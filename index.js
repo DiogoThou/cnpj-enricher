@@ -6,15 +6,16 @@ app.use(express.json());
 
 const CLIENT_ID = process.env.CLIENT_ID;
 const CLIENT_SECRET = process.env.CLIENT_SECRET;
-const HUBSPOT_ACCESS_TOKEN = process.env.HUBSPOT_ACCESS_TOKEN; // inicial vazio, você pode trocar no runtime
-const REDIRECT_URI = 'https://cnpj-enricher.vercel.app/oauth/callback';
+const HUBSPOT_ACCESS_TOKEN = process.env.HUBSPOT_ACCESS_TOKEN; // inicialmente gerado no fluxo
+const HUBSPOT_REFRESH_TOKEN = process.env.HUBSPOT_REFRESH_TOKEN;
+const REDIRECT_URI = process.env.REDIRECT_URI;
 
-// Função para limpar CNPJ
+// Limpa CNPJ removendo pontos, traços e barras
 function cleanCNPJ(cnpj) {
   return cnpj ? cnpj.replace(/[^\d]/g, '') : '';
 }
 
-// Endpoint de status (Account Component)
+// Account Component - status do app
 app.get('/account', (req, res) => {
   res.json({
     status: 'connected',
@@ -23,7 +24,7 @@ app.get('/account', (req, res) => {
   });
 });
 
-// OAuth callback para trocar code por token
+// OAuth callback - troca o code por access_token e refresh_token
 app.get('/oauth/callback', async (req, res) => {
   const code = req.query.code;
 
@@ -52,7 +53,6 @@ app.get('/oauth/callback', async (req, res) => {
     console.log('🔁 Refresh Token:', refresh_token);
     console.log('⏰ Expira em (segundos):', expires_in);
 
-    // Em produção você deve salvar no banco
     res.send('✅ App autorizado com sucesso! Access token gerado. Verifique o console do servidor.');
 
   } catch (error) {
@@ -61,7 +61,41 @@ app.get('/oauth/callback', async (req, res) => {
   }
 });
 
-// Enrichment endpoint
+// Refresh do token
+app.get('/refresh', async (req, res) => {
+  if (!HUBSPOT_REFRESH_TOKEN) {
+    return res.status(400).send('❌ Refresh token não configurado.');
+  }
+
+  try {
+    const response = await axios.post(
+      'https://api.hubapi.com/oauth/v1/token',
+      new URLSearchParams({
+        grant_type: 'refresh_token',
+        client_id: CLIENT_ID,
+        client_secret: CLIENT_SECRET,
+        refresh_token: HUBSPOT_REFRESH_TOKEN
+      }),
+      {
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
+      }
+    );
+
+    const { access_token, refresh_token, expires_in } = response.data;
+
+    console.log('✅ Novo Access Token:', access_token);
+    console.log('🔁 Novo Refresh Token:', refresh_token);
+    console.log('⏰ Expira em (segundos):', expires_in);
+
+    res.send('✅ Novo access_token gerado com sucesso! Verifique o console.');
+
+  } catch (error) {
+    console.error('❌ Erro ao fazer refresh do token:', error.response?.data || error.message);
+    res.status(500).send('❌ Erro ao gerar novo token.');
+  }
+});
+
+// Enrichment
 app.post('/enrich', async (req, res) => {
   const { companyId } = req.body;
 
@@ -70,7 +104,6 @@ app.post('/enrich', async (req, res) => {
   }
 
   try {
-    // Buscar empresa no HubSpot
     const hubspotCompany = await axios.get(`https://api.hubapi.com/crm/v3/objects/companies/${companyId}`, {
       headers: { Authorization: `Bearer ${HUBSPOT_ACCESS_TOKEN}` }
     });
@@ -82,7 +115,6 @@ app.post('/enrich', async (req, res) => {
       return res.status(400).json({ error: 'CNPJ not found or invalid in HubSpot company record' });
     }
 
-    // Consultar API publica.cnpj.ws
     const cnpjDataResponse = await axios.get(`https://publica.cnpj.ws/cnpj/${cnpj}`);
     const cnpjData = cnpjDataResponse.data;
 
@@ -105,7 +137,6 @@ app.post('/enrich', async (req, res) => {
       }
     };
 
-    // Atualizar no HubSpot
     await axios.patch(`https://api.hubapi.com/crm/v3/objects/companies/${companyId}`, updatePayload, {
       headers: {
         Authorization: `Bearer ${HUBSPOT_ACCESS_TOKEN}`,
@@ -121,6 +152,6 @@ app.post('/enrich', async (req, res) => {
   }
 });
 
-// Porta automática no Vercel
+// Porta no Vercel
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`CNPJ Enricher rodando na porta ${PORT}`));
+app.listen(PORT, () => console.log(`🚀 CNPJ Enricher rodando na porta ${PORT}`));
