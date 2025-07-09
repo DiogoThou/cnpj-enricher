@@ -1057,18 +1057,35 @@ app.post('/api/accounts-fetch', (req, res) => {
   });
 });
 
-let fieldMapping = {
-  company_name: null // ← onde será salvo o name do campo (ex: "nome_fantasia")
-};
+let selectedOption = 'nenhum';
 
-app.post('/api/save-mapping', (req, res) => {
-  const { mapping } = req.body;
-  if (mapping?.company_name) {
-    fieldMapping.company_name = mapping.company_name;
-    console.log('🧩 Campo personalizado para nome da empresa:', fieldMapping.company_name);
-    return res.json({ message: `Campo personalizado salvo como: ${fieldMapping.company_name}` });
-  }
-  return res.status(400).json({ message: "Nenhum mapeamento válido enviado." });
+app.post('/api/dropdown-fetch', (req, res) => {
+  return res.json({
+    response: {
+      options: [
+        { text: 'Nenhum campo mapeado', value: 'nenhum' },
+        { text: 'Nome Fantasia → nome_fantasia', value: 'name' },
+        { text: 'Porte → porte', value: 'porte' },
+        { text: 'Telefone → telefone', value: 'telefone' }
+      ],
+      selectedOption,
+      placeholder: 'Escolha o campo a mapear'
+    }
+  });
+});
+
+app.post('/api/dropdown-update', (req, res) => {
+  selectedOption = req.body.selectedOption || 'nenhum';
+
+  console.log('📥 Novo campo selecionado:', selectedOption);
+
+  res.json({
+    response: {
+      actionType: 'DROPDOWN_UPDATE',
+      selectedOption,
+      message: `Campo atualizado para: ${selectedOption}`
+    }
+  });
 });
 
 
