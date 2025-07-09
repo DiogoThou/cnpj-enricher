@@ -1500,7 +1500,6 @@ app.post('/api/sync-cnpj', async (req, res) => {
   } catch (error) {
     console.error('❌ Erro no sync-cnpj (POST):', error.message);
     res.status(500).json({ error: 'Erro na sincronização' });
-  }
 });
 
 const PORT = process.env.PORT || 3000;
