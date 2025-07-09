@@ -687,14 +687,102 @@ app.get('/debug-company/:companyId', async (req, res) => {
 });
 
 // Enrichment com CNPJ - Versão com debug melhorado
+
 app.post('/enrich', async (req, res) => {
   const { companyId } = req.body;
 
-  console.log('🔍 Iniciando enriquecimento para companyId:', companyId);
-
   if (!companyId) {
-    console.error('❌ Company ID não fornecido');
     return res.status(400).json({ error: 'Company ID is required' });
+  }
+
+  try {
+    console.log('🔍 Iniciando enriquecimento para companyId:', companyId);
+
+    const hubspotCompany = await axios.get(`https://api.hubapi.com/crm/v3/objects/companies/${companyId}`, {
+      headers: { Authorization: `Bearer ${HUBSPOT_ACCESS_TOKEN}` }
+    });
+
+    const properties = hubspotCompany.data.properties;
+    const cnpjRaw = properties.cnpj;
+    const cnpj = (cnpjRaw || '').replace(/[^\d]/g, '');
+
+    console.log('🔍 CNPJ limpo:', cnpj);
+
+    if (!cnpj || cnpj.length !== 14) {
+      return res.status(400).json({ error: 'CNPJ inválido ou não encontrado' });
+    }
+
+    const response = await axios.get(`https://publica.cnpj.ws/cnpj/${cnpj}`);
+    const cnpjData = response.data;
+
+    const sociosStr = (cnpjData.socios || [])
+      .map((s) => `• ${s.nome} (${s.qualificacao_socio?.descricao?.trim() || 'Qualificação não informada'})`)
+      .join('\n');
+
+    const now = new Date().toLocaleString('pt-BR');
+    const est = cnpjData.estabelecimento || {}
+
+    const formattedText = `🏢 DADOS DA EMPRESA (CNPJ: ${cnpj}) ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📋 IDENTIFICAÇÃO:
+• Razão Social: ${cnpjData.razao_social || ''}
+• Nome Fantasia: ${est.nome_fantasia || ''}
+• CNPJ: ${est.cnpj || ''}
+• Situação: ${est.situacao_cadastral || ''}
+
+💼 INFORMAÇÕES EMPRESARIAIS:
+• Porte: ${cnpjData.porte?.descricao || ''}
+• Capital Social: R$ ${cnpjData.capital_social || ''}
+• Atividade Principal: ${est.atividade_principal?.descricao || ''}
+• Natureza Jurídica: ${cnpjData.natureza_juridica?.descricao || ''}
+
+📍 ENDEREÇO:
+• Logradouro: ${est.tipo_logradouro || ''} ${est.logradouro || ''}, ${est.numero || ''}
+• Complemento: ${est.complemento || ''}
+• Bairro: ${est.bairro || ''}
+• CEP: ${est.cep || ''}
+• Cidade: ${est.cidade?.nome || ''}
+• Estado: ${est.estado?.sigla || ''}
+• País: ${est.pais?.nome || 'Brasil'}
+
+📞 CONTATO:
+• Telefone: (${est.ddd1 || ''}) ${est.telefone1 || ''}
+• Fax: (${est.ddd_fax || ''}) ${est.fax || ''}
+• Email: ${est.email || ''}
+
+📊 OUTRAS INFORMAÇÕES:
+• Data de Início: ${est.data_inicio_atividade || ''}
+• Data da Situação: ${est.data_situacao_cadastral || ''}
+• Última Atualização: ${cnpjData.atualizado_em || ''}
+
+👥 SÓCIOS:
+${sociosStr || 'Nenhum sócio encontrado'}
+
+🎯 Dados obtidos automaticamente via CNPJ Enricher em ${now}
+`;
+
+    const payload = {
+      properties: {
+        teste_cnpj: formattedText
+      }
+    };
+
+    console.log('📦 Payload para teste_cnpj:', payload);
+
+    await axios.patch(`https://api.hubapi.com/crm/v3/objects/companies/${companyId}`, payload, {
+      headers: {
+        Authorization: `Bearer ${HUBSPOT_ACCESS_TOKEN}`,
+        'Content-Type': 'application/json'
+      }
+    });
+
+    res.json({ status: 'success', message: 'Dados salvos em teste_cnpj com sucesso.' });
+
+  } catch (error) {
+    console.error('❌ Erro detalhado no enriquecimento:', error.response?.data || error.message);
+    res.status(500).json({ error: 'Erro ao enriquecer dados' });
+  }
+});
+
   }
 
   // Verificar se as variáveis de ambiente estão configuradas
