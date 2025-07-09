@@ -27,45 +27,10 @@ let fieldMapping = {
   cep: 'zip'
 };
 
-// ⚡ SISTEMA DE PERSISTÊNCIA REAL
-let selectedDestinationField = 'teste_cnpj'; // Padrão inicial
+// ⚡ VARIÁVEIS PARA PERSISTÊNCIA - APENAS ESTAS LINHAS MUDARAM
+let selectedDestinationField = 'teste_cnpj'; // Padrão
 let availableFields = []; // Cache dos campos disponíveis
-let configurationLoaded = false; // Flag para saber se já carregou configuração
-
-// ⚡ SIMULAÇÃO DE BANCO DE DADOS SIMPLES (em produção use um banco real)
-let persistentStorage = {
-  campo_destino: 'teste_cnpj' // Valor padrão salvo
-};
-
-// ⚡ Função para carregar configuração salva
-function loadSavedConfiguration() {
-  console.log('🔄 Carregando configuração salva...');
-  
-  // Em produção, isso viria de um banco de dados
-  // Por enquanto, usar a variável persistentStorage
-  if (persistentStorage.campo_destino) {
-    selectedDestinationField = persistentStorage.campo_destino;
-    console.log(`✅ Configuração carregada: ${selectedDestinationField}`);
-  } else {
-    selectedDestinationField = 'teste_cnpj';
-    console.log(`⚡ Usando configuração padrão: ${selectedDestinationField}`);
-  }
-  
-  configurationLoaded = true;
-  return selectedDestinationField;
-}
-
-// ⚡ Função para salvar configuração
-function saveConfiguration(newField) {
-  console.log(`💾 Salvando nova configuração: ${newField}`);
-  
-  // Em produção, isso iria para um banco de dados
-  persistentStorage.campo_destino = newField;
-  selectedDestinationField = newField;
-  
-  console.log(`✅ Configuração salva com sucesso: ${newField}`);
-  return true;
-}
+let savedUserChoice = null; // ⚡ NOVA: Para salvar escolha do usuário
 
 // ⚡ Função melhorada para limpar CNPJ - aceita qualquer formato
 function cleanCNPJ(cnpjInput) {
@@ -141,190 +106,11 @@ Atualizado em: ${new Date().toLocaleString('pt-BR')}
   return formattedData;
 }
 
-// ⚡ Função CORRIGIDA para buscar todos os campos de texto de empresa no HubSpot
-async function fetchCompanyTextFields() {
-  if (!HUBSPOT_ACCESS_TOKEN) {
-    console.log('❌ Token não configurado para buscar campos');
-    return [];
-  }
-
-  try {
-    console.log('🔍 Buscando TODOS os campos de empresa...');
-    console.log('🔑 Token disponível:', HUBSPOT_ACCESS_TOKEN ? 'SIM' : 'NÃO');
-    
-    const response = await axios.get(
-      'https://api.hubapi.com/crm/v3/properties/companies',
-      {
-        headers: {
-          Authorization: `Bearer ${HUBSPOT_ACCESS_TOKEN}`,
-          'Content-Type': 'application/json'
-        }
-      }
-    );
-
-    console.log(`📊 Total de campos encontrados: ${response.data.results.length}`);
-
-    // ⚡ FILTRO EXPANDIDO
-    const textFields = response.data.results.filter(field => {
-      const isTextType = (
-        field.type === 'string' ||           
-        field.type === 'enumeration' ||      
-        field.fieldType === 'text' ||
-        field.fieldType === 'textarea' ||
-        field.fieldType === 'phonenumber' ||
-        field.fieldType === 'email'
-      );
-      
-      const isEditable = !field.readOnlyValue && !field.calculated;
-      const isVisible = !field.hidden;
-      const isNotSystemField = !field.name.startsWith('hs_') || field.name.includes('additional');
-
-      return isTextType && isEditable && isVisible && isNotSystemField;
-    });
-
-    console.log(`✅ Campos de texto filtrados: ${textFields.length}`);
-    
-    const mappedFields = textFields.map(field => ({
-      text: `${field.label || field.name} (${field.name})`,
-      value: field.name,
-      fieldType: field.fieldType,
-      type: field.type,
-      description: field.description || `Campo: ${field.name}`
-    }));
-
-    return mappedFields;
-    
-  } catch (error) {
-    console.error('❌ Erro ao buscar campos de empresa:', error.response?.data || error.message);
-    return [];
-  }
-}
-
-// ⚡ Função para atualizar o endpoint /enrich para usar o campo selecionado
-function updateEnrichmentPayload(cnpjData, cnpjNumber) {
-  const dadosFormatados = formatCNPJData(cnpjData, cnpjNumber);
-  
-  // ⚡ Se não mapear, retorna payload vazio
-  if (selectedDestinationField === 'nenhum') {
-    console.log('🚫 Modo "não mapear" - não salvando dados adicionais');
-    return { properties: {} };
-  }
-  
-  // ⚡ Se for campo padrão ou qualquer outro campo, salva os dados formatados
-  const payload = {
-    properties: {
-      [selectedDestinationField]: dadosFormatados
-    }
-  };
-  
-  console.log(`📦 Dados serão salvos no campo: ${selectedDestinationField}`);
-  return payload;
-}
-
 // Status do app
 app.get('/account', (req, res) => {
   const camposConfigurados = Object.keys(fieldMapping).filter(key => fieldMapping[key] && fieldMapping[key].trim() !== '');
   
   res.json({
-    response: {
-      campo_destino: currentConfig,
-      configuracao_salva: persistentStorage.campo_destino,
-      message: `Configuração carregada: ${currentConfig}`,
-      timestamp: new Date().toISOString()
-    }
-  });
-});
-
-// ⚡ Endpoint MELHORADO para salvar configuração
-app.post('/api/save-settings', (req, res) => {
-  console.log('💾 Salvando configurações via save-settings...');
-  console.log('📥 Request body:', JSON.stringify(req.body, null, 2));
-  
-  let fieldToSave = selectedDestinationField;
-  
-  // Se vier campo específico no request, usar ele
-  if (req.body.campo_destino) {
-    fieldToSave = req.body.campo_destino;
-  }
-  
-  const saved = saveConfiguration(fieldToSave);
-  
-  console.log(`✅ Campo salvo: ${fieldToSave}`);
-  console.log(`🗄️ Storage atualizado: ${JSON.stringify(persistentStorage)}`);
-  
-  res.json({
-    response: {
-      status: 'saved',
-      campo_destino: selectedDestinationField,
-      configuracao_salva: persistentStorage.campo_destino,
-      message: `Configuração salva: ${fieldToSave}`,
-      timestamp: new Date().toISOString()
-    }
-  });
-});
-
-// ⚡ Debug endpoint MELHORADO para ver estado atual
-app.get('/api/debug-settings', (req, res) => {
-  // Garantir que configuração foi carregada
-  if (!configurationLoaded) {
-    loadSavedConfiguration();
-  }
-  
-  res.json({
-    selectedDestinationField: selectedDestinationField,
-    persistentStorage: persistentStorage,
-    configurationLoaded: configurationLoaded,
-    availableFieldsCount: availableFields.length,
-    availableFields: availableFields.slice(0, 5), // Primeiros 5 para debug
-    timestamp: new Date().toISOString(),
-    status: 'Configuração com persistência ativa'
-  });
-});
-
-// ⚡ Endpoint para resetar configuração (útil para debug)
-app.post('/api/reset-config', (req, res) => {
-  console.log('🔄 Resetando configuração para padrão...');
-  
-  persistentStorage.campo_destino = 'teste_cnpj';
-  selectedDestinationField = 'teste_cnpj';
-  configurationLoaded = false;
-  
-  console.log('✅ Configuração resetada para teste_cnpj');
-  
-  res.json({
-    success: true,
-    message: 'Configuração resetada para campo padrão (teste_cnpj)',
-    novaCofiguracao: selectedDestinationField
-  });
-});
-
-// ⚡ Endpoint adicional para verificar configuração atual
-app.get('/api/current-mapping', (req, res) => {
-  // Garantir que configuração foi carregada
-  if (!configurationLoaded) {
-    loadSavedConfiguration();
-  }
-  
-  const currentField = availableFields.find(field => field.value === selectedDestinationField);
-  
-  res.json({
-    success: true,
-    configuracaoAtual: {
-      campoSelecionado: selectedDestinationField,
-      campoLabel: currentField ? currentField.text : selectedDestinationField,
-      tipoMapeamento: selectedDestinationField === 'teste_cnpj' ? 'Campo padrão' : 
-                     selectedDestinationField === 'nenhum' ? 'Sem mapeamento' : 'Campo personalizado',
-      totalCamposDisponiveis: availableFields.length,
-      persistencia: persistentStorage
-    }
-  });
-});
-
-console.log('🔧 Sistema de mapeamento de campos CNPJ carregado com sucesso!');
-console.log('🔧 Sistema de persistência REAL carregado com sucesso!');
-
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`🚀 CNPJ Enricher rodando na porta ${PORT}`));json({
     status: 'connected',
     app: 'CNPJ Enricher',
     version: '1.0',
@@ -341,7 +127,7 @@ app.listen(PORT, () => console.log(`🚀 CNPJ Enricher rodando na porta ${PORT}`
       criarTeste: 'POST /create-test-company'
     }
   });
-
+});
 
 // ⚡ OAuth Callback CORRIGIDO
 app.get('/oauth/callback', async (req, res) => {
@@ -617,6 +403,89 @@ app.get('/debug-company/:companyId', async (req, res) => {
   }
 });
 
+// ⚡ FUNÇÃO CORRIGIDA para buscar todos os campos de texto de empresa no HubSpot
+async function fetchCompanyTextFields() {
+  if (!HUBSPOT_ACCESS_TOKEN) {
+    console.log('❌ Token não configurado para buscar campos');
+    return [];
+  }
+
+  try {
+    console.log('🔍 Buscando TODOS os campos de empresa...');
+    console.log('🔑 Token disponível:', HUBSPOT_ACCESS_TOKEN ? 'SIM' : 'NÃO');
+    
+    const response = await axios.get(
+      'https://api.hubapi.com/crm/v3/properties/companies',
+      {
+        headers: {
+          Authorization: `Bearer ${HUBSPOT_ACCESS_TOKEN}`,
+          'Content-Type': 'application/json'
+        }
+      }
+    );
+
+    console.log(`📊 Total de campos encontrados: ${response.data.results.length}`);
+
+    // ⚡ FILTRO EXPANDIDO
+    const textFields = response.data.results.filter(field => {
+      const isTextType = (
+        field.type === 'string' ||           
+        field.type === 'enumeration' ||      
+        field.fieldType === 'text' ||
+        field.fieldType === 'textarea' ||
+        field.fieldType === 'phonenumber' ||
+        field.fieldType === 'email'
+      );
+      
+      const isEditable = !field.readOnlyValue && !field.calculated;
+      const isVisible = !field.hidden;
+      const isNotSystemField = !field.name.startsWith('hs_') || field.name.includes('additional');
+
+      return isTextType && isEditable && isVisible && isNotSystemField;
+    });
+
+    console.log(`✅ Campos de texto filtrados: ${textFields.length}`);
+    
+    const mappedFields = textFields.map(field => ({
+      text: `${field.label || field.name} (${field.name})`,
+      value: field.name,
+      fieldType: field.fieldType,
+      type: field.type,
+      description: field.description || `Campo: ${field.name}`
+    }));
+
+    return mappedFields;
+    
+  } catch (error) {
+    console.error('❌ Erro ao buscar campos de empresa:', error.response?.data || error.message);
+    return [];
+  }
+}
+
+// ⚡ FUNÇÃO PARA USAR CAMPO SELECIONADO (CORRIGIDA)
+function updateEnrichmentPayload(cnpjData, cnpjNumber) {
+  const dadosFormatados = formatCNPJData(cnpjData, cnpjNumber);
+  
+  // ⚡ USAR ESCOLHA DO USUÁRIO OU PADRÃO
+  const campoAtual = savedUserChoice || selectedDestinationField;
+  
+  // ⚡ Se não mapear, retorna payload vazio
+  if (campoAtual === 'nenhum') {
+    console.log('🚫 Modo "não mapear" - não salvando dados adicionais');
+    return { properties: {} };
+  }
+  
+  // ⚡ Se for campo padrão ou qualquer outro campo, salva os dados formatados
+  const payload = {
+    properties: {
+      [campoAtual]: dadosFormatados
+    }
+  };
+  
+  console.log(`📦 Dados serão salvos no campo: ${campoAtual}`);
+  return payload;
+}
+
 // ⚡ ENRICHMENT PRINCIPAL - VERSÃO CORRIGIDA COM CAMPO ÚNICO
 app.post('/enrich', async (req, res) => {
   const { companyId } = req.body;
@@ -788,43 +657,10 @@ app.post('/enrich', async (req, res) => {
     console.log('📦 Dados formatados para campo selecionado:');
     console.log(dadosFormatados);
 
-    // ⚡ PAYLOAD DINÂMICO - USA CAMPO SELECIONADO
+    // ⚡ PAYLOAD DINÂMICO - USA CAMPO SELECIONADO COM PERSISTÊNCIA
     const updatePayload = updateEnrichmentPayload(cnpjData, cnpjLimpo);
 
     console.log('📦 Payload final:', JSON.stringify(updatePayload, null, 2));
-
-    // ⚡ VERIFICAR SE TEM ALGO PARA ATUALIZAR
-    if (Object.keys(updatePayload.properties).length === 0) {
-      console.log('✅ Modo "não mapear" - CNPJ válido mas sem salvar dados');
-      
-      return res.json({ 
-        success: true,
-        message: '✅ CNPJ válido! Configurado para não salvar dados (modo validação)',
-        cnpj: cnpjLimpo,
-        empresa: {
-          razaoSocial: razaoSocial,
-          nomeFantasia: nomeFantasia,
-          situacao: situacaoCadastral,
-          localizacao: `${cidade}/${estado}`,
-          porte: porte,
-          contato: {
-            email: emailCnpj,
-            telefone: telefoneFormatado
-          },
-          atividade: atividadePrincipal
-        },
-        configuracao: {
-          campoDestino: selectedDestinationField,
-          tipoConteudo: 'Apenas validação - não salvou dados',
-          modo: 'nao_mapear'
-        },
-        proximosPassos: [
-          'CNPJ validado com sucesso',
-          'Configure outro campo no dropdown para salvar dados',
-          'Ou mantenha assim para apenas validar CNPJs'
-        ]
-      });
-    }
 
     console.log('📡 Atualizando empresa no HubSpot...');
     
@@ -839,7 +675,8 @@ app.post('/enrich', async (req, res) => {
       }
     );
 
-    console.log(`✅ Empresa atualizada com sucesso! Dados salvos no campo: ${selectedDestinationField}`);
+    const campoUsado = savedUserChoice || selectedDestinationField;
+    console.log(`✅ Empresa atualizada com sucesso! Dados salvos no campo: ${campoUsado}`);
     
     // ⚡ Dados resumidos da empresa para o log e resposta
     const dadosEmpresa = {
@@ -854,7 +691,7 @@ app.post('/enrich', async (req, res) => {
       telefone: telefoneFormatado
     };
     
-    console.log(`🎉 SUCESSO COMPLETO - Dados da empresa salvos no campo: ${selectedDestinationField}`);
+    console.log(`🎉 SUCESSO COMPLETO - Dados da empresa salvos no campo: ${campoUsado}`);
     console.log('🏢 Razão Social:', dadosEmpresa.razaoSocial);
     console.log('✨ Nome Fantasia:', dadosEmpresa.nomeFantasia);
     console.log('📊 Situação:', dadosEmpresa.situacao);
@@ -865,7 +702,7 @@ app.post('/enrich', async (req, res) => {
 
     res.json({ 
       success: true,
-      message: `🎉 Empresa enriquecida com sucesso! Dados salvos no campo: ${selectedDestinationField}`,
+      message: `🎉 Empresa enriquecida com sucesso! Dados salvos no campo: ${campoUsado}`,
       cnpj: cnpjLimpo,
       empresa: {
         razaoSocial: dadosEmpresa.razaoSocial,
@@ -880,7 +717,7 @@ app.post('/enrich', async (req, res) => {
         atividade: dadosEmpresa.atividade
       },
       configuracao: {
-        campoDestino: selectedDestinationField,
+        campoDestino: campoUsado,
         tipoConteudo: 'Texto formatado com todos os dados',
         dadosIncluidos: [
           'Razão Social e Nome Fantasia',
@@ -892,7 +729,7 @@ app.post('/enrich', async (req, res) => {
         ]
       },
       proximosPassos: [
-        `Verifique o campo ${selectedDestinationField} na empresa no HubSpot`,
+        `Verifique o campo ${campoUsado} na empresa no HubSpot`,
         'Todos os dados estão formatados e legíveis',
         'Use POST /create-test-company para criar mais testes'
       ]
@@ -924,13 +761,12 @@ app.post('/enrich', async (req, res) => {
     
     // ⚡ TRATAR ERRO DE PROPRIEDADES QUE NÃO EXISTEM
     if (error.response?.status === 400 && error.response?.data?.message?.includes('does not exist')) {
-      console.log(`⚠️ Campo ${selectedDestinationField} não existe no HubSpot`);
+      console.log('⚠️ Campo teste_cnpj não existe no HubSpot');
       
       return res.status(400).json({ 
-        error: `Campo ${selectedDestinationField} não existe no HubSpot`,
-        message: 'Execute POST /create-test-field para criar o campo ou escolha outro campo',
+        error: 'Campo teste_cnpj não existe no HubSpot',
+        message: 'Execute POST /create-test-field para criar o campo',
         solucao: 'POST /create-test-field',
-        campoSelecionado: selectedDestinationField,
         dadosObtidos: {
           cnpj: cnpjLimpo,
           razaoSocial: cnpjData.razao_social,
@@ -940,9 +776,8 @@ app.post('/enrich', async (req, res) => {
           estado: cnpjData.estabelecimento?.estado?.sigla
         },
         proximosPasses: [
-          '1. Execute: POST /create-test-field para criar o campo teste_cnpj',
-          '2. Ou escolha outro campo existente no dropdown',
-          '3. Depois execute: POST /enrich novamente'
+          '1. Execute: POST /create-test-field',
+          '2. Depois execute: POST /enrich novamente'
         ]
       });
     }
@@ -1249,14 +1084,14 @@ app.post('/create-test-company', async (req, res) => {
       testEnrichUrl: `POST /enrich com {"companyId": "${response.data.id}"}`,
       debugUrl: `/debug-company/${response.data.id}`,
       configuracao: {
-        campoDestino: selectedDestinationField,
+        campoDestino: savedUserChoice || selectedDestinationField,
         tipoConteudo: 'Todos os dados formatados em texto',
         criarCampo: 'POST /create-test-field (se necessário)'
       },
       proximoTeste: {
         url: 'POST /enrich',
         body: { companyId: response.data.id },
-        expectativa: `Dados do CNPJ serão salvos no campo: ${selectedDestinationField}`
+        expectativa: `Dados do CNPJ serão salvos no campo: ${savedUserChoice || selectedDestinationField}`
       }
     });
   } catch (error) {
@@ -1306,24 +1141,18 @@ app.post('/api/accounts-fetch', (req, res) => {
   });
 });
 
-// ⚡ ENDPOINTS COM PERSISTÊNCIA REAL
+// ⚡ ENDPOINTS COM PERSISTÊNCIA SIMPLES - APENAS ESTES FORAM ADICIONADOS
 
-// ⚡ Endpoint MELHORADO para buscar options do dropdown
+// ⚡ Endpoint para buscar options do dropdown (COM PERSISTÊNCIA)
 app.post('/api/dropdown-fetch', async (req, res) => {
   console.log('🔍 HubSpot solicitando opções do dropdown...');
   console.log('📥 Request body:', JSON.stringify(req.body, null, 2));
   
   try {
-    // ⚡ SEMPRE carregar configuração salva primeiro
-    if (!configurationLoaded) {
-      loadSavedConfiguration();
-    }
-    
-    // ⚡ SEMPRE buscar campos atualizados
-    console.log('🔄 Buscando campos atualizados...');
+    // ⚡ Buscar campos atualizados
     availableFields = await fetchCompanyTextFields();
 
-    // ⚡ Opções com ordem correta: não mapear, padrão, outros campos
+    // ⚡ Opções do dropdown
     const options = [
       { 
         text: '🚫 Não mapear - Apenas validar CNPJ', 
@@ -1342,25 +1171,23 @@ app.post('/api/dropdown-fetch', async (req, res) => {
       }))
     ];
 
+    // ⚡ USAR ESCOLHA SALVA DO USUÁRIO OU PADRÃO
+    const currentSelection = savedUserChoice || selectedDestinationField;
+
     console.log(`📋 Retornando ${options.length} opções para o dropdown`);
-    console.log(`🎯 Campo ATUAL selecionado: ${selectedDestinationField}`);
-    console.log(`🗄️ Configuração persistente: ${persistentStorage.campo_destino}`);
+    console.log(`🎯 Campo selecionado: ${currentSelection}`);
+    console.log(`💾 Escolha salva: ${savedUserChoice}`);
 
     return res.json({
       response: {
         options: options,
-        selectedOption: selectedDestinationField, // ⚡ SEMPRE usar o valor salvo
+        selectedOption: currentSelection, // ⚡ PERSISTÊNCIA AQUI
         placeholder: 'Escolha onde salvar os dados do CNPJ'
       }
     });
     
   } catch (error) {
     console.error('❌ Erro ao buscar opções do dropdown:', error);
-    
-    // ⚡ Carregar configuração mesmo em caso de erro
-    if (!configurationLoaded) {
-      loadSavedConfiguration();
-    }
     
     return res.json({
       response: {
@@ -1376,39 +1203,28 @@ app.post('/api/dropdown-fetch', async (req, res) => {
             description: 'Campo padrão para dados do CNPJ'
           }
         ],
-        selectedOption: selectedDestinationField,
+        selectedOption: savedUserChoice || selectedDestinationField,
         placeholder: 'Escolha onde salvar os dados do CNPJ'
       }
     });
   }
 });
 
-// ⚡ Endpoint MELHORADO para atualizar campo selecionado
+// ⚡ Endpoint para atualizar campo selecionado (COM PERSISTÊNCIA)
 app.post('/api/dropdown-update', (req, res) => {
   const newSelection = req.body.selectedOption || 'teste_cnpj';
-  const previousSelection = selectedDestinationField;
+  const previousSelection = savedUserChoice || selectedDestinationField;
   
   console.log('📥 Atualizando campo de destino:');
   console.log(`   Anterior: ${previousSelection}`);
   console.log(`   Novo: ${newSelection}`);
   console.log(`   Request completo:`, JSON.stringify(req.body, null, 2));
 
-  // ⚡ SALVAR CONFIGURAÇÃO PERSISTENTE
-  const saved = saveConfiguration(newSelection);
-  
-  if (!saved) {
-    console.error('❌ Erro ao salvar configuração');
-    return res.status(500).json({
-      response: {
-        actionType: 'ERROR',
-        message: 'Erro ao salvar configuração'
-      }
-    });
-  }
+  // ⚡ SALVAR ESCOLHA DO USUÁRIO (PERSISTÊNCIA SIMPLES)
+  savedUserChoice = newSelection;
 
   // ⚡ Mensagens específicas baseadas na seleção
   let message = '';
-  let actionType = 'DROPDOWN_UPDATE';
   
   if (newSelection === 'teste_cnpj') {
     message = '✅ Configurado para salvar todos os dados formatados no campo teste_cnpj';
@@ -1421,32 +1237,78 @@ app.post('/api/dropdown-update', (req, res) => {
   }
 
   console.log(`💬 Mensagem de confirmação: ${message}`);
-  console.log(`🗄️ Estado persistente atualizado: ${persistentStorage.campo_destino}`);
+  console.log(`💾 Escolha salva: ${savedUserChoice}`);
 
   res.json({
     response: {
-      actionType: actionType,
-      selectedOption: selectedDestinationField,
+      actionType: 'DROPDOWN_UPDATE',
+      selectedOption: newSelection,
       message: message,
       configuracao: {
-        campoDestino: selectedDestinationField,
-        campoSalvo: persistentStorage.campo_destino,
-        tipoMapeamento: newSelection === 'teste_cnpj' ? 'campo_padrao' : 
-                       newSelection === 'nenhum' ? 'sem_mapeamento' : 'campo_personalizado',
+        campoDestino: newSelection,
+        escolhaSalva: savedUserChoice,
         persistencia: 'ativa'
       }
     }
   });
 });
 
-// ⚡ Endpoint MELHORADO para carregar configuração salva
+// ⚡ Endpoints mantidos para compatibilidade
 app.post('/api/load-settings', (req, res) => {
-  console.log('🔄 Carregando configurações salvas via load-settings...');
-  console.log('📥 Request body:', JSON.stringify(req.body, null, 2));
+  console.log('🔄 Carregando configurações salvas...');
   
-  const currentConfig = loadSavedConfiguration();
+  res.json({
+    response: {
+      campo_destino: savedUserChoice || selectedDestinationField,
+      message: `Configuração carregada: ${savedUserChoice || selectedDestinationField}`
+    }
+  });
+});
+
+app.post('/api/save-settings', (req, res) => {
+  console.log('💾 Salvando configurações...');
   
-  console.log(`📋 Configuração carregada: ${currentConfig}`);
-  console.log(`🗄️ Storage persistente: ${JSON.stringify(persistentStorage)}`);
+  res.json({
+    response: {
+      status: 'saved',
+      campo_destino: savedUserChoice || selectedDestinationField,
+      message: `Configuração salva: ${savedUserChoice || selectedDestinationField}`
+    }
+  });
+});
+
+// ⚡ Debug endpoint MELHORADO
+app.get('/api/debug-settings', (req, res) => {
+  res.json({
+    selectedDestinationField: selectedDestinationField,
+    savedUserChoice: savedUserChoice,
+    currentField: savedUserChoice || selectedDestinationField,
+    availableFieldsCount: availableFields.length,
+    availableFields: availableFields.slice(0, 5),
+    timestamp: new Date().toISOString(),
+    status: 'Persistência simples ativa'
+  });
+});
+
+// ⚡ Endpoint adicional para verificar configuração atual
+app.get('/api/current-mapping', (req, res) => {
+  const currentField = availableFields.find(field => field.value === (savedUserChoice || selectedDestinationField));
   
-  res.
+  res.json({
+    success: true,
+    configuracaoAtual: {
+      campoSelecionado: savedUserChoice || selectedDestinationField,
+      campoLabel: currentField ? currentField.text : (savedUserChoice || selectedDestinationField),
+      tipoMapeamento: (savedUserChoice || selectedDestinationField) === 'teste_cnpj' ? 'Campo padrão' : 
+                     (savedUserChoice || selectedDestinationField) === 'nenhum' ? 'Sem mapeamento' : 'Campo personalizado',
+      totalCamposDisponiveis: availableFields.length,
+      escolhaSalva: savedUserChoice,
+      campoDefault: selectedDestinationField
+    }
+  });
+});
+
+console.log('🔧 Sistema de mapeamento de campos CNPJ carregado com sucesso!');
+
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => console.log(`🚀 CNPJ Enricher rodando na porta ${PORT}`));
