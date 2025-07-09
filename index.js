@@ -7,7 +7,7 @@ app.use(express.json());
 
 const CLIENT_ID = process.env.CLIENT_ID;
 const CLIENT_SECRET = process.env.CLIENT_SECRET;
-const HUBSPOT_ACCESS_TOKEN = process.env.HUBSPOT_ACCESS_TOKEN;
+let HUBSPOT_ACCESS_TOKEN = process.env.HUBSPOT_ACCESS_TOKEN; // ⚡ Mudança: let ao invés de const
 const HUBSPOT_REFRESH_TOKEN = process.env.HUBSPOT_REFRESH_TOKEN;
 const REDIRECT_URI = process.env.REDIRECT_URI;
 
@@ -20,14 +20,20 @@ app.get('/account', (req, res) => {
   res.json({
     status: 'connected',
     app: 'CNPJ Enricher',
-    version: '1.0'
+    version: '1.0',
+    tokenStatus: HUBSPOT_ACCESS_TOKEN ? 'Configurado' : 'Não configurado' // ⚡ Adicionado
   });
 });
 
-// OAuth Callback
+// ⚡ OAuth Callback CORRIGIDO
 app.get('/oauth/callback', async (req, res) => {
   const code = req.query.code;
   if (!code) return res.status(400).send('❌ Código de autorização não fornecido.');
+
+  console.log('🔍 Código recebido:', code);
+  console.log('🔑 CLIENT_ID:', CLIENT_ID);
+  console.log('🔐 CLIENT_SECRET:', CLIENT_SECRET ? 'Configurado' : 'Não configurado');
+  console.log('🔗 REDIRECT_URI:', REDIRECT_URI);
 
   try {
     const response = await axios.post(
@@ -46,18 +52,44 @@ app.get('/oauth/callback', async (req, res) => {
 
     const { access_token, refresh_token, expires_in } = response.data;
 
-    console.log('✅ Access Token:', access_token);
+    // ⚡ CORREÇÃO PRINCIPAL: Salvar o token na variável
+    HUBSPOT_ACCESS_TOKEN = access_token;
+
+    console.log('✅ Access Token gerado:', access_token);
     console.log('🔁 Refresh Token:', refresh_token);
     console.log('⏰ Expira em (segundos):', expires_in);
 
-    res.send('✅ App autorizado com sucesso! Access token gerado. Verifique o console.');
+    res.send(`
+      <h2>✅ Token gerado com sucesso!</h2>
+      <p><strong>Access Token:</strong> ${access_token.substring(0, 20)}...</p>
+      <p><strong>Expira em:</strong> ${expires_in} segundos</p>
+      <p><strong>Status:</strong> Pronto para usar!</p>
+      <hr>
+      <p><a href="/account">Verificar Status</a></p>
+      <p><strong>Teste agora:</strong></p>
+      <pre>POST /enrich
+{
+  "companyId": "123"
+}</pre>
+    `);
   } catch (error) {
-    console.error('❌ Erro ao trocar o code pelo token:', error.response?.data || error.message);
-    res.status(500).send('❌ Erro ao gerar token.');
+    console.error('❌ Erro detalhado ao trocar code pelo token:');
+    console.error('📊 Status:', error.response?.status);
+    console.error('📄 Data:', error.response?.data);
+    console.error('🔗 URL:', error.config?.url);
+    console.error('📡 Payload:', error.config?.data);
+    
+    res.status(500).send(`
+      <h2>❌ Erro ao gerar token</h2>
+      <p><strong>Status:</strong> ${error.response?.status}</p>
+      <p><strong>Erro:</strong> ${JSON.stringify(error.response?.data)}</p>
+      <p><strong>CLIENT_ID:</strong> ${CLIENT_ID}</p>
+      <p><strong>REDIRECT_URI:</strong> ${REDIRECT_URI}</p>
+    `);
   }
 });
 
-// Refresh do token
+// ⚡ Refresh do token MELHORADO
 app.get('/refresh', async (req, res) => {
   if (!HUBSPOT_REFRESH_TOKEN) return res.status(400).send('❌ Refresh token não configurado.');
 
@@ -77,6 +109,9 @@ app.get('/refresh', async (req, res) => {
 
     const { access_token, refresh_token, expires_in } = response.data;
 
+    // ⚡ CORREÇÃO: Atualizar o token na variável
+    HUBSPOT_ACCESS_TOKEN = access_token;
+
     console.log('✅ Novo Access Token:', access_token);
     console.log('🔁 Novo Refresh Token:', refresh_token);
     console.log('⏰ Expira em (segundos):', expires_in);
@@ -85,6 +120,38 @@ app.get('/refresh', async (req, res) => {
   } catch (error) {
     console.error('❌ Erro ao fazer refresh do token:', error.response?.data || error.message);
     res.status(500).send('❌ Erro ao gerar novo token.');
+  }
+});
+
+// ⚡ Endpoint para testar token
+app.get('/test-token', async (req, res) => {
+  if (!HUBSPOT_ACCESS_TOKEN) {
+    return res.json({
+      status: 'error',
+      message: 'Token não configurado',
+      needsAuth: true,
+      authUrl: `https://app.hubspot.com/oauth/authorize?client_id=${CLIENT_ID}&scope=crm.objects.companies.read%20crm.objects.companies.write&redirect_uri=${REDIRECT_URI}`
+    });
+  }
+
+  try {
+    const response = await axios.get('https://api.hubapi.com/crm/v3/objects/companies?limit=1', {
+      headers: { Authorization: `Bearer ${HUBSPOT_ACCESS_TOKEN}` }
+    });
+    
+    res.json({
+      status: 'success',
+      message: 'Token funcionando!',
+      tokenPreview: HUBSPOT_ACCESS_TOKEN.substring(0, 20) + '...',
+      companiesFound: response.data.results.length
+    });
+  } catch (error) {
+    res.json({
+      status: 'error',
+      message: 'Token inválido',
+      error: error.response?.data,
+      needsAuth: true
+    });
   }
 });
 
@@ -104,7 +171,8 @@ app.post('/enrich', async (req, res) => {
     console.error('❌ HUBSPOT_ACCESS_TOKEN não configurado');
     return res.status(500).json({ 
       error: 'Token do HubSpot não configurado',
-      details: 'Verifique as variáveis de ambiente'
+      details: 'Execute OAuth primeiro',
+      authUrl: `https://app.hubspot.com/oauth/authorize?client_id=${CLIENT_ID}&scope=crm.objects.companies.read%20crm.objects.companies.write&redirect_uri=${REDIRECT_URI}`
     });
   }
 
@@ -216,7 +284,8 @@ app.post('/enrich', async (req, res) => {
     if (error.response?.status === 401) {
       return res.status(401).json({ 
         error: 'Token do HubSpot inválido ou expirado',
-        details: 'Verifique o HUBSPOT_ACCESS_TOKEN'
+        details: 'Execute OAuth novamente',
+        authUrl: `https://app.hubspot.com/oauth/authorize?client_id=${CLIENT_ID}&scope=crm.objects.companies.read%20crm.objects.companies.write&redirect_uri=${REDIRECT_URI}`
       });
     }
     
@@ -238,6 +307,46 @@ app.post('/enrich', async (req, res) => {
       error: 'Erro ao enriquecer dados',
       details: error.message,
       step: 'Erro não identificado - verifique os logs'
+    });
+  }
+});
+
+// ⚡ Criar empresa de teste
+app.post('/create-test-company', async (req, res) => {
+  if (!HUBSPOT_ACCESS_TOKEN) {
+    return res.status(401).json({ 
+      error: 'Token não configurado',
+      authUrl: `https://app.hubspot.com/oauth/authorize?client_id=${CLIENT_ID}&scope=crm.objects.companies.read%20crm.objects.companies.write&redirect_uri=${REDIRECT_URI}`
+    });
+  }
+
+  try {
+    const response = await axios.post(
+      'https://api.hubapi.com/crm/v3/objects/companies',
+      {
+        properties: {
+          name: 'Empresa Teste CNPJ',
+          cnpj: '11.222.333/0001-81'
+        }
+      },
+      {
+        headers: {
+          Authorization: `Bearer ${HUBSPOT_ACCESS_TOKEN}`,
+          'Content-Type': 'application/json'
+        }
+      }
+    );
+
+    res.json({
+      success: true,
+      companyId: response.data.id,
+      message: 'Empresa de teste criada',
+      testUrl: `/enrich com {"companyId": "${response.data.id}"}`
+    });
+  } catch (error) {
+    res.status(500).json({
+      error: 'Erro ao criar empresa teste',
+      details: error.response?.data
     });
   }
 });
