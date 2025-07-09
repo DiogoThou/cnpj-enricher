@@ -1061,7 +1061,7 @@ app.post('/api/accounts-fetch', (req, res) => {
 let selectedDestinationField = 'nenhum'; // ⚡ CORREÇÃO: "não mapear" como padrão
 let availableFields = []; // Cache dos campos disponíveis
 
-// ⚡ Função para buscar todos os campos de texto de empresa no HubSpot
+// ⚡ Função CORRIGIDA para buscar todos os campos de texto de empresa no HubSpot
 async function fetchCompanyTextFields() {
   if (!HUBSPOT_ACCESS_TOKEN) {
     console.log('❌ Token não configurado para buscar campos');
@@ -1069,7 +1069,8 @@ async function fetchCompanyTextFields() {
   }
 
   try {
-    console.log('🔍 Buscando todos os campos de texto de empresa...');
+    console.log('🔍 Buscando TODOS os campos de empresa...');
+    console.log('🔑 Token disponível:', HUBSPOT_ACCESS_TOKEN ? 'SIM' : 'NÃO');
     
     const response = await axios.get(
       'https://api.hubapi.com/crm/v3/properties/companies',
@@ -1081,47 +1082,40 @@ async function fetchCompanyTextFields() {
       }
     );
 
-    // ⚡ Filtrar apenas campos de texto/textarea que podem receber dados do CNPJ
+    console.log(`📊 Total de campos encontrados: ${response.data.results.length}`);
+
+    // ⚡ FILTRO EXPANDIDO
     const textFields = response.data.results.filter(field => {
-      return (
-        (field.type === 'string' && 
-         (field.fieldType === 'text' || 
-          field.fieldType === 'textarea' || 
-          field.fieldType === 'phonenumber' ||
-          field.fieldType === 'email')) ||
-        field.type === 'enumeration' // Para campos dropdown
-      ) && 
-      !field.readOnlyValue && // Não incluir campos read-only
-      !field.hidden && // Não incluir campos ocultos
-      field.name !== 'hs_object_id' // Excluir campos do sistema
+      const isTextType = (
+        field.type === 'string' ||           
+        field.type === 'enumeration' ||      
+        field.fieldType === 'text' ||
+        field.fieldType === 'textarea' ||
+        field.fieldType === 'phonenumber' ||
+        field.fieldType === 'email'
+      );
+      
+      const isEditable = !field.readOnlyValue && !field.calculated;
+      const isVisible = !field.hidden;
+      const isNotSystemField = !field.name.startsWith('hs_') || field.name.includes('additional');
+
+      return isTextType && isEditable && isVisible && isNotSystemField;
     });
 
-    // ⚡ Mapear para formato do dropdown
+    console.log(`✅ Campos de texto filtrados: ${textFields.length}`);
+    
     const mappedFields = textFields.map(field => ({
       text: `${field.label || field.name} (${field.name})`,
       value: field.name,
       fieldType: field.fieldType,
+      type: field.type,
       description: field.description || `Campo: ${field.name}`
     }));
 
-    console.log(`✅ Encontrados ${mappedFields.length} campos de texto disponíveis`);
-    
-    // ⚡ Campos mais comuns primeiro
-    const commonFields = ['name', 'description', 'website', 'phone', 'city', 'state', 'country'];
-    const sortedFields = mappedFields.sort((a, b) => {
-      const aIndex = commonFields.indexOf(a.value);
-      const bIndex = commonFields.indexOf(b.value);
-      
-      if (aIndex !== -1 && bIndex !== -1) return aIndex - bIndex;
-      if (aIndex !== -1) return -1;
-      if (bIndex !== -1) return 1;
-      return a.text.localeCompare(b.text);
-    });
-
-    return sortedFields;
+    return mappedFields;
     
   } catch (error) {
-    console.error('❌ Erro ao buscar campos de empresa:', error.response?.data);
+    console.error('❌ Erro ao buscar campos de empresa:', error.response?.data || error.message);
     return [];
   }
 }
