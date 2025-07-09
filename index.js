@@ -570,11 +570,7 @@ app.post('/enrich', async (req, res) => {
     console.log(dadosFormatados);
 
     // ⚡ PAYLOAD SIMPLIFICADO - APENAS CAMPO teste_cnpj
-    const updatePayload = {
-      properties: {
-        teste_cnpj: dadosFormatados
-      }
-    };
+   const updatePayload = updateEnrichmentPayload(cnpjData, cnpjLimpo);
 
     console.log('📦 Payload final:', JSON.stringify(updatePayload, null, 2));
 
@@ -1057,37 +1053,229 @@ app.post('/api/accounts-fetch', (req, res) => {
   });
 });
 
-let selectedOption = 'nenhum';
 
-app.post('/api/dropdown-fetch', (req, res) => {
-  return res.json({
-    response: {
-      options: [
-        { text: 'Nenhum campo mapeado', value: 'nenhum' },
-        { text: 'Nome Fantasia → nome_fantasia', value: 'name' },
-        { text: 'Porte → porte', value: 'porte' },
-        { text: 'Telefone → telefone', value: 'telefone' }
-      ],
-      selectedOption,
-      placeholder: 'Escolha o campo a mapear'
+// ⚡ SISTEMA DE MAPEAMENTO DE CAMPOS CNPJ - VERSÃO MELHORADA
+// Substitua essa parte no seu index.js
+
+// ⚡ Variáveis globais para mapeamento
+let selectedDestinationField = 'teste_cnpj'; // Campo padrão
+let availableFields = []; // Cache dos campos disponíveis
+
+// ⚡ Função para buscar todos os campos de texto de empresa no HubSpot
+async function fetchCompanyTextFields() {
+  if (!HUBSPOT_ACCESS_TOKEN) {
+    console.log('❌ Token não configurado para buscar campos');
+    return [];
+  }
+
+  try {
+    console.log('🔍 Buscando todos os campos de texto de empresa...');
+    
+    const response = await axios.get(
+      'https://api.hubapi.com/crm/v3/properties/companies',
+      {
+        headers: {
+          Authorization: `Bearer ${HUBSPOT_ACCESS_TOKEN}`,
+          'Content-Type': 'application/json'
+        }
+      }
+    );
+
+    // ⚡ Filtrar apenas campos de texto/textarea que podem receber dados do CNPJ
+    const textFields = response.data.results.filter(field => {
+      return (
+        (field.type === 'string' && 
+         (field.fieldType === 'text' || 
+          field.fieldType === 'textarea' || 
+          field.fieldType === 'phonenumber' ||
+          field.fieldType === 'email')) ||
+        field.type === 'enumeration' // Para campos dropdown
+      ) && 
+      !field.readOnlyValue && // Não incluir campos read-only
+      !field.hidden && // Não incluir campos ocultos
+      field.name !== 'hs_object_id' // Excluir campos do sistema
+    });
+
+    // ⚡ Mapear para formato do dropdown
+    const mappedFields = textFields.map(field => ({
+      text: `${field.label || field.name} (${field.name})`,
+      value: field.name,
+      fieldType: field.fieldType,
+      description: field.description || `Campo: ${field.name}`
+    }));
+
+    console.log(`✅ Encontrados ${mappedFields.length} campos de texto disponíveis`);
+    
+    // ⚡ Campos mais comuns primeiro
+    const commonFields = ['name', 'description', 'website', 'phone', 'city', 'state', 'country'];
+    const sortedFields = mappedFields.sort((a, b) => {
+      const aIndex = commonFields.indexOf(a.value);
+      const bIndex = commonFields.indexOf(b.value);
+      
+      if (aIndex !== -1 && bIndex !== -1) return aIndex - bIndex;
+      if (aIndex !== -1) return -1;
+      if (bIndex !== -1) return 1;
+      return a.text.localeCompare(b.text);
+    });
+
+    return sortedFields;
+    
+  } catch (error) {
+    console.error('❌ Erro ao buscar campos de empresa:', error.response?.data);
+    return [];
+  }
+}
+
+// ⚡ Endpoint para buscar options do dropdown (chamado pelo HubSpot)
+app.post('/api/dropdown-fetch', async (req, res) => {
+  console.log('🔍 HubSpot solicitando opções do dropdown...');
+  
+  try {
+    // ⚡ Buscar campos disponíveis se ainda não estão em cache
+    if (availableFields.length === 0) {
+      availableFields = await fetchCompanyTextFields();
     }
-  });
+
+    // ⚡ Criar opções do dropdown
+    const options = [
+      { 
+        text: '📋 Campo padrão (teste_cnpj) - Todos os dados formatados', 
+        value: 'teste_cnpj',
+        description: 'Salva todos os dados do CNPJ formatados em texto no campo teste_cnpj'
+      },
+      { 
+        text: '🚫 Não mapear - Apenas validar CNPJ', 
+        value: 'nenhum',
+        description: 'Apenas valida o CNPJ sem salvar dados adicionais'
+      },
+      ...availableFields.map(field => ({
+        text: `📝 ${field.text}`,
+        value: field.value,
+        description: `Salvar dados formatados em: ${field.value}`
+      }))
+    ];
+
+    console.log(`📋 Retornando ${options.length} opções para o dropdown`);
+    console.log(`🎯 Campo atualmente selecionado: ${selectedDestinationField}`);
+
+    return res.json({
+      response: {
+        options: options,
+        selectedOption: selectedDestinationField,
+        placeholder: 'Escolha onde salvar os dados do CNPJ'
+      }
+    });
+    
+  } catch (error) {
+    console.error('❌ Erro ao buscar opções do dropdown:', error);
+    
+    // ⚡ Fallback com opções básicas se houver erro
+    return res.json({
+      response: {
+        options: [
+          { 
+            text: '📋 Campo padrão (teste_cnpj)', 
+            value: 'teste_cnpj',
+            description: 'Campo padrão para dados do CNPJ'
+          },
+          { 
+            text: '🚫 Não mapear', 
+            value: 'nenhum',
+            description: 'Apenas validar CNPJ'
+          }
+        ],
+        selectedOption: selectedDestinationField,
+        placeholder: 'Escolha onde salvar os dados do CNPJ'
+      }
+    });
+  }
 });
 
+// ⚡ Endpoint para atualizar campo selecionado (chamado pelo HubSpot)
 app.post('/api/dropdown-update', (req, res) => {
-  selectedOption = req.body.selectedOption || 'nenhum';
+  const newSelection = req.body.selectedOption || 'teste_cnpj';
+  const previousSelection = selectedDestinationField;
+  
+  selectedDestinationField = newSelection;
 
-  console.log('📥 Novo campo selecionado:', selectedOption);
+  console.log('📥 Campo de destino atualizado:');
+  console.log(`   Anterior: ${previousSelection}`);
+  console.log(`   Novo: ${selectedDestinationField}`);
+
+  // ⚡ Mensagens específicas baseadas na seleção
+  let message = '';
+  let actionType = 'DROPDOWN_UPDATE';
+  
+  if (newSelection === 'teste_cnpj') {
+    message = '✅ Configurado para salvar todos os dados formatados no campo teste_cnpj';
+  } else if (newSelection === 'nenhum') {
+    message = '⚠️ Configurado para apenas validar CNPJ (não salvar dados)';
+  } else {
+    const selectedField = availableFields.find(field => field.value === newSelection);
+    const fieldLabel = selectedField ? selectedField.text : newSelection;
+    message = `✅ Configurado para salvar dados formatados no campo: ${fieldLabel}`;
+  }
+
+  console.log(`💬 Mensagem de confirmação: ${message}`);
 
   res.json({
     response: {
-      actionType: 'DROPDOWN_UPDATE',
-      selectedOption,
-      message: `Campo atualizado para: ${selectedOption}`
+      actionType: actionType,
+      selectedOption: selectedDestinationField,
+      message: message,
+      configuracao: {
+        campoDestino: selectedDestinationField,
+        tipoMapeamento: newSelection === 'teste_cnpj' ? 'campo_padrao' : 
+                       newSelection === 'nenhum' ? 'sem_mapeamento' : 'campo_personalizado'
+      }
     }
   });
 });
 
+// ⚡ Endpoint adicional para verificar configuração atual
+app.get('/api/current-mapping', (req, res) => {
+  const currentField = availableFields.find(field => field.value === selectedDestinationField);
+  
+  res.json({
+    success: true,
+    configuracaoAtual: {
+      campoSelecionado: selectedDestinationField,
+      campoLabel: currentField ? currentField.text : selectedDestinationField,
+      tipoMapeamento: selectedDestinationField === 'teste_cnpj' ? 'Campo padrão' : 
+                     selectedDestinationField === 'nenhum' ? 'Sem mapeamento' : 'Campo personalizado',
+      totalCamposDisponiveis: availableFields.length
+    }
+  });
+});
+
+// ⚡ Função para atualizar o endpoint /enrich para usar o campo selecionado
+function updateEnrichmentPayload(cnpjData, cnpjNumber) {
+  const dadosFormatados = formatCNPJData(cnpjData, cnpjNumber);
+  
+  // ⚡ Se não mapear, retorna payload vazio
+  if (selectedDestinationField === 'nenhum') {
+    console.log('🚫 Modo "não mapear" - não salvando dados adicionais');
+    return { properties: {} };
+  }
+  
+  // ⚡ Se for campo padrão ou qualquer outro campo, salva os dados formatados
+  const payload = {
+    properties: {
+      [selectedDestinationField]: dadosFormatados
+    }
+  };
+  
+  console.log(`📦 Dados serão salvos no campo: ${selectedDestinationField}`);
+  return payload;
+}
+
+// ⚡ IMPORTANTE: No seu endpoint /enrich, substitua esta linha:
+// const updatePayload = { properties: { teste_cnpj: dadosFormatados } };
+// 
+// Por esta:
+// const updatePayload = updateEnrichmentPayload(cnpjData, cnpjLimpo);
+
+console.log('🔧 Sistema de mapeamento de campos CNPJ carregado com sucesso!');
 
 
 const PORT = process.env.PORT || 3000;
