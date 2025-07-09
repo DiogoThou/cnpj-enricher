@@ -1,453 +1,162 @@
 <!DOCTYPE html>
-<html lang="pt-BR">
+<html>
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>CNPJ Enricher - Configurações</title>
+    <title>CNPJ Enricher</title>
     <style>
-        body {
-            font-family: 'Lexend', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            margin: 0;
-            padding: 20px;
-            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
-            min-height: 100vh;
-            color: #33475b;
+        body { 
+            font-family: Arial, sans-serif; 
+            margin: 20px; 
+            background: #f8f9fa; 
         }
-        
-        .container {
-            max-width: 800px;
-            margin: 0 auto;
-            background: white;
-            border-radius: 16px;
-            padding: 32px;
-            box-shadow: 0 20px 60px rgba(0,0,0,0.1);
-            border: 1px solid rgba(255,255,255,0.2);
+        .container { 
+            max-width: 500px; 
+            margin: 0 auto; 
+            background: white; 
+            padding: 20px; 
+            border-radius: 8px; 
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1); 
         }
-        
-        h1 {
-            color: #33475b;
-            text-align: center;
-            margin-bottom: 8px;
-            font-size: 2.2em;
-            font-weight: 700;
+        h1 { 
+            color: #333; 
+            text-align: center; 
+            margin-bottom: 20px; 
         }
-        
-        .subtitle {
-            text-align: center;
-            color: #7c98b6;
-            margin-bottom: 40px;
-            font-size: 1.1em;
+        .info { 
+            background: #e3f2fd; 
+            padding: 15px; 
+            border-radius: 5px; 
+            margin-bottom: 20px; 
+            border-left: 4px solid #1976d2; 
         }
-        
-        .mapping-section {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            padding: 24px;
-            border-radius: 12px;
-            margin-bottom: 32px;
+        .btn { 
+            background: #1976d2; 
+            color: white; 
+            padding: 10px 20px; 
+            border: none; 
+            border-radius: 5px; 
+            cursor: pointer; 
+            margin: 5px; 
+            font-size: 14px; 
         }
-        
-        .mapping-section h3 {
-            margin-top: 0;
-            font-size: 1.4em;
-            margin-bottom: 16px;
+        .btn:hover { 
+            background: #1565c0; 
         }
-        
-        .field-mapping {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 20px;
-            margin-bottom: 20px;
-            align-items: center;
+        .btn-secondary { 
+            background: #6c757d; 
         }
-        
-        .cnpj-field {
-            background: rgba(255,255,255,0.15);
-            padding: 12px 16px;
-            border-radius: 8px;
-            font-weight: 600;
-            backdrop-filter: blur(10px);
+        .status { 
+            padding: 10px; 
+            margin: 10px 0; 
+            border-radius: 5px; 
+            text-align: center; 
         }
-        
-        .hubspot-field select {
-            width: 100%;
-            padding: 12px 16px;
-            border: 2px solid rgba(255,255,255,0.3);
-            border-radius: 8px;
-            background: rgba(255,255,255,0.9);
-            color: #33475b;
-            font-size: 14px;
-            font-weight: 500;
+        .success { 
+            background: #d4edda; 
+            color: #155724; 
+            border: 1px solid #c3e6cb; 
         }
-        
-        .hubspot-field select:focus {
-            outline: none;
-            border-color: #4299e1;
-            box-shadow: 0 0 0 3px rgba(66, 153, 225, 0.2);
+        .error { 
+            background: #f8d7da; 
+            color: #721c24; 
+            border: 1px solid #f5c6cb; 
         }
-        
-        .actions {
-            display: flex;
-            gap: 16px;
-            justify-content: center;
-            margin-top: 32px;
+        .info-status { 
+            background: #d1ecf1; 
+            color: #0c5460; 
+            border: 1px solid #bee5eb; 
         }
-        
-        button {
-            padding: 14px 28px;
-            border: none;
-            border-radius: 8px;
-            font-weight: 600;
-            font-size: 16px;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            min-width: 140px;
-        }
-        
-        .btn-primary {
-            background: linear-gradient(135deg, #4299e1, #3182ce);
-            color: white;
-        }
-        
-        .btn-primary:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 10px 25px rgba(66, 153, 225, 0.4);
-        }
-        
-        .btn-secondary {
-            background: #f7fafc;
-            color: #4a5568;
-            border: 2px solid #e2e8f0;
-        }
-        
-        .btn-secondary:hover {
-            background: #edf2f7;
-            border-color: #cbd5e0;
-        }
-        
-        .status {
-            padding: 16px;
-            border-radius: 8px;
-            margin: 16px 0;
-            font-weight: 600;
-            text-align: center;
-        }
-        
-        .status.success {
-            background: #c6f6d5;
-            color: #2f855a;
-            border: 2px solid #68d391;
-        }
-        
-        .status.error {
-            background: #fed7d7;
-            color: #c53030;
-            border: 2px solid #fc8181;
-        }
-        
-        .info-box {
-            background: #e8f4fd;
-            border: 2px solid #90cdf4;
-            border-radius: 12px;
-            padding: 20px;
-            margin-bottom: 24px;
-        }
-        
-        .info-box h4 {
-            margin-top: 0;
-            color: #2b6cb0;
-        }
-        
-        @media (max-width: 768px) {
-            .field-mapping {
-                grid-template-columns: 1fr;
-                gap: 12px;
-            }
-            
-            .actions {
-                flex-direction: column;
-                align-items: center;
-            }
+        .actions { 
+            text-align: center; 
+            margin-top: 20px; 
         }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>⚙️ Configurações CNPJ Enricher</h1>
-        <p class="subtitle">Configure como os dados do CNPJ serão mapeados nos campos do HubSpot</p>
+        <h1>⚙️ CNPJ Enricher</h1>
         
-        <div class="info-box">
-            <h4>📋 Como funciona:</h4>
-            <p>Escolha qual campo do HubSpot receberá cada dado obtido da consulta do CNPJ. 
-            Deixe em "Não mapear" para campos que não deseja preencher.</p>
+        <div class="info">
+            <strong>📋 Como funciona:</strong><br>
+            Este app enriquece automaticamente as empresas no HubSpot com dados do CNPJ da Receita Federal.
+            Todos os dados são salvos no campo <strong>teste_cnpj</strong>.
         </div>
         
-        <div class="mapping-section">
-            <h3>🎯 Mapeamento de Campos</h3>
-            
-            <div class="field-mapping">
-                <div class="cnpj-field">🏢 Razão Social</div>
-                <div class="hubspot-field">
-                    <select id="razao_social">
-                        <option value="">-- Não mapear --</option>
-                        <option value="name">Nome da empresa</option>
-                        <option value="description">Descrição</option>
-                        <option value="about_us">Sobre nós</option>
-                        <option value="razao_social">Razão Social (customizado)</option>
-                    </select>
-                </div>
-            </div>
-            
-            <div class="field-mapping">
-                <div class="cnpj-field">✨ Nome Fantasia</div>
-                <div class="hubspot-field">
-                    <select id="nome_fantasia">
-                        <option value="">-- Não mapear --</option>
-                        <option value="name">Nome da empresa</option>
-                        <option value="description">Descrição</option>
-                        <option value="nome_fantasia">Nome Fantasia (customizado)</option>
-                    </select>
-                </div>
-            </div>
-            
-            <div class="field-mapping">
-                <div class="cnpj-field">📊 Situação Cadastral</div>
-                <div class="hubspot-field">
-                    <select id="situacao_cadastral">
-                        <option value="">-- Não mapear --</option>
-                        <option value="description">Descrição</option>
-                        <option value="notes_last_contacted">Notas</option>
-                        <option value="situacao_cadastral">Situação Cadastral (customizado)</option>
-                    </select>
-                </div>
-            </div>
-            
-            <div class="field-mapping">
-                <div class="cnpj-field">💰 Capital Social</div>
-                <div class="hubspot-field">
-                    <select id="capital_social">
-                        <option value="">-- Não mapear --</option>
-                        <option value="annualrevenue">Receita anual</option>
-                        <option value="description">Descrição</option>
-                        <option value="capital_social">Capital Social (customizado)</option>
-                    </select>
-                </div>
-            </div>
-            
-            <div class="field-mapping">
-                <div class="cnpj-field">🏭 Porte da Empresa</div>
-                <div class="hubspot-field">
-                    <select id="porte">
-                        <option value="">-- Não mapear --</option>
-                        <option value="numberofemployees">Número de funcionários</option>
-                        <option value="company_size">Tamanho da empresa</option>
-                        <option value="porte">Porte (customizado)</option>
-                    </select>
-                </div>
-            </div>
-            
-            <div class="field-mapping">
-                <div class="cnpj-field">💼 Atividade Principal</div>
-                <div class="hubspot-field">
-                    <select id="atividade_principal">
-                        <option value="">-- Não mapear --</option>
-                        <option value="industry">Setor</option>
-                        <option value="description">Descrição</option>
-                        <option value="atividade_principal">Atividade Principal (customizado)</option>
-                    </select>
-                </div>
-            </div>
-            
-            <div class="field-mapping">
-                <div class="cnpj-field">📞 Telefone</div>
-                <div class="hubspot-field">
-                    <select id="telefone">
-                        <option value="">-- Não mapear --</option>
-                        <option value="phone">Telefone</option>
-                        <option value="mobilephone">Telefone celular</option>
-                        <option value="telefone">Telefone (customizado)</option>
-                    </select>
-                </div>
-            </div>
-            
-            <div class="field-mapping">
-                <div class="cnpj-field">📧 Email</div>
-                <div class="hubspot-field">
-                    <select id="email">
-                        <option value="">-- Não mapear --</option>
-                        <option value="domain">Domínio</option>
-                        <option value="description">Descrição</option>
-                        <option value="cnpj_email">Email CNPJ (customizado)</option>
-                    </select>
-                </div>
-            </div>
-            
-            <div class="field-mapping">
-                <div class="cnpj-field">🏠 Endereço Completo</div>
-                <div class="hubspot-field">
-                    <select id="endereco">
-                        <option value="">-- Não mapear --</option>
-                        <option value="address">Endereço</option>
-                        <option value="address2">Endereço 2</option>
-                        <option value="endereco_completo">Endereço Completo (customizado)</option>
-                    </select>
-                </div>
-            </div>
-            
-            <div class="field-mapping">
-                <div class="cnpj-field">🏙️ Cidade</div>
-                <div class="hubspot-field">
-                    <select id="cidade">
-                        <option value="">-- Não mapear --</option>
-                        <option value="city">Cidade</option>
-                        <option value="cidade">Cidade (customizado)</option>
-                    </select>
-                </div>
-            </div>
-            
-            <div class="field-mapping">
-                <div class="cnpj-field">🗺️ Estado</div>
-                <div class="hubspot-field">
-                    <select id="estado">
-                        <option value="">-- Não mapear --</option>
-                        <option value="state">Estado</option>
-                        <option value="estado">Estado (customizado)</option>
-                    </select>
-                </div>
-            </div>
-            
-            <div class="field-mapping">
-                <div class="cnpj-field">📮 CEP</div>
-                <div class="hubspot-field">
-                    <select id="cep">
-                        <option value="">-- Não mapear --</option>
-                        <option value="zip">CEP</option>
-                        <option value="cep">CEP (customizado)</option>
-                    </select>
-                </div>
-            </div>
+        <div class="info">
+            <strong>🎯 Configuração:</strong><br>
+            • Campo destino: <strong>teste_cnpj</strong><br>
+            • Tipo: Texto formatado<br>
+            • Dados: Razão Social, Endereço, Telefone, Email, etc.
         </div>
         
         <div class="actions">
-            <button type="button" class="btn-secondary" onclick="loadDefaults()">
-                🔄 Carregar Padrões
-            </button>
-            <button type="button" class="btn-primary" onclick="saveMapping()">
-                💾 Salvar Configurações
-            </button>
+            <button class="btn btn-secondary" onclick="createField()">🔧 Criar Campo</button>
+            <button class="btn" onclick="testApp()">🧪 Testar App</button>
         </div>
         
         <div id="status"></div>
     </div>
 
     <script>
-        // Configurações padrão
-        const defaultMapping = {
-            razao_social: 'name',
-            nome_fantasia: 'description',
-            situacao_cadastral: 'situacao_cadastral',
-            capital_social: 'capital_social',
-            porte: 'porte',
-            atividade_principal: 'industry',
-            telefone: 'phone',
-            email: 'cnpj_email',
-            endereco: 'address',
-            cidade: 'city',
-            estado: 'state',
-            cep: 'zip'
-        };
-
-        // Carregar configurações padrão
-        function loadDefaults() {
-            Object.keys(defaultMapping).forEach(field => {
-                const select = document.getElementById(field);
-                if (select) {
-                    select.value = defaultMapping[field];
-                }
-            });
-            showStatus('Configurações padrão carregadas!', 'success');
+        function showStatus(msg, type) {
+            document.getElementById('status').innerHTML = 
+                '<div class="status ' + type + '">' + msg + '</div>';
         }
 
-        // Salvar mapeamento
-        async function saveMapping() {
-            const mapping = {};
-            
-            Object.keys(defaultMapping).forEach(field => {
-                const select = document.getElementById(field);
-                if (select && select.value) {
-                    mapping[field] = select.value;
-                }
-            });
-
+        async function createField() {
+            showStatus('Criando campo teste_cnpj...', 'info-status');
             try {
-                showStatus('Salvando configurações...', 'info');
-                
-                const response = await fetch('/api/save-mapping', {
+                const response = await fetch('/create-test-field', {
                     method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({ mapping })
+                    headers: {'Content-Type': 'application/json'}
                 });
-
                 const result = await response.json();
-
                 if (response.ok) {
-                    showStatus('✅ Configurações salvas com sucesso!', 'success');
-                    
-                    // Notificar o HubSpot que as configurações foram salvas
-                    if (window.parent && window.parent.postMessage) {
-                        window.parent.postMessage({
-                            type: 'CONFIGURATION_SAVED',
-                            data: mapping
-                        }, '*');
-                    }
+                    showStatus('✅ Campo criado com sucesso!', 'success');
                 } else {
-                    showStatus(`❌ Erro: ${result.error}`, 'error');
+                    showStatus('❌ ' + result.error, 'error');
                 }
             } catch (error) {
-                showStatus('❌ Erro ao salvar configurações', 'error');
-                console.error('Erro:', error);
+                showStatus('❌ Erro ao criar campo', 'error');
             }
         }
 
-        // Mostrar status
-        function showStatus(message, type) {
-            const statusDiv = document.getElementById('status');
-            statusDiv.innerHTML = `<div class="status ${type}">${message}</div>`;
-            
-            if (type === 'success') {
-                setTimeout(() => {
-                    statusDiv.innerHTML = '';
-                }, 3000);
-            }
-        }
-
-        // Carregar configurações salvas ao iniciar
-        async function loadSavedMapping() {
+        async function testApp() {
+            showStatus('Criando empresa de teste...', 'info-status');
             try {
-                const response = await fetch('/api/get-mapping');
+                const response = await fetch('/create-test-company', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'}
+                });
+                const result = await response.json();
                 if (response.ok) {
-                    const result = await response.json();
-                    const mapping = result.mapping || defaultMapping;
-                    
-                    Object.keys(mapping).forEach(field => {
-                        const select = document.getElementById(field);
-                        if (select) {
-                            select.value = mapping[field] || '';
-                        }
-                    });
+                    showStatus('✅ Empresa criada! Testando enriquecimento...', 'info-status');
+                    setTimeout(() => enrichCompany(result.companyId), 1000);
+                } else {
+                    showStatus('❌ ' + result.error, 'error');
                 }
             } catch (error) {
-                console.error('Erro ao carregar configurações:', error);
-                loadDefaults();
+                showStatus('❌ Erro no teste', 'error');
             }
         }
 
-        // Inicializar página
-        document.addEventListener('DOMContentLoaded', function() {
-            loadSavedMapping();
-        });
+        async function enrichCompany(companyId) {
+            try {
+                const response = await fetch('/enrich', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({companyId: companyId})
+                });
+                const result = await response.json();
+                if (response.ok) {
+                    showStatus('🎉 Sucesso! Dados salvos no campo teste_cnpj', 'success');
+                } else {
+                    showStatus('❌ ' + result.error, 'error');
+                }
+            } catch (error) {
+                showStatus('❌ Erro no enriquecimento', 'error');
+            }
+        }
     </script>
 </body>
 </html>
