@@ -1712,4 +1712,393 @@ console.log('🔧 Sistema de mapeamento de campos CNPJ carregado com sucesso!');
 console.log('🗺️ Sistema de mapeamento individual carregado com sucesso!');
 
 const PORT = process.env.PORT || 3000;
+
+
+// ===== ADICIONAR ESTES ENDPOINTS ANTES DO app.listen =====
+
+// ⚡ INTERFACE PRINCIPAL DO HUBSPOT - TELA DE CONFIGURAÇÕES
+app.post('/api/ui-extensions-fetch', async (req, res) => {
+  console.log('🎨 HubSpot solicitando interface de configurações...');
+  
+  try {
+    // Buscar campos disponíveis do HubSpot
+    availableFields = await fetchCompanyTextFields();
+    
+    // Gerar sugestões automáticas
+    const suggestions = getSuggestedMapping(availableFields);
+    
+    // Preparar opções para dropdowns
+    const fieldOptions = [
+      { text: '🚫 Não mapear', value: 'nenhum', description: 'Este campo não será salvo' },
+      { text: '📋 Campo backup (teste_cnpj)', value: 'teste_cnpj', description: 'Salvar no campo de backup' },
+      ...availableFields.map(field => ({
+        text: `📝 ${field.text}`,
+        value: field.value,
+        description: `Tipo: ${field.type}`
+      }))
+    ];
+
+    // Verificar se há mapeamento individual ativo
+    const hasIndividualMapping = Object.values(individualMapping).some(field => field && field !== 'nenhum');
+
+    // Estrutura da interface
+    const sections = [
+      {
+        type: 'section',
+        title: '🗺️ Configuração de Mapeamento CNPJ',
+        description: 'Configure onde cada dado da Receita Federal será salvo no HubSpot'
+      },
+      {
+        type: 'radio',
+        name: 'mapping_mode',
+        label: '📋 Modo de Mapeamento',
+        description: 'Escolha como mapear os dados do CNPJ',
+        value: hasIndividualMapping ? 'individual' : 'single',
+        options: [
+          { 
+            text: 'Campo único', 
+            value: 'single', 
+            description: 'Salvar todos os dados formatados em um campo só' 
+          },
+          { 
+            text: 'Mapeamento individual', 
+            value: 'individual', 
+            description: 'Mapear cada dado para um campo específico' 
+          }
+        ]
+      }
+    ];
+
+    // Se modo individual está ativo, mostrar os campos individuais
+    if (hasIndividualMapping) {
+      sections.push({
+        type: 'section',
+        title: '🎯 Mapeamento Individual de Campos',
+        description: 'Configure onde cada dado específico será salvo'
+      });
+
+      // Adicionar dropdown para cada campo do CNPJ
+      Object.keys(cnpjFieldsDefinition).forEach(cnpjField => {
+        const fieldDef = cnpjFieldsDefinition[cnpjField];
+        const currentValue = individualMapping[cnpjField] || suggestions[cnpjField] || 'nenhum';
+        
+        sections.push({
+          type: 'dropdown',
+          name: `field_${cnpjField}`,
+          label: fieldDef.label,
+          description: `${fieldDef.description} | Exemplo: ${fieldDef.example}`,
+          value: currentValue,
+          options: fieldOptions,
+          required: false
+        });
+      });
+
+      // Campo backup
+      sections.push({
+        type: 'section',
+        title: '📦 Campo Backup',
+        description: 'Dados não mapeados acima serão salvos aqui'
+      });
+
+      sections.push({
+        type: 'dropdown',
+        name: 'backup_field',
+        label: '📦 Campo para dados não mapeados',
+        description: 'Onde salvar dados que não foram mapeados individualmente',
+        value: savedUserChoice || selectedDestinationField,
+        options: [
+          { text: '🚫 Não salvar dados não mapeados', value: 'nenhum' },
+          { text: '📋 Campo padrão (teste_cnpj)', value: 'teste_cnpj' },
+          ...availableFields.map(field => ({
+            text: `📝 ${field.text}`,
+            value: field.value,
+            description: `Tipo: ${field.type}`
+          }))
+        ]
+      });
+    } else {
+      // Modo campo único
+      sections.push({
+        type: 'section',
+        title: '📋 Campo Único',
+        description: 'Todos os dados do CNPJ serão salvos formatados em um campo'
+      });
+
+      sections.push({
+        type: 'dropdown',
+        name: 'single_field',
+        label: '📂 Campo de destino',
+        description: 'Escolha onde salvar todos os dados formatados do CNPJ',
+        value: savedUserChoice || selectedDestinationField,
+        options: fieldOptions
+      });
+    }
+
+    // Seção de ações
+    sections.push({
+      type: 'section',
+      title: '⚡ Ações',
+      description: 'Salvar configurações e testar'
+    });
+
+    sections.push({
+      type: 'button',
+      name: 'save_config',
+      label: '💾 Salvar Configuração',
+      variant: 'primary',
+      action: 'save'
+    });
+
+    sections.push({
+      type: 'button',
+      name: 'test_mapping',
+      label: '🧪 Testar Mapeamento',
+      variant: 'secondary',
+      action: 'test'
+    });
+
+    console.log(`✅ Interface gerada com ${sections.length} seções`);
+    console.log(`🎯 Modo atual: ${hasIndividualMapping ? 'individual' : 'single'}`);
+    console.log(`📊 Campos disponíveis: ${availableFields.length}`);
+
+    return res.json({
+      response: {
+        sections: sections,
+        metadata: {
+          totalFields: Object.keys(cnpjFieldsDefinition).length,
+          availableHubSpotFields: availableFields.length,
+          currentMode: hasIndividualMapping ? 'individual' : 'single',
+          suggestionsGenerated: Object.keys(suggestions).length
+        }
+      }
+    });
+
+  } catch (error) {
+    console.error('❌ Erro ao gerar interface:', error);
+    
+    // Interface de fallback em caso de erro
+    return res.json({
+      response: {
+        sections: [
+          {
+            type: 'section',
+            title: '❌ Erro ao carregar configurações',
+            description: 'Verifique se o token está configurado corretamente'
+          },
+          {
+            type: 'dropdown',
+            name: 'fallback_field',
+            label: '📂 Campo de backup',
+            value: 'teste_cnpj',
+            options: [
+              { text: '📋 Campo padrão (teste_cnpj)', value: 'teste_cnpj' }
+            ]
+          }
+        ]
+      }
+    });
+  }
+});
+
+// ⚡ ENDPOINT PARA SALVAR CONFIGURAÇÕES DA INTERFACE
+app.post('/api/ui-extensions-save', (req, res) => {
+  console.log('💾 Salvando configurações da interface...');
+  console.log('📥 Dados recebidos:', JSON.stringify(req.body, null, 2));
+  
+  try {
+    const formData = req.body.formData || req.body;
+    
+    // Verificar modo selecionado
+    const mappingMode = formData.mapping_mode || 'single';
+    console.log(`🗺️ Modo selecionado: ${mappingMode}`);
+    
+    if (mappingMode === 'individual') {
+      // Salvar mapeamento individual
+      let updatedCount = 0;
+      
+      Object.keys(cnpjFieldsDefinition).forEach(cnpjField => {
+        const fieldKey = `field_${cnpjField}`;
+        if (formData[fieldKey]) {
+          const oldValue = individualMapping[cnpjField];
+          const newValue = formData[fieldKey];
+          
+          individualMapping[cnpjField] = newValue;
+          
+          if (oldValue !== newValue) {
+            updatedCount++;
+            console.log(`🔄 ${cnpjField}: "${oldValue}" → "${newValue}"`);
+          }
+        }
+      });
+      
+      // Salvar campo backup
+      if (formData.backup_field) {
+        savedUserChoice = formData.backup_field;
+        console.log(`📦 Campo backup: ${formData.backup_field}`);
+      }
+      
+      console.log(`✅ Mapeamento individual salvo: ${updatedCount} campos atualizados`);
+      
+      const mappedFields = Object.values(individualMapping).filter(field => field && field !== 'nenhum').length;
+      const unmappedFields = Object.values(individualMapping).filter(field => !field || field === 'nenhum').length;
+      
+      return res.json({
+        success: true,
+        message: `✅ Mapeamento individual configurado! ${mappedFields} campos mapeados, ${unmappedFields} vão para backup.`,
+        configuration: {
+          mode: 'individual',
+          mappedFields: mappedFields,
+          unmappedFields: unmappedFields,
+          backupField: savedUserChoice || selectedDestinationField,
+          mapping: individualMapping
+        },
+        nextStep: 'Use o enriquecimento em uma empresa para testar'
+      });
+      
+    } else {
+      // Modo campo único
+      if (formData.single_field) {
+        const oldField = savedUserChoice || selectedDestinationField;
+        savedUserChoice = formData.single_field;
+        
+        // Limpar mapeamento individual
+        Object.keys(individualMapping).forEach(key => {
+          individualMapping[key] = null;
+        });
+        
+        console.log(`📋 Campo único: "${oldField}" → "${savedUserChoice}"`);
+        console.log(`🧹 Mapeamento individual limpo`);
+        
+        return res.json({
+          success: true,
+          message: `✅ Configurado para salvar todos os dados no campo: ${savedUserChoice}`,
+          configuration: {
+            mode: 'single',
+            field: savedUserChoice,
+            description: savedUserChoice === 'nenhum' ? 'Apenas validar CNPJ' : 'Todos os dados formatados em um campo'
+          },
+          nextStep: 'Use o enriquecimento em uma empresa para testar'
+        });
+      }
+    }
+    
+    return res.status(400).json({
+      error: 'Dados de configuração inválidos',
+      received: formData
+    });
+    
+  } catch (error) {
+    console.error('❌ Erro ao salvar configurações da interface:', error);
+    return res.status(500).json({
+      error: 'Erro interno ao salvar configurações',
+      details: error.message
+    });
+  }
+});
+
+// ⚡ ENDPOINT PARA AÇÕES DA INTERFACE (BOTÕES)
+app.post('/api/ui-extensions-action', async (req, res) => {
+  console.log('⚡ Ação executada na interface:', req.body);
+  
+  try {
+    const { action, formData } = req.body;
+    
+    switch (action) {
+      case 'save':
+        // Redirecionar para salvar configurações
+        return res.redirect(307, '/api/ui-extensions-save');
+        
+      case 'test':
+        // Testar configuração atual
+        const hasIndividualMapping = Object.values(individualMapping).some(field => field && field !== 'nenhum');
+        
+        return res.json({
+          success: true,
+          message: '🧪 Configuração de teste',
+          currentConfig: {
+            mode: hasIndividualMapping ? 'individual' : 'single',
+            individualMapping: hasIndividualMapping ? individualMapping : null,
+            singleField: !hasIndividualMapping ? (savedUserChoice || selectedDestinationField) : null,
+            backupField: savedUserChoice || selectedDestinationField
+          },
+          testInstructions: [
+            '1. Crie uma empresa de teste: POST /create-test-company',
+            '2. Execute o enriquecimento: POST /enrich com o ID da empresa',
+            '3. Verifique os campos na empresa no HubSpot'
+          ]
+        });
+        
+      default:
+        return res.status(400).json({
+          error: 'Ação não reconhecida',
+          availableActions: ['save', 'test']
+        });
+    }
+    
+  } catch (error) {
+    console.error('❌ Erro ao executar ação:', error);
+    return res.status(500).json({
+      error: 'Erro ao executar ação',
+      details: error.message
+    });
+  }
+});
+
+// ⚡ ENDPOINT PARA MUDANÇA DE MODO (SINGLE <-> INDIVIDUAL)
+app.post('/api/switch-mapping-mode', (req, res) => {
+  console.log('🔄 Alternando modo de mapeamento:', req.body);
+  
+  try {
+    const { mode } = req.body;
+    
+    if (mode === 'individual') {
+      // Ativar mapeamento individual com sugestões
+      const suggestions = getSuggestedMapping(availableFields);
+      
+      Object.keys(individualMapping).forEach(cnpjField => {
+        if (!individualMapping[cnpjField]) {
+          individualMapping[cnpjField] = suggestions[cnpjField] || 'nenhum';
+        }
+      });
+      
+      console.log('✅ Modo individual ativado com sugestões');
+      
+      return res.json({
+        success: true,
+        message: 'Modo individual ativado',
+        mapping: individualMapping,
+        suggestions: suggestions
+      });
+      
+    } else if (mode === 'single') {
+      // Limpar mapeamento individual
+      Object.keys(individualMapping).forEach(key => {
+        individualMapping[key] = null;
+      });
+      
+      console.log('✅ Modo campo único ativado');
+      
+      return res.json({
+        success: true,
+        message: 'Modo campo único ativado',
+        field: savedUserChoice || selectedDestinationField
+      });
+    }
+    
+    return res.status(400).json({
+      error: 'Modo inválido',
+      validModes: ['single', 'individual']
+    });
+    
+  } catch (error) {
+    console.error('❌ Erro ao alternar modo:', error);
+    return res.status(500).json({
+      error: 'Erro ao alternar modo',
+      details: error.message
+    });
+  }
+});
+
+console.log('🎨 Interface HubSpot carregada com sucesso!');
+
 app.listen(PORT, () => console.log(`🚀 CNPJ- Enricher rodando na porta ${PORT}`));
