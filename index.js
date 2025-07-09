@@ -258,12 +258,8 @@ app.get('/test-token', async (req, res) => {
 });
 
 // ⚡ Página de configurações do app
-// ⚙️ Página de configurações do app - 100% compatível com HubSpot
 app.get('/settings', (req, res) => {
-  res.setHeader("X-Frame-Options", "ALLOWALL");
-  res.setHeader("Content-Security-Policy", "frame-ancestors 'self' https://app.hubspot.com https://app-eu1.hubspot.com;");
-  res.setHeader("Access-Control-Allow-Origin", "*");
-
+  // Retornar a página HTML de configurações
   res.send(`
 <!DOCTYPE html>
 <html lang="pt-BR">
@@ -272,94 +268,190 @@ app.get('/settings', (req, res) => {
   <title>Configurações | CNPJ Enricher</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <style>
-    body {
-      font-family: sans-serif;
-      margin: 20px;
-      padding: 0;
-      background: #fff;
-      color: #333;
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { 
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      padding: 20px;
     }
-    h1 {
-      font-size: 20px;
-      margin-bottom: 10px;
+    .container {
+      max-width: 800px;
+      margin: 0 auto;
+      background: white;
+      border-radius: 12px;
+      box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+      overflow: hidden;
     }
-    .box {
-      background: #f9f9f9;
-      padding: 16px;
-      border: 1px solid #ddd;
-      border-radius: 8px;
-      margin-bottom: 16px;
-    }
-    button {
-      margin-right: 10px;
-      padding: 8px 16px;
-      border-radius: 6px;
-      border: 1px solid #ccc;
-      background: #0073e6;
+    .header {
+      background: #2c5aa0;
       color: white;
-      font-weight: bold;
-      cursor: pointer;
+      padding: 30px;
+      text-align: center;
     }
-    #status {
+    .header h1 { font-size: 2rem; margin-bottom: 10px; }
+    .subtitle { opacity: 0.9; font-size: 1.1rem; }
+    .content { padding: 40px; }
+    .info-box {
+      background: #f8f9fa;
+      border-left: 4px solid #2c5aa0;
+      padding: 20px;
+      margin: 20px 0;
+      border-radius: 0 8px 8px 0;
+    }
+    .info-box h3 { color: #2c5aa0; margin-bottom: 10px; }
+    .button-row {
+      display: flex;
+      gap: 15px;
+      margin: 30px 0;
+      flex-wrap: wrap;
+    }
+    .btn-primary, .btn-secondary {
+      flex: 1;
+      padding: 15px 25px;
+      border: none;
+      border-radius: 8px;
+      font-size: 1rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      min-width: 200px;
+    }
+    .btn-primary {
+      background: #28a745;
+      color: white;
+    }
+    .btn-primary:hover { background: #218838; transform: translateY(-2px); }
+    .btn-secondary {
+      background: #6f42c1;
+      color: white;
+    }
+    .btn-secondary:hover { background: #5a32a3; transform: translateY(-2px); }
+    .status {
       margin-top: 20px;
-      font-weight: bold;
+      padding: 15px;
+      border-radius: 8px;
+      background: #e9ecef;
+      font-weight: 500;
+      text-align: center;
+      min-height: 50px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .tech-details {
+      background: #f8f9fa;
+      border-radius: 8px;
+      padding: 20px;
+      margin-top: 30px;
+    }
+    .tech-row {
+      display: flex;
+      justify-content: space-between;
+      padding: 10px 0;
+      border-bottom: 1px solid #dee2e6;
+    }
+    .tech-row:last-child { border-bottom: none; }
+    code {
+      background: #e9ecef;
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-family: 'Monaco', 'Consolas', monospace;
     }
   </style>
 </head>
 <body>
-  <h1>⚙️ Configurações do CNPJ Enricher</h1>
-  <div class="box">
-    <p>Todos os dados do CNPJ são salvos no campo <strong>teste_cnpj</strong> do HubSpot como texto completo.</p>
+  <div class="container">
+    <div class="header">
+      <h1>⚙️ CNPJ Enricher</h1>
+      <p class="subtitle">Configurações e Testes do Sistema</p>
+    </div>
+    
+    <div class="content">
+      <div class="info-box">
+        <h3>📄 Como funciona</h3>
+        <p>Todos os dados extraídos via CNPJ são salvos como texto formatado no campo <strong>teste_cnpj</strong> do HubSpot.</p>
+      </div>
+
+      <div class="info-box">
+        <h3>🛠️ Criar Campo</h3>
+        <p>Cria automaticamente o campo "teste_cnpj" no seu CRM se ele ainda não existir.</p>
+      </div>
+
+      <div class="info-box">
+        <h3>🧪 Testar Enriquecimento</h3>
+        <p>Cria uma empresa fictícia e preenche o campo <strong>teste_cnpj</strong> com dados reais de exemplo.</p>
+      </div>
+
+      <div class="button-row">
+        <button class="btn-secondary" onclick="createTestField()">🛠️ Criar Campo</button>
+        <button class="btn-primary" onclick="testEnrichment()">🧪 Testar Enriquecimento</button>
+      </div>
+
+      <div class="status" id="status">Pronto para configurar</div>
+      
+      <div class="tech-details">
+        <h3 style="margin-bottom: 15px; color: #2c5aa0;">Detalhes Técnicos</h3>
+        <div class="tech-row">
+          <span>Campo de Destino:</span>
+          <code>teste_cnpj</code>
+        </div>
+        <div class="tech-row">
+          <span>Tipo de Conteúdo:</span>
+          <span>Texto formatado</span>
+        </div>
+        <div class="tech-row">
+          <span>Fonte de Dados:</span>
+          <span>Receita Federal</span>
+        </div>
+        <div class="tech-row">
+          <span>API:</span>
+          <code>publica.cnpj.ws</code>
+        </div>
+      </div>
+    </div>
   </div>
-  <div class="box">
-    <button onclick="createTestField()">Criar Campo teste_cnpj</button>
-    <button onclick="testEnrichment()">Testar Enriquecimento</button>
-  </div>
-  <div id="status"></div>
 
   <script>
-    function setStatus(msg, color = 'black') {
+    function setStatus(text, color = '#333') {
       const el = document.getElementById('status');
-      el.innerText = msg;
+      el.textContent = text;
       el.style.color = color;
+      el.style.background = color === 'green' ? '#d4edda' : color === 'red' ? '#f8d7da' : '#e9ecef';
     }
 
     async function createTestField() {
-      setStatus('Criando campo...');
+      setStatus('Criando campo teste_cnpj...', '#0066cc');
       try {
         const res = await fetch('/create-test-field', { method: 'POST' });
         const json = await res.json();
-        if (res.ok) {
-          setStatus('✅ Campo criado/verificado com sucesso!', 'green');
-        } else {
-          setStatus('❌ Erro: ' + (json.error || 'Falha'), 'red');
-        }
-      } catch {
+        if (res.ok) setStatus('✅ Campo criado/verificado com sucesso!', 'green');
+        else setStatus('❌ Erro: ' + (json?.error || 'Falha'), 'red');
+      } catch (e) {
         setStatus('❌ Erro de conexão', 'red');
       }
     }
 
     async function testEnrichment() {
-      setStatus('Criando empresa de teste...');
+      setStatus('Criando empresa de teste...', '#0066cc');
       try {
         const res = await fetch('/create-test-company', { method: 'POST' });
         const json = await res.json();
-        if (!res.ok) return setStatus('❌ Erro: ' + (json.error || 'Falha'), 'red');
-        const companyId = json.companyId;
+        if (!res.ok) return setStatus('❌ Erro: ' + (json?.error || 'Falha'), 'red');
 
-        setStatus('Enriquecendo empresa com ID: ' + companyId + '...');
+        const companyId = json.companyId;
+        setStatus('Enriquecendo empresa com ID: ' + companyId + '...', '#0066cc');
+
         const enrichRes = await fetch('/enrich', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ companyId })
         });
+
         const enrichJson = await enrichRes.json();
-        if (enrichRes.ok) {
-          setStatus('🎉 Enriquecimento concluído!', 'green');
-        } else {
-          setStatus('❌ Erro: ' + (enrichJson.error || 'Falha'), 'red');
-        }
-      } catch {
+        if (enrichRes.ok) setStatus('🎉 Enriquecimento concluído com sucesso!', 'green');
+        else setStatus('❌ Erro no enriquecimento: ' + (enrichJson?.error || 'Falha'), 'red');
+      } catch (e) {
         setStatus('❌ Erro inesperado', 'red');
       }
     }
