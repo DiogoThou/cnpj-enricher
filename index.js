@@ -341,7 +341,7 @@ app.listen(PORT, () => console.log(`🚀 CNPJ Enricher rodando na porta ${PORT}`
       criarTeste: 'POST /create-test-company'
     }
   });
-});
+
 
 // ⚡ OAuth Callback CORRIGIDO
 app.get('/oauth/callback', async (req, res) => {
