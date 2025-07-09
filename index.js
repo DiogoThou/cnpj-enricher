@@ -948,28 +948,35 @@ app.post('/enrich', async (req, res) => {
       });
     }
     
-    // ⚡ TRATAR ERRO DE PROPRIEDADES QUE NÃO EXISTEM
-    if (error.response?.status === 400 && error.response?.data?.message?.includes('does not exist')) {
-      console.log('⚠️ Campo teste_cnpj não existe no HubSpot');
-      
-      return res.status(400).json({ 
-        error: 'Campo teste_cnpj não existe no HubSpot',
-        message: 'Execute POST /create-test-field para criar o campo',
-        solucao: 'POST /create-test-field',
-        dadosObtidos: {
-          cnpj: cnpjLimpo,
-          razaoSocial: cnpjData.razao_social,
-          nomeFantasia: cnpjData.estabelecimento?.nome_fantasia,
-          situacao: cnpjData.estabelecimento?.situacao_cadastral,
-          cidade: cnpjData.estabelecimento?.cidade?.nome,
-          estado: cnpjData.estabelecimento?.estado?.sigla
-        },
-        proximosPasses: [
-          '1. Execute: POST /create-test-field',
-          '2. Depois execute: POST /enrich novamente'
-        ]
-      });
-    }
+// ⚡ TRATAR ERRO DE PROPRIEDADES QUE NÃO EXISTEM
+if (error.response?.status === 400 && error.response?.data?.message?.includes('does not exist')) {
+  console.log('⚠️ Campo teste_cnpj não existe no HubSpot');
+  
+  // ⚡ VERIFICAR SE cnpjData EXISTE ANTES DE USAR
+  const dadosObtidos = {};
+  if (typeof cnpjData !== 'undefined' && cnpjData) {
+    dadosObtidos.cnpj = cnpjLimpo;
+    dadosObtidos.razaoSocial = cnpjData.razao_social;
+    dadosObtidos.nomeFantasia = cnpjData.estabelecimento?.nome_fantasia;
+    dadosObtidos.situacao = cnpjData.estabelecimento?.situacao_cadastral;
+    dadosObtidos.cidade = cnpjData.estabelecimento?.cidade?.nome;
+    dadosObtidos.estado = cnpjData.estabelecimento?.estado?.sigla;
+  } else {
+    dadosObtidos.cnpj = cnpjLimpo || 'CNPJ não disponível';
+    dadosObtidos.status = 'Dados do CNPJ não obtidos devido ao erro';
+  }
+  
+  return res.status(400).json({ 
+    error: 'Campo teste_cnpj não existe no HubSpot',
+    message: 'Execute POST /create-test-field para criar o campo',
+    solucao: 'POST /create-test-field',
+    dadosObtidos: dadosObtidos,
+    proximosPasses: [
+      '1. Execute: POST /create-test-field',
+      '2. Depois execute: POST /enrich novamente'
+    ]
+  });
+}
     
     // ⚡ TRATAR RATE LIMIT (429) COMO SUCESSO PARCIAL
     if (error.response?.status === 429 && error.config?.url?.includes('cnpj.ws')) {
