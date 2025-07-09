@@ -381,66 +381,65 @@ app.post('/enrich', async (req, res) => {
       return value || '';
     };
 
+    // ⚡ SOLUÇÃO TESTE: Todos os dados em um único campo "teste_cnpj"
+    const todosOsDados = `
+🏢 DADOS DA EMPRESA (CNPJ: ${cnpj})
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+📋 IDENTIFICAÇÃO:
+• Razão Social: ${cnpjData.razao_social}
+• Nome Fantasia: ${cnpjData.estabelecimento?.nome_fantasia || 'N/A'}
+• CNPJ: ${cnpj}
+• Situação: ${cnpjData.estabelecimento?.situacao_cadastral}
+
+💼 INFORMAÇÕES EMPRESARIAIS:
+• Porte: ${cnpjData.porte?.descricao}
+• Capital Social: R$ ${cnpjData.capital_social}
+• Atividade Principal: ${cnpjData.estabelecimento?.atividade_principal?.descricao}
+• Natureza Jurídica: ${cnpjData.natureza_juridica?.descricao}
+
+📍 ENDEREÇO:
+• Logradouro: ${cnpjData.estabelecimento?.tipo_logradouro} ${cnpjData.estabelecimento?.logradouro}, ${cnpjData.estabelecimento?.numero}
+• Complemento: ${cnpjData.estabelecimento?.complemento || 'N/A'}
+• Bairro: ${cnpjData.estabelecimento?.bairro}
+• CEP: ${cnpjData.estabelecimento?.cep}
+• Cidade: ${cnpjData.estabelecimento?.cidade?.nome}
+• Estado: ${cnpjData.estabelecimento?.estado?.nome} (${cnpjData.estabelecimento?.estado?.sigla})
+• País: ${cnpjData.estabelecimento?.pais?.nome}
+
+📞 CONTATO:
+• Telefone: (${cnpjData.estabelecimento?.ddd1}) ${cnpjData.estabelecimento?.telefone1}
+• Fax: (${cnpjData.estabelecimento?.ddd_fax}) ${cnpjData.estabelecimento?.fax}
+• Email: ${cnpjData.estabelecimento?.email}
+
+📊 OUTRAS INFORMAÇÕES:
+• Data de Início: ${cnpjData.estabelecimento?.data_inicio_atividade}
+• Data da Situação: ${cnpjData.estabelecimento?.data_situacao_cadastral}
+• Última Atualização: ${cnpjData.atualizado_em}
+
+👥 SÓCIOS:
+${cnpjData.socios?.map(socio => 
+  `• ${socio.nome} (${socio.qualificacao_socio?.descricao})`
+).join('\n') || 'N/A'}
+
+🎯 Dados obtidos automaticamente via CNPJ Enricher em ${new Date().toLocaleString('pt-BR')}
+    `.trim();
+
     const updatePayload = {
       properties: {
-        // ⚡ Mapeamento para campos PADRÃO do HubSpot
-        name: extract('Nome da Empresa', cnpjData.estabelecimento?.nome_fantasia || cnpjData.razao_social),
-        phone: extract('Telefone', cnpjData.estabelecimento?.telefone1 ? `(${cnpjData.estabelecimento.ddd1}) ${cnpjData.estabelecimento.telefone1}` : ''),
-        city: extract('Cidade', cnpjData.estabelecimento?.cidade?.nome),
-        state: extract('Estado', cnpjData.estabelecimento?.estado?.sigla),
-        country: extract('País', cnpjData.estabelecimento?.pais?.nome),
-        zip: extract('CEP', cnpjData.estabelecimento?.cep),
-        address: extract('Endereço', cnpjData.estabelecimento?.logradouro ? 
-          `${cnpjData.estabelecimento.tipo_logradouro} ${cnpjData.estabelecimento.logradouro}, ${cnpjData.estabelecimento.numero}` : ''),
-        address2: extract('Complemento', cnpjData.estabelecimento?.complemento),
-        
-        // ⚡ Campos customizados que PODEM existir (se não existir, HubSpot ignora)
-        description: extract('Descrição', 
-          `Razão Social: ${cnpjData.razao_social}\n` +
-          `Nome Fantasia: ${cnpjData.estabelecimento?.nome_fantasia || 'N/A'}\n` +
-          `Situação: ${cnpjData.estabelecimento?.situacao_cadastral}\n` +
-          `Porte: ${cnpjData.porte?.descricao}\n` +
-          `Atividade Principal: ${cnpjData.estabelecimento?.atividade_principal?.descricao}\n` +
-          `Capital Social: R$ ${cnpjData.capital_social}`
-        ),
-        
-        // ⚡ Campos que podem existir
-        website: extract('Website', cnpjData.estabelecimento?.email ? `https://${cnpjData.estabelecimento.email.split('@')[1]}` : ''),
-        
-        // ⚡ Campos customizados (apenas se existirem)
-        razao_social: extract('Razão Social', cnpjData.razao_social),
-        nome_fantasia: extract('Nome Fantasia', cnpjData.estabelecimento?.nome_fantasia),
-        situacao_cadastral: extract('Situação Cadastral', cnpjData.estabelecimento?.situacao_cadastral),
-        capital_social: extract('Capital Social', cnpjData.capital_social),
-        porte: extract('Porte', cnpjData.porte?.descricao),
-        atividade_principal: extract('Atividade Principal', cnpjData.estabelecimento?.atividade_principal?.descricao),
-        cnpj_email: extract('Email CNPJ', cnpjData.estabelecimento?.email),
-        bairro: extract('Bairro', cnpjData.estabelecimento?.bairro)
+        teste_cnpj: todosOsDados
       }
     };
 
-    console.log('📦 Payload inicial criado:', JSON.stringify(updatePayload, null, 2));
+    console.log('📦 Payload TESTE - Todos os dados em teste_cnpj:', JSON.stringify(updatePayload, null, 2));
 
-    // ⚡ Remover campos vazios para evitar erros
-    const cleanPayload = {
-      properties: {}
-    };
-    
-    Object.keys(updatePayload.properties).forEach(key => {
-      const value = updatePayload.properties[key];
-      if (value && value.trim() !== '') {
-        cleanPayload.properties[key] = value;
-      }
-    });
+    console.log('📦 Payload TESTE - Todos os dados em teste_cnpj:', JSON.stringify(updatePayload, null, 2));
 
-    console.log('📦 Payload final enviado ao HubSpot (campos vazios removidos):', JSON.stringify(cleanPayload, null, 2));
-    console.log('📊 Total de campos a serem atualizados:', Object.keys(cleanPayload.properties).length);
-
-    console.log('📡 Atualizando empresa no HubSpot...');
+    console.log('📡 Atualizando empresa no HubSpot (campo teste_cnpj)...');
     
     await axios.patch(
       `https://api.hubapi.com/crm/v3/objects/companies/${companyId}`,
-      cleanPayload,
+      updatePayload,
       {
         headers: {
           Authorization: `Bearer ${HUBSPOT_ACCESS_TOKEN}`,
@@ -449,7 +448,7 @@ app.post('/enrich', async (req, res) => {
       }
     );
 
-    console.log('✅ Empresa atualizada com sucesso!');
+    console.log('✅ Empresa atualizada com sucesso no campo teste_cnpj!');
     
     // ⚡ Dados resumidos da empresa para o log e resposta
     const dadosEmpresa = {
@@ -464,7 +463,7 @@ app.post('/enrich', async (req, res) => {
       telefone: cnpjData.estabelecimento?.telefone1
     };
     
-    console.log('🎉 SUCESSO COMPLETO - Dados da empresa encontrados:');
+    console.log('🎉 SUCESSO COMPLETO - Dados da empresa salvos em teste_cnpj:');
     console.log('🏢 Razão Social:', dadosEmpresa.razaoSocial);
     console.log('✨ Nome Fantasia:', dadosEmpresa.nomeFantasia);
     console.log('📊 Situação:', dadosEmpresa.situacao);
@@ -475,9 +474,9 @@ app.post('/enrich', async (req, res) => {
 
     res.json({ 
       success: true,
-      message: '🎉 Empresa enriquecida com sucesso!',
+      message: '🎉 Empresa enriquecida com sucesso! (Dados salvos em teste_cnpj)',
       cnpj: cnpj,
-      dadosEncontrados: Object.keys(cleanPayload.properties),
+      campoAtualizado: 'teste_cnpj',
       empresa: {
         razaoSocial: dadosEmpresa.razaoSocial,
         nomeFantasia: dadosEmpresa.nomeFantasia,
@@ -490,16 +489,9 @@ app.post('/enrich', async (req, res) => {
         },
         atividade: dadosEmpresa.atividade
       },
-      totalCamposAtualizados: Object.keys(cleanPayload.properties).length,
-      camposAtualizados: Object.keys(cleanPayload.properties),
-      hubspotMapping: {
-        'Nome da empresa': cleanPayload.properties.name,
-        'Cidade': cleanPayload.properties.city,
-        'Estado': cleanPayload.properties.state,
-        'Telefone': cleanPayload.properties.phone,
-        'CEP': cleanPayload.properties.zip,
-        'Endereço': cleanPayload.properties.address
-      }
+      observacao: 'Todos os dados foram salvos no campo teste_cnpj para fins de teste',
+      proximoPasso: 'Verificar no HubSpot se o campo teste_cnpj foi preenchido com todos os dados',
+      caracteresGravados: todosOsDados.length
     });
 
   } catch (error) {
@@ -528,31 +520,24 @@ app.post('/enrich', async (req, res) => {
     
     // ⚡ TRATAR ERRO DE PROPRIEDADES QUE NÃO EXISTEM
     if (error.response?.status === 400 && error.response?.data?.message?.includes('does not exist')) {
-      console.log('⚠️ Algumas propriedades não existem no HubSpot');
-      
-      const missingProps = error.response.data.errors?.map(err => err.context?.propertyName || 'unknown') || [];
-      console.log('📋 Propriedades faltando:', missingProps);
+      console.log('⚠️ Campo teste_cnpj não existe no HubSpot');
       
       return res.status(400).json({ 
-        error: 'Propriedades customizadas não existem no HubSpot',
-        message: 'Algumas propriedades CNPJ não foram criadas ainda',
-        propriedadesFaltando: missingProps,
-        solucoes: [
-          '1. Use: POST /create-cnpj-properties (cria todas as propriedades)',
-          '2. Ou aguarde - o sistema vai tentar usar apenas campos padrão',
-          '3. Dados foram obtidos com sucesso da Receita Federal'
-        ],
+        error: 'Campo teste_cnpj não existe no HubSpot',
+        message: 'O campo teste_cnpj precisa ser criado primeiro',
+        solucao: 'Execute: POST /create-test-field',
         dadosObtidos: {
           cnpj: cnpj,
           razaoSocial: cnpjData.razao_social,
           nomeFantasia: cnpjData.estabelecimento?.nome_fantasia,
           situacao: cnpjData.estabelecimento?.situacao_cadastral,
           cidade: cnpjData.estabelecimento?.cidade?.nome,
-          estado: cnpjData.estabelecimento?.estado?.sigla
+          estado: cnpjData.estabelecimento?.estado?.sigla,
+          observacao: 'Dados foram obtidos com sucesso da Receita Federal'
         },
         proximosPasses: [
-          'Execute: POST /create-cnpj-properties',
-          'Depois execute: POST /enrich novamente'
+          '1. Execute: POST /create-test-field',
+          '2. Depois execute: POST /enrich novamente'
         ]
       });
     }
@@ -591,6 +576,66 @@ app.post('/enrich', async (req, res) => {
       details: error.message,
       step: 'Erro não identificado - verifique os logs'
     });
+  }
+});
+
+// ⚡ Endpoint para criar o campo de teste teste_cnpj
+app.post('/create-test-field', async (req, res) => {
+  if (!HUBSPOT_ACCESS_TOKEN) {
+    return res.status(401).json({ error: 'Token não configurado' });
+  }
+
+  try {
+    console.log('🔧 Criando campo de teste teste_cnpj...');
+    
+    const response = await axios.post(
+      'https://api.hubapi.com/crm/v3/properties/companies',
+      {
+        name: 'teste_cnpj',
+        label: 'Teste CNPJ',
+        type: 'string',
+        fieldType: 'textarea',
+        description: 'Campo de teste para dados do CNPJ - todos os dados da Receita Federal',
+        groupName: 'companyinformation',
+        hasUniqueValue: false,
+        hidden: false,
+        displayOrder: -1
+      },
+      {
+        headers: {
+          Authorization: `Bearer ${HUBSPOT_ACCESS_TOKEN}`,
+          'Content-Type': 'application/json'
+        }
+      }
+    );
+
+    console.log('✅ Campo teste_cnpj criado com sucesso');
+    
+    res.json({
+      success: true,
+      message: 'Campo teste_cnpj criado com sucesso!',
+      fieldName: 'teste_cnpj',
+      fieldType: 'textarea',
+      proximoPasso: 'Agora execute POST /enrich para testar o enriquecimento'
+    });
+    
+  } catch (error) {
+    if (error.response?.status === 409) {
+      console.log('⚠️ Campo teste_cnpj já existe');
+      res.json({
+        success: true,
+        message: 'Campo teste_cnpj já existe no HubSpot',
+        status: 'already_exists',
+        proximoPasso: 'Execute POST /enrich para testar o enriquecimento'
+      });
+    } else {
+      console.error('❌ Erro ao criar campo teste_cnpj:', error.response?.data);
+      res.status(500).json({
+        error: 'Erro ao criar campo teste_cnpj',
+        details: error.response?.data,
+        solucao: 'Campo teste_cnpj pode já existir ou você precisa de permissões'
+      });
+    }
   }
 });
 
@@ -806,7 +851,8 @@ app.post('/create-test-company', async (req, res) => {
           cnpj: '14665903000104', // ⚡ Mesmo CNPJ que você tem
           domain: 'teste.com.br',
           phone: '11999999999',
-          website: 'https://teste.com.br'
+          website: 'https://teste.com.br',
+          teste_cnpj: 'Campo de teste criado para receber dados do CNPJ'
         }
       },
       {
@@ -827,7 +873,12 @@ app.post('/create-test-company', async (req, res) => {
       cnpj: '14665903000104',
       testEnrichUrl: `POST /enrich com {"companyId": "${response.data.id}"}`,
       debugUrl: `/debug-company/${response.data.id}`,
-      addCnpjUrl: `POST /add-cnpj/${response.data.id} com {"cnpj": "14665903000104"}`
+      observacao: 'Campo teste_cnpj incluído para receber todos os dados',
+      proximoTeste: {
+        url: 'POST /enrich',
+        body: { companyId: response.data.id },
+        expectativa: 'Todos os dados do CNPJ serão salvos no campo teste_cnpj'
+      }
     });
   } catch (error) {
     console.error('❌ Erro ao criar empresa teste:', error.response?.data);
