@@ -27,9 +27,6 @@ let fieldMapping = {
   cep: 'zip'
 };
 
-// ⚡ Controle do modo avançado
-let modoAvancadoAtivo = false;  // Por padrão DESABILITADO
-
 // ⚡ Função melhorada para limpar CNPJ - aceita qualquer formato
 function cleanCNPJ(cnpj) {
   console.log('🧹 Limpando CNPJ:', cnpj, 'Tipo:', typeof cnpj);
@@ -60,24 +57,11 @@ function cleanCNPJ(cnpj) {
 
 // Status do app
 app.get('/account', (req, res) => {
-  const camposConfigurados = Object.keys(fieldMapping).filter(key => fieldMapping[key] && fieldMapping[key].trim() !== '');
-  
   res.json({
     status: 'connected',
     app: 'CNPJ Enricher',
     version: '1.0',
-    tokenStatus: HUBSPOT_ACCESS_TOKEN ? 'Configurado' : 'Não configurado',
-    configuracao: {
-      mapeamentoConfigurado: camposConfigurados.length > 0,
-      totalCamposMapeados: camposConfigurados.length,
-      settingsUrl: '/settings'
-    },
-    endpoints: {
-      configurar: 'GET /settings',
-      enriquecer: 'POST /enrich',
-      status: 'GET /api/config-status',
-      criarTeste: 'POST /create-test-company'
-    }
+    tokenStatus: HUBSPOT_ACCESS_TOKEN ? 'Configurado' : 'Não configurado' // ⚡ Adicionado
   });
 });
 
@@ -214,12 +198,8 @@ app.get('/test-token', async (req, res) => {
   }
 });
 
-// ⚡ Página de configurações do app (compatível com iframe do HubSpot)
+// ⚡ Página de configurações do app
 app.get('/settings', (req, res) => {
-  // Headers para funcionar dentro do iframe do HubSpot
-  res.setHeader('X-Frame-Options', 'ALLOWALL');
-  res.setHeader('Content-Security-Policy', "frame-ancestors *");
-  
   // Retornar a página HTML de configurações
   res.send(`
 <!DOCTYPE html>
@@ -232,72 +212,73 @@ app.get('/settings', (req, res) => {
         body {
             font-family: 'Lexend', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
             margin: 0;
-            padding: 16px;
-            background: #f5f8fa;
+            padding: 20px;
+            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
             min-height: 100vh;
             color: #33475b;
         }
         
         .container {
-            max-width: 100%;
+            max-width: 800px;
             margin: 0 auto;
             background: white;
-            border-radius: 8px;
-            padding: 24px;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            border-radius: 16px;
+            padding: 32px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.1);
+            border: 1px solid rgba(255,255,255,0.2);
         }
         
         h1 {
             color: #33475b;
             text-align: center;
             margin-bottom: 8px;
-            font-size: 1.8em;
-            font-weight: 600;
+            font-size: 2.2em;
+            font-weight: 700;
         }
         
         .subtitle {
             text-align: center;
             color: #7c98b6;
-            margin-bottom: 32px;
-            font-size: 1em;
+            margin-bottom: 40px;
+            font-size: 1.1em;
         }
         
         .mapping-section {
-            background: #0091ae;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             color: white;
-            padding: 20px;
-            border-radius: 8px;
-            margin-bottom: 24px;
+            padding: 24px;
+            border-radius: 12px;
+            margin-bottom: 32px;
         }
         
         .mapping-section h3 {
             margin-top: 0;
-            font-size: 1.2em;
+            font-size: 1.4em;
             margin-bottom: 16px;
         }
         
         .field-mapping {
             display: grid;
             grid-template-columns: 1fr 1fr;
-            gap: 16px;
-            margin-bottom: 16px;
+            gap: 20px;
+            margin-bottom: 20px;
             align-items: center;
         }
         
         .cnpj-field {
             background: rgba(255,255,255,0.15);
-            padding: 10px 12px;
-            border-radius: 6px;
-            font-weight: 500;
-            font-size: 14px;
+            padding: 12px 16px;
+            border-radius: 8px;
+            font-weight: 600;
+            backdrop-filter: blur(10px);
         }
         
         .hubspot-field select {
             width: 100%;
-            padding: 10px 12px;
-            border: 1px solid rgba(255,255,255,0.3);
-            border-radius: 6px;
-            background: rgba(255,255,255,0.95);
+            padding: 12px 16px;
+            border: 2px solid rgba(255,255,255,0.3);
+            border-radius: 8px;
+            background: rgba(255,255,255,0.9);
             color: #33475b;
             font-size: 14px;
             font-weight: 500;
@@ -305,109 +286,58 @@ app.get('/settings', (req, res) => {
         
         .actions {
             display: flex;
-            gap: 12px;
+            gap: 16px;
             justify-content: center;
-            margin-top: 24px;
+            margin-top: 32px;
         }
         
         button {
-            padding: 12px 20px;
+            padding: 14px 28px;
             border: none;
-            border-radius: 6px;
+            border-radius: 8px;
             font-weight: 600;
-            font-size: 14px;
+            font-size: 16px;
             cursor: pointer;
-            transition: all 0.2s ease;
-            min-width: 120px;
+            transition: all 0.3s ease;
+            min-width: 140px;
         }
         
         .btn-primary {
-            background: #0091ae;
+            background: linear-gradient(135deg, #4299e1, #3182ce);
             color: white;
-        }
-        
-        .btn-primary:hover {
-            background: #007a94;
         }
         
         .btn-secondary {
             background: #f7fafc;
             color: #4a5568;
-            border: 1px solid #e2e8f0;
-        }
-        
-        .btn-secondary:hover {
-            background: #edf2f7;
+            border: 2px solid #e2e8f0;
         }
         
         .status {
-            padding: 12px;
-            border-radius: 6px;
-            margin: 12px 0;
+            padding: 16px;
+            border-radius: 8px;
+            margin: 16px 0;
             font-weight: 600;
             text-align: center;
-            font-size: 14px;
         }
         
         .status.success {
             background: #c6f6d5;
             color: #2f855a;
-            border: 1px solid #68d391;
+            border: 2px solid #68d391;
         }
         
         .status.error {
             background: #fed7d7;
             color: #c53030;
-            border: 1px solid #fc8181;
-        }
-        
-        .status.info {
-            background: #bee3f8;
-            color: #2c5282;
-            border: 1px solid #90cdf4;
-        }
-        
-        .info-box {
-            background: #e8f4fd;
-            border: 1px solid #90cdf4;
-            border-radius: 8px;
-            padding: 16px;
-            margin-bottom: 20px;
-        }
-        
-        .info-box h4 {
-            margin-top: 0;
-            color: #2b6cb0;
-            font-size: 16px;
-        }
-        
-        @media (max-width: 600px) {
-            .field-mapping {
-                grid-template-columns: 1fr;
-                gap: 8px;
-            }
-            
-            .actions {
-                flex-direction: column;
-                align-items: center;
-            }
-            
-            .container {
-                padding: 16px;
-            }
+            border: 2px solid #fc8181;
         }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>⚙️ CNPJ Enricher</h1>
+        <h1>⚙️ Configurações CNPJ Enricher</h1>
         <p class="subtitle">Configure como os dados do CNPJ serão mapeados nos campos do HubSpot</p>
-        
-        <div class="info-box">
-            <h4>📋 Como funciona:</h4>
-            <p>Escolha qual campo do HubSpot receberá cada dado obtido da consulta do CNPJ. 
-            Deixe em "Não mapear" para campos que não deseja preencher.</p>
-        </div>
         
         <div class="mapping-section">
             <h3>🎯 Mapeamento de Campos</h3>
@@ -420,6 +350,7 @@ app.get('/settings', (req, res) => {
                         <option value="name">Nome da empresa</option>
                         <option value="description">Descrição</option>
                         <option value="about_us">Sobre nós</option>
+                        <option value="razao_social">Razão Social (customizado)</option>
                     </select>
                 </div>
             </div>
@@ -431,6 +362,7 @@ app.get('/settings', (req, res) => {
                         <option value="">-- Não mapear --</option>
                         <option value="name">Nome da empresa</option>
                         <option value="description">Descrição</option>
+                        <option value="nome_fantasia">Nome Fantasia (customizado)</option>
                     </select>
                 </div>
             </div>
@@ -442,6 +374,29 @@ app.get('/settings', (req, res) => {
                         <option value="">-- Não mapear --</option>
                         <option value="phone">Telefone</option>
                         <option value="mobilephone">Telefone celular</option>
+                        <option value="telefone">Telefone (customizado)</option>
+                    </select>
+                </div>
+            </div>
+            
+            <div class="field-mapping">
+                <div class="cnpj-field">🏙️ Cidade</div>
+                <div class="hubspot-field">
+                    <select id="cidade">
+                        <option value="">-- Não mapear --</option>
+                        <option value="city">Cidade</option>
+                        <option value="cidade">Cidade (customizado)</option>
+                    </select>
+                </div>
+            </div>
+            
+            <div class="field-mapping">
+                <div class="cnpj-field">🗺️ Estado</div>
+                <div class="hubspot-field">
+                    <select id="estado">
+                        <option value="">-- Não mapear --</option>
+                        <option value="state">Estado</option>
+                        <option value="estado">Estado (customizado)</option>
                     </select>
                 </div>
             </div>
@@ -453,47 +408,7 @@ app.get('/settings', (req, res) => {
                         <option value="">-- Não mapear --</option>
                         <option value="domain">Domínio</option>
                         <option value="description">Descrição</option>
-                    </select>
-                </div>
-            </div>
-            
-            <div class="field-mapping">
-                <div class="cnpj-field">🏙️ Cidade</div>
-                <div class="hubspot-field">
-                    <select id="cidade">
-                        <option value="">-- Não mapear --</option>
-                        <option value="city">Cidade</option>
-                    </select>
-                </div>
-            </div>
-            
-            <div class="field-mapping">
-                <div class="cnpj-field">🗺️ Estado</div>
-                <div class="hubspot-field">
-                    <select id="estado">
-                        <option value="">-- Não mapear --</option>
-                        <option value="state">Estado</option>
-                    </select>
-                </div>
-            </div>
-            
-            <div class="field-mapping">
-                <div class="cnpj-field">📮 CEP</div>
-                <div class="hubspot-field">
-                    <select id="cep">
-                        <option value="">-- Não mapear --</option>
-                        <option value="zip">CEP</option>
-                    </select>
-                </div>
-            </div>
-            
-            <div class="field-mapping">
-                <div class="cnpj-field">🏠 Endereço</div>
-                <div class="hubspot-field">
-                    <select id="endereco">
-                        <option value="">-- Não mapear --</option>
-                        <option value="address">Endereço</option>
-                        <option value="address2">Endereço 2</option>
+                        <option value="cnpj_email">Email CNPJ (customizado)</option>
                     </select>
                 </div>
             </div>
@@ -501,10 +416,10 @@ app.get('/settings', (req, res) => {
         
         <div class="actions">
             <button type="button" class="btn-secondary" onclick="loadDefaults()">
-                🔄 Padrões
+                🔄 Carregar Padrões
             </button>
             <button type="button" class="btn-primary" onclick="saveMapping()">
-                💾 Salvar
+                💾 Salvar Configurações
             </button>
         </div>
         
@@ -518,9 +433,7 @@ app.get('/settings', (req, res) => {
             telefone: 'phone',
             cidade: 'city',
             estado: 'state',
-            email: '',
-            cep: 'zip',
-            endereco: 'address'
+            email: 'cnpj_email'
         };
 
         function loadDefaults() {
@@ -530,7 +443,7 @@ app.get('/settings', (req, res) => {
                     select.value = defaultMapping[field];
                 }
             });
-            showStatus('✅ Configurações padrão carregadas!', 'success');
+            showStatus('Configurações padrão carregadas!', 'success');
         }
 
         async function saveMapping() {
@@ -544,7 +457,7 @@ app.get('/settings', (req, res) => {
             });
 
             try {
-                showStatus('💾 Salvando configurações...', 'info');
+                showStatus('Salvando configurações...', 'info');
                 
                 const response = await fetch('/api/save-mapping', {
                     method: 'POST',
@@ -558,20 +471,11 @@ app.get('/settings', (req, res) => {
 
                 if (response.ok) {
                     showStatus('✅ Configurações salvas com sucesso!', 'success');
-                    
-                    // Notificar o HubSpot parent window se disponível
-                    if (window.parent && window.parent !== window) {
-                        window.parent.postMessage({
-                            type: 'CONFIGURATION_SAVED',
-                            data: mapping
-                        }, '*');
-                    }
                 } else {
-                    showStatus('❌ Erro: ' + (result.error || 'Erro desconhecido'), 'error');
+                    showStatus('❌ Erro: ' + result.error, 'error');
                 }
             } catch (error) {
                 showStatus('❌ Erro ao salvar configurações', 'error');
-                console.error('Erro:', error);
             }
         }
 
@@ -582,7 +486,7 @@ app.get('/settings', (req, res) => {
             if (type === 'success') {
                 setTimeout(() => {
                     statusDiv.innerHTML = '';
-                }, 4000);
+                }, 3000);
             }
         }
 
@@ -595,35 +499,18 @@ app.get('/settings', (req, res) => {
                     
                     Object.keys(mapping).forEach(field => {
                         const select = document.getElementById(field);
-                        if (select && mapping[field]) {
-                            select.value = mapping[field];
+                        if (select) {
+                            select.value = mapping[field] || '';
                         }
                     });
-                    
-                    showStatus('📋 Configurações carregadas', 'info');
-                    setTimeout(() => {
-                        document.getElementById('status').innerHTML = '';
-                    }, 2000);
-                } else {
-                    loadDefaults();
                 }
             } catch (error) {
-                console.error('Erro ao carregar configurações:', error);
                 loadDefaults();
             }
         }
 
-        // Inicializar
         document.addEventListener('DOMContentLoaded', function() {
             loadSavedMapping();
-        });
-        
-        // Comunicação com HubSpot
-        window.addEventListener('message', function(event) {
-            if (event.data && event.data.type === 'HUBSPOT_IFRAME_RESIZE') {
-                // HubSpot pode enviar mensagens para redimensionar iframe
-                console.log('HubSpot iframe message:', event.data);
-            }
         });
     </script>
 </body>
