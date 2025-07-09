@@ -2196,7 +2196,15 @@ app.get('/api/sync-cnpj', async (req, res) => {
 app.post('/api/sync-cnpj', async (req, res) => {
   try {
     await syncCNPJs();
+   app.post('/api/sync-cnpj', async (req, res) => {
+  try {
+    await syncCNPJs();
     res.json({ status: 'success', message: 'Sync concluído com sucesso (POST)' });
+  } catch (error) {
+    console.error('❌ Erro no sync-cnpj (POST):', error.message);
+    res.status(500).json({ error: 'Erro na sincronização' });
+  }
+});
   } catch (error) {
     console.error('❌ Erro no sync-cnpj (POST):', error.message);
     res.status(500).json({ error: 'Erro na sincronização' });
