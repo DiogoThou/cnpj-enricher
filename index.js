@@ -1900,25 +1900,76 @@ app.post('/api/ui-extensions-fetch', async (req, res) => {
   }
 });
 
-// ⚡ ENDPOINT PARA SALVAR CONFIGURAÇÕES DA INTERFACE
+// ⚡ ENDPOINT CORRIGIDO PARA SALVAR CONFIGURAÇÕES DA INTERFACE
 app.post('/api/ui-extensions-save', (req, res) => {
   console.log('💾 Salvando configurações da interface...');
-  console.log('📥 Dados recebidos:', JSON.stringify(req.body, null, 2));
+  console.log('📥 Request body completo:', JSON.stringify(req.body, null, 2));
+  console.log('📥 Headers:', JSON.stringify(req.headers, null, 2));
   
   try {
-    const formData = req.body.formData || req.body;
+    // ⚡ MÚLTIPLAS FORMAS DE EXTRAIR OS DADOS
+    let formData = {};
     
-    // Verificar modo selecionado
-    const mappingMode = formData.mapping_mode || 'single';
-    console.log(`🗺️ Modo selecionado: ${mappingMode}`);
+    // Tentar diferentes estruturas de dados que o HubSpot pode enviar
+    if (req.body.formData) {
+      formData = req.body.formData;
+      console.log('📋 Usando req.body.formData');
+    } else if (req.body.properties) {
+      formData = req.body.properties;
+      console.log('📋 Usando req.body.properties');
+    } else if (req.body.data) {
+      formData = req.body.data;
+      console.log('📋 Usando req.body.data');
+    } else {
+      formData = req.body;
+      console.log('📋 Usando req.body diretamente');
+    }
+    
+    console.log('📊 Dados extraídos:', JSON.stringify(formData, null, 2));
+    
+    // ⚡ VALIDAÇÃO MAIS FLEXÍVEL
+    if (!formData || typeof formData !== 'object') {
+      console.log('❌ Dados inválidos recebidos');
+      return res.status(400).json({
+        error: 'Dados de formulário não encontrados',
+        received: req.body,
+        expected: 'Objeto com propriedades do formulário',
+        debug: {
+          hasFormData: !!req.body.formData,
+          hasProperties: !!req.body.properties,
+          hasData: !!req.body.data,
+          bodyKeys: Object.keys(req.body)
+        }
+      });
+    }
+    
+    // ⚡ DETECTAR MODO AUTOMATICAMENTE
+    let mappingMode = 'single'; // Padrão
+    
+    // Verificar se tem dados de mapeamento individual
+    const hasIndividualFields = Object.keys(formData).some(key => key.startsWith('field_'));
+    const hasMappingMode = formData.mapping_mode;
+    const hasSingleField = formData.single_field;
+    
+    if (hasMappingMode) {
+      mappingMode = formData.mapping_mode;
+    } else if (hasIndividualFields) {
+      mappingMode = 'individual';
+    } else if (hasSingleField) {
+      mappingMode = 'single';
+    }
+    
+    console.log(`🗺️ Modo detectado: ${mappingMode}`);
+    console.log(`📊 Debug - hasIndividualFields: ${hasIndividualFields}, hasMappingMode: ${hasMappingMode}, hasSingleField: ${hasSingleField}`);
     
     if (mappingMode === 'individual') {
-      // Salvar mapeamento individual
+      // ⚡ SALVAR MAPEAMENTO INDIVIDUAL
       let updatedCount = 0;
+      let mappingChanges = [];
       
       Object.keys(cnpjFieldsDefinition).forEach(cnpjField => {
         const fieldKey = `field_${cnpjField}`;
-        if (formData[fieldKey]) {
+        if (formData[fieldKey] !== undefined) {
           const oldValue = individualMapping[cnpjField];
           const newValue = formData[fieldKey];
           
@@ -1926,21 +1977,23 @@ app.post('/api/ui-extensions-save', (req, res) => {
           
           if (oldValue !== newValue) {
             updatedCount++;
+            mappingChanges.push(`${cnpjField}: "${oldValue}" → "${newValue}"`);
             console.log(`🔄 ${cnpjField}: "${oldValue}" → "${newValue}"`);
           }
         }
       });
       
-      // Salvar campo backup
-      if (formData.backup_field) {
+      // ⚡ SALVAR CAMPO BACKUP
+      if (formData.backup_field !== undefined) {
+        const oldBackup = savedUserChoice || selectedDestinationField;
         savedUserChoice = formData.backup_field;
-        console.log(`📦 Campo backup: ${formData.backup_field}`);
+        console.log(`📦 Campo backup: "${oldBackup}" → "${savedUserChoice}"`);
       }
-      
-      console.log(`✅ Mapeamento individual salvo: ${updatedCount} campos atualizados`);
       
       const mappedFields = Object.values(individualMapping).filter(field => field && field !== 'nenhum').length;
       const unmappedFields = Object.values(individualMapping).filter(field => !field || field === 'nenhum').length;
+      
+      console.log(`✅ Mapeamento individual salvo: ${updatedCount} campos atualizados`);
       
       return res.json({
         success: true,
@@ -1950,24 +2003,52 @@ app.post('/api/ui-extensions-save', (req, res) => {
           mappedFields: mappedFields,
           unmappedFields: unmappedFields,
           backupField: savedUserChoice || selectedDestinationField,
+          changes: mappingChanges,
           mapping: individualMapping
         },
-        nextStep: 'Use o enriquecimento em uma empresa para testar'
+        nextStep: 'Use o enriquecimento em uma empresa para testar',
+        debug: {
+          fieldsProcessed: Object.keys(cnpjFieldsDefinition).length,
+          updatedCount: updatedCount,
+          formDataKeys: Object.keys(formData)
+        }
       });
       
     } else {
-      // Modo campo único
-      if (formData.single_field) {
+      // ⚡ MODO CAMPO ÚNICO
+      let targetField = formData.single_field;
+      
+      // ⚡ FALLBACK: Se não tem single_field, tentar outros campos comuns
+      if (!targetField) {
+        targetField = formData.campo_destino || 
+                     formData.destination_field || 
+                     formData.target_field ||
+                     savedUserChoice || 
+                     selectedDestinationField;
+      }
+      
+      if (targetField) {
         const oldField = savedUserChoice || selectedDestinationField;
-        savedUserChoice = formData.single_field;
+        savedUserChoice = targetField;
         
-        // Limpar mapeamento individual
+        // ⚡ LIMPAR MAPEAMENTO INDIVIDUAL
+        let clearedFields = 0;
         Object.keys(individualMapping).forEach(key => {
+          if (individualMapping[key] && individualMapping[key] !== 'nenhum') {
+            clearedFields++;
+          }
           individualMapping[key] = null;
         });
         
         console.log(`📋 Campo único: "${oldField}" → "${savedUserChoice}"`);
-        console.log(`🧹 Mapeamento individual limpo`);
+        console.log(`🧹 Mapeamento individual limpo (${clearedFields} campos)`);
+        
+        let fieldDescription = 'Todos os dados formatados em um campo';
+        if (savedUserChoice === 'nenhum') {
+          fieldDescription = 'Apenas validar CNPJ (não salvar dados)';
+        } else if (savedUserChoice === 'teste_cnpj') {
+          fieldDescription = 'Campo padrão para todos os dados do CNPJ';
+        }
         
         return res.json({
           success: true,
@@ -1975,25 +2056,72 @@ app.post('/api/ui-extensions-save', (req, res) => {
           configuration: {
             mode: 'single',
             field: savedUserChoice,
-            description: savedUserChoice === 'nenhum' ? 'Apenas validar CNPJ' : 'Todos os dados formatados em um campo'
+            previousField: oldField,
+            description: fieldDescription,
+            clearedIndividualFields: clearedFields
           },
-          nextStep: 'Use o enriquecimento em uma empresa para testar'
+          nextStep: 'Use o enriquecimento em uma empresa para testar',
+          debug: {
+            targetFieldFound: !!targetField,
+            formDataKeys: Object.keys(formData),
+            savedChoice: savedUserChoice
+          }
+        });
+      } else {
+        // ⚡ ERRO: Nenhum campo especificado
+        console.log('❌ Nenhum campo de destino especificado');
+        return res.status(400).json({
+          error: 'Campo de destino não especificado',
+          received: formData,
+          expectedFields: ['single_field', 'campo_destino', 'destination_field'],
+          currentConfig: {
+            savedUserChoice: savedUserChoice,
+            selectedDestinationField: selectedDestinationField
+          },
+          suggestion: 'Especifique um campo de destino válido'
         });
       }
     }
-    
-    return res.status(400).json({
-      error: 'Dados de configuração inválidos',
-      received: formData
-    });
     
   } catch (error) {
     console.error('❌ Erro ao salvar configurações da interface:', error);
     return res.status(500).json({
       error: 'Erro interno ao salvar configurações',
-      details: error.message
+      details: error.message,
+      stack: error.stack,
+      received: req.body,
+      timestamp: new Date().toISOString()
     });
   }
+});
+
+// ⚡ ENDPOINT ADICIONAL PARA DEBUG
+app.post('/api/debug-save-request', (req, res) => {
+  console.log('🔍 DEBUG - Request completo:');
+  console.log('📥 Body:', JSON.stringify(req.body, null, 2));
+  console.log('📋 Headers:', JSON.stringify(req.headers, null, 2));
+  console.log('🎯 Method:', req.method);
+  console.log('📍 URL:', req.url);
+  console.log('🔗 Query:', JSON.stringify(req.query, null, 2));
+  
+  res.json({
+    debug: true,
+    request: {
+      body: req.body,
+      headers: req.headers,
+      method: req.method,
+      url: req.url,
+      query: req.query
+    },
+    analysis: {
+      hasFormData: !!req.body.formData,
+      hasProperties: !!req.body.properties,
+      hasData: !!req.body.data,
+      bodyKeys: Object.keys(req.body || {}),
+      contentType: req.headers['content-type']
+    },
+    timestamp: new Date().toISOString()
+  });
 });
 
 // ⚡ ENDPOINT PARA AÇÕES DA INTERFACE (BOTÕES)
