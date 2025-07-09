@@ -1134,7 +1134,7 @@ app.post('/api/accounts-fetch', (req, res) => {
         {
           accountId: 'default-account',
           accountName: 'Enriquecedor CNPJ - CRM Hub',
-          accountLogoUrl: 'https://crmhub.com.br/logo.png' // insira a URL pública do seu logo aqui
+          accountLogoUrl: 'https://crmhub.com.br/wp-content/uploads/2025/02/logo-laranja-1.png' // insira a URL pública do seu logo aqui
         }
       ]
     }
