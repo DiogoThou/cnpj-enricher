@@ -1278,5 +1278,49 @@ function updateEnrichmentPayload(cnpjData, cnpjNumber) {
 console.log('🔧 Sistema de mapeamento de campos CNPJ carregado com sucesso!');
 
 
+// ⚡ ENDPOINTS EXTRAS PARA PERSISTÊNCIA
+
+// Endpoint para carregar configuração salva (chamado quando o app carrega)
+app.post('/api/load-settings', (req, res) => {
+  console.log('🔄 Carregando configurações salvas...');
+  console.log('📥 Request body:', JSON.stringify(req.body, null, 2));
+  
+  res.json({
+    response: {
+      campo_destino: selectedDestinationField,
+      message: `Configuração carregada: ${selectedDestinationField}`
+    }
+  });
+});
+
+// Endpoint para salvar configuração (chamado quando usuário muda algo)
+app.post('/api/save-settings', (req, res) => {
+  console.log('💾 Salvando configurações...');
+  console.log('📥 Request body:', JSON.stringify(req.body, null, 2));
+  
+  if (req.body.campo_destino) {
+    selectedDestinationField = req.body.campo_destino;
+    console.log(`✅ Campo destino salvo: ${selectedDestinationField}`);
+  }
+  
+  res.json({
+    response: {
+      status: 'saved',
+      campo_destino: selectedDestinationField,
+      message: `Configuração salva: ${selectedDestinationField}`
+    }
+  });
+});
+
+// Debug endpoint para ver estado atual
+app.get('/api/debug-settings', (req, res) => {
+  res.json({
+    selectedDestinationField: selectedDestinationField,
+    availableFieldsCount: availableFields.length,
+    availableFields: availableFields.slice(0, 5), // Primeiros 5 para debug
+    timestamp: new Date().toISOString()
+  });
+});
+
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`🚀 CNPJ Enricher rodando na porta ${PORT}`));
