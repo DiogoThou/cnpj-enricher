@@ -11,6 +11,22 @@ let HUBSPOT_ACCESS_TOKEN = process.env.HUBSPOT_ACCESS_TOKEN; // ⚡ Mudança: le
 const HUBSPOT_REFRESH_TOKEN = process.env.HUBSPOT_REFRESH_TOKEN;
 const REDIRECT_URI = process.env.REDIRECT_URI;
 
+// ⚡ Armazenamento temporário para mapeamento (em produção usar banco de dados)
+let fieldMapping = {
+  razao_social: 'name',
+  nome_fantasia: 'description', 
+  situacao_cadastral: 'situacao_cadastral',
+  capital_social: 'capital_social',
+  porte: 'porte',
+  atividade_principal: 'industry',
+  telefone: 'phone',
+  email: 'cnpj_email',
+  endereco: 'address',
+  cidade: 'city',
+  estado: 'state',
+  cep: 'zip'
+};
+
 // ⚡ Função melhorada para limpar CNPJ - aceita qualquer formato
 function cleanCNPJ(cnpj) {
   console.log('🧹 Limpando CNPJ:', cnpj, 'Tipo:', typeof cnpj);
@@ -41,11 +57,24 @@ function cleanCNPJ(cnpj) {
 
 // Status do app
 app.get('/account', (req, res) => {
+  const camposConfigurados = Object.keys(fieldMapping).filter(key => fieldMapping[key] && fieldMapping[key].trim() !== '');
+  
   res.json({
     status: 'connected',
     app: 'CNPJ Enricher',
     version: '1.0',
-    tokenStatus: HUBSPOT_ACCESS_TOKEN ? 'Configurado' : 'Não configurado' // ⚡ Adicionado
+    tokenStatus: HUBSPOT_ACCESS_TOKEN ? 'Configurado' : 'Não configurado',
+    configuracao: {
+      mapeamentoConfigurado: camposConfigurados.length > 0,
+      totalCamposMapeados: camposConfigurados.length,
+      settingsUrl: '/settings'
+    },
+    endpoints: {
+      configurar: 'GET /settings',
+      enriquecer: 'POST /enrich',
+      status: 'GET /api/config-status',
+      criarTeste: 'POST /create-test-company'
+    }
   });
 });
 
@@ -179,6 +208,425 @@ app.get('/test-token', async (req, res) => {
       error: error.response?.data,
       needsAuth: true
     });
+  }
+});
+
+// ⚡ Página de configurações do app
+app.get('/settings', (req, res) => {
+  // Retornar a página HTML de configurações
+  res.send(`
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CNPJ Enricher - Configurações</title>
+    <style>
+        body {
+            font-family: 'Lexend', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+            min-height: 100vh;
+            color: #33475b;
+        }
+        
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 16px;
+            padding: 32px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.1);
+            border: 1px solid rgba(255,255,255,0.2);
+        }
+        
+        h1 {
+            color: #33475b;
+            text-align: center;
+            margin-bottom: 8px;
+            font-size: 2.2em;
+            font-weight: 700;
+        }
+        
+        .subtitle {
+            text-align: center;
+            color: #7c98b6;
+            margin-bottom: 40px;
+            font-size: 1.1em;
+        }
+        
+        .mapping-section {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 24px;
+            border-radius: 12px;
+            margin-bottom: 32px;
+        }
+        
+        .mapping-section h3 {
+            margin-top: 0;
+            font-size: 1.4em;
+            margin-bottom: 16px;
+        }
+        
+        .field-mapping {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin-bottom: 20px;
+            align-items: center;
+        }
+        
+        .cnpj-field {
+            background: rgba(255,255,255,0.15);
+            padding: 12px 16px;
+            border-radius: 8px;
+            font-weight: 600;
+            backdrop-filter: blur(10px);
+        }
+        
+        .hubspot-field select {
+            width: 100%;
+            padding: 12px 16px;
+            border: 2px solid rgba(255,255,255,0.3);
+            border-radius: 8px;
+            background: rgba(255,255,255,0.9);
+            color: #33475b;
+            font-size: 14px;
+            font-weight: 500;
+        }
+        
+        .actions {
+            display: flex;
+            gap: 16px;
+            justify-content: center;
+            margin-top: 32px;
+        }
+        
+        button {
+            padding: 14px 28px;
+            border: none;
+            border-radius: 8px;
+            font-weight: 600;
+            font-size: 16px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            min-width: 140px;
+        }
+        
+        .btn-primary {
+            background: linear-gradient(135deg, #4299e1, #3182ce);
+            color: white;
+        }
+        
+        .btn-secondary {
+            background: #f7fafc;
+            color: #4a5568;
+            border: 2px solid #e2e8f0;
+        }
+        
+        .status {
+            padding: 16px;
+            border-radius: 8px;
+            margin: 16px 0;
+            font-weight: 600;
+            text-align: center;
+        }
+        
+        .status.success {
+            background: #c6f6d5;
+            color: #2f855a;
+            border: 2px solid #68d391;
+        }
+        
+        .status.error {
+            background: #fed7d7;
+            color: #c53030;
+            border: 2px solid #fc8181;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>⚙️ Configurações CNPJ Enricher</h1>
+        <p class="subtitle">Configure como os dados do CNPJ serão mapeados nos campos do HubSpot</p>
+        
+        <div class="mapping-section">
+            <h3>🎯 Mapeamento de Campos</h3>
+            
+            <div class="field-mapping">
+                <div class="cnpj-field">🏢 Razão Social</div>
+                <div class="hubspot-field">
+                    <select id="razao_social">
+                        <option value="">-- Não mapear --</option>
+                        <option value="name">Nome da empresa</option>
+                        <option value="description">Descrição</option>
+                        <option value="about_us">Sobre nós</option>
+                        <option value="razao_social">Razão Social (customizado)</option>
+                    </select>
+                </div>
+            </div>
+            
+            <div class="field-mapping">
+                <div class="cnpj-field">✨ Nome Fantasia</div>
+                <div class="hubspot-field">
+                    <select id="nome_fantasia">
+                        <option value="">-- Não mapear --</option>
+                        <option value="name">Nome da empresa</option>
+                        <option value="description">Descrição</option>
+                        <option value="nome_fantasia">Nome Fantasia (customizado)</option>
+                    </select>
+                </div>
+            </div>
+            
+            <div class="field-mapping">
+                <div class="cnpj-field">📞 Telefone</div>
+                <div class="hubspot-field">
+                    <select id="telefone">
+                        <option value="">-- Não mapear --</option>
+                        <option value="phone">Telefone</option>
+                        <option value="mobilephone">Telefone celular</option>
+                        <option value="telefone">Telefone (customizado)</option>
+                    </select>
+                </div>
+            </div>
+            
+            <div class="field-mapping">
+                <div class="cnpj-field">🏙️ Cidade</div>
+                <div class="hubspot-field">
+                    <select id="cidade">
+                        <option value="">-- Não mapear --</option>
+                        <option value="city">Cidade</option>
+                        <option value="cidade">Cidade (customizado)</option>
+                    </select>
+                </div>
+            </div>
+            
+            <div class="field-mapping">
+                <div class="cnpj-field">🗺️ Estado</div>
+                <div class="hubspot-field">
+                    <select id="estado">
+                        <option value="">-- Não mapear --</option>
+                        <option value="state">Estado</option>
+                        <option value="estado">Estado (customizado)</option>
+                    </select>
+                </div>
+            </div>
+            
+            <div class="field-mapping">
+                <div class="cnpj-field">📧 Email</div>
+                <div class="hubspot-field">
+                    <select id="email">
+                        <option value="">-- Não mapear --</option>
+                        <option value="domain">Domínio</option>
+                        <option value="description">Descrição</option>
+                        <option value="cnpj_email">Email CNPJ (customizado)</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+        
+        <div class="actions">
+            <button type="button" class="btn-secondary" onclick="loadDefaults()">
+                🔄 Carregar Padrões
+            </button>
+            <button type="button" class="btn-primary" onclick="saveMapping()">
+                💾 Salvar Configurações
+            </button>
+        </div>
+        
+        <div id="status"></div>
+    </div>
+
+    <script>
+        const defaultMapping = {
+            razao_social: 'name',
+            nome_fantasia: 'description',
+            telefone: 'phone',
+            cidade: 'city',
+            estado: 'state',
+            email: 'cnpj_email'
+        };
+
+        function loadDefaults() {
+            Object.keys(defaultMapping).forEach(field => {
+                const select = document.getElementById(field);
+                if (select) {
+                    select.value = defaultMapping[field];
+                }
+            });
+            showStatus('Configurações padrão carregadas!', 'success');
+        }
+
+        async function saveMapping() {
+            const mapping = {};
+            
+            Object.keys(defaultMapping).forEach(field => {
+                const select = document.getElementById(field);
+                if (select && select.value) {
+                    mapping[field] = select.value;
+                }
+            });
+
+            try {
+                showStatus('Salvando configurações...', 'info');
+                
+                const response = await fetch('/api/save-mapping', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ mapping })
+                });
+
+                const result = await response.json();
+
+                if (response.ok) {
+                    showStatus('✅ Configurações salvas com sucesso!', 'success');
+                } else {
+                    showStatus('❌ Erro: ' + result.error, 'error');
+                }
+            } catch (error) {
+                showStatus('❌ Erro ao salvar configurações', 'error');
+            }
+        }
+
+        function showStatus(message, type) {
+            const statusDiv = document.getElementById('status');
+            statusDiv.innerHTML = '<div class="status ' + type + '">' + message + '</div>';
+            
+            if (type === 'success') {
+                setTimeout(() => {
+                    statusDiv.innerHTML = '';
+                }, 3000);
+            }
+        }
+
+        async function loadSavedMapping() {
+            try {
+                const response = await fetch('/api/get-mapping');
+                if (response.ok) {
+                    const result = await response.json();
+                    const mapping = result.mapping || defaultMapping;
+                    
+                    Object.keys(mapping).forEach(field => {
+                        const select = document.getElementById(field);
+                        if (select) {
+                            select.value = mapping[field] || '';
+                        }
+                    });
+                }
+            } catch (error) {
+                loadDefaults();
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', function() {
+            loadSavedMapping();
+        });
+    </script>
+</body>
+</html>
+  `);
+});
+
+// ⚡ Status das configurações
+app.get('/api/config-status', (req, res) => {
+  try {
+    const camposConfigurados = Object.keys(fieldMapping).filter(key => fieldMapping[key] && fieldMapping[key].trim() !== '');
+    
+    res.json({
+      success: true,
+      configuracao: {
+        totalCamposMapeados: camposConfigurados.length,
+        mapeamento: fieldMapping,
+        camposConfigurados: camposConfigurados.map(campo => ({
+          dadoCNPJ: campo,
+          campoHubSpot: fieldMapping[campo]
+        }))
+      },
+      urls: {
+        configurar: '/settings',
+        enriquecer: 'POST /enrich',
+        criarEmpresaTeste: 'POST /create-test-company'
+      },
+      status: camposConfigurados.length > 0 ? 'Configurado' : 'Não configurado',
+      proximoPasso: camposConfigurados.length === 0 ? 
+        'Configure o mapeamento em /settings' : 
+        'Pronto para enriquecer empresas'
+    });
+  } catch (error) {
+    res.status(500).json({ error: 'Erro ao obter status da configuração' });
+  }
+});
+
+// ⚡ Resetar configurações para padrão
+app.post('/api/reset-mapping', (req, res) => {
+  try {
+    fieldMapping = {
+      razao_social: 'name',
+      nome_fantasia: 'description', 
+      situacao_cadastral: '',
+      capital_social: '',
+      porte: '',
+      atividade_principal: 'industry',
+      telefone: 'phone',
+      email: '',
+      endereco: 'address',
+      cidade: 'city',
+      estado: 'state',
+      cep: 'zip'
+    };
+    
+    console.log('🔄 Mapeamento resetado para padrão:', fieldMapping);
+    
+    res.json({ 
+      success: true, 
+      message: 'Mapeamento resetado para configurações padrão',
+      mapping: fieldMapping 
+    });
+  } catch (error) {
+    console.error('❌ Erro ao resetar mapeamento:', error);
+    res.status(500).json({ error: 'Erro interno do servidor' });
+  }
+});
+
+// ⚡ API para salvar mapeamento
+app.post('/api/save-mapping', (req, res) => {
+  try {
+    const { mapping } = req.body;
+    
+    if (!mapping || typeof mapping !== 'object') {
+      return res.status(400).json({ error: 'Mapeamento inválido' });
+    }
+    
+    // Salvar mapeamento (em produção usar banco de dados)
+    fieldMapping = { ...fieldMapping, ...mapping };
+    
+    console.log('✅ Mapeamento salvo:', fieldMapping);
+    
+    res.json({ 
+      success: true, 
+      message: 'Mapeamento salvo com sucesso',
+      mapping: fieldMapping 
+    });
+  } catch (error) {
+    console.error('❌ Erro ao salvar mapeamento:', error);
+    res.status(500).json({ error: 'Erro interno do servidor' });
+  }
+});
+
+// ⚡ API para recuperar mapeamento
+app.get('/api/get-mapping', (req, res) => {
+  try {
+    res.json({ 
+      success: true, 
+      mapping: fieldMapping 
+    });
+  } catch (error) {
+    console.error('❌ Erro ao recuperar mapeamento:', error);
+    res.status(500).json({ error: 'Erro interno do servidor' });
   }
 });
 
@@ -381,61 +829,91 @@ app.post('/enrich', async (req, res) => {
       return value || '';
     };
 
-    // ⚡ SOLUÇÃO TESTE: Todos os dados em um único campo "teste_cnpj"
-    const todosOsDados = `
-🏢 DADOS DA EMPRESA (CNPJ: ${cnpj})
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-📋 IDENTIFICAÇÃO:
-• Razão Social: ${cnpjData.razao_social}
-• Nome Fantasia: ${cnpjData.estabelecimento?.nome_fantasia || 'N/A'}
-• CNPJ: ${cnpj}
-• Situação: ${cnpjData.estabelecimento?.situacao_cadastral}
-
-💼 INFORMAÇÕES EMPRESARIAIS:
-• Porte: ${cnpjData.porte?.descricao}
-• Capital Social: R$ ${cnpjData.capital_social}
-• Atividade Principal: ${cnpjData.estabelecimento?.atividade_principal?.descricao}
-• Natureza Jurídica: ${cnpjData.natureza_juridica?.descricao}
-
-📍 ENDEREÇO:
-• Logradouro: ${cnpjData.estabelecimento?.tipo_logradouro} ${cnpjData.estabelecimento?.logradouro}, ${cnpjData.estabelecimento?.numero}
-• Complemento: ${cnpjData.estabelecimento?.complemento || 'N/A'}
-• Bairro: ${cnpjData.estabelecimento?.bairro}
-• CEP: ${cnpjData.estabelecimento?.cep}
-• Cidade: ${cnpjData.estabelecimento?.cidade?.nome}
-• Estado: ${cnpjData.estabelecimento?.estado?.nome} (${cnpjData.estabelecimento?.estado?.sigla})
-• País: ${cnpjData.estabelecimento?.pais?.nome}
-
-📞 CONTATO:
-• Telefone: (${cnpjData.estabelecimento?.ddd1}) ${cnpjData.estabelecimento?.telefone1}
-• Fax: (${cnpjData.estabelecimento?.ddd_fax}) ${cnpjData.estabelecimento?.fax}
-• Email: ${cnpjData.estabelecimento?.email}
-
-📊 OUTRAS INFORMAÇÕES:
-• Data de Início: ${cnpjData.estabelecimento?.data_inicio_atividade}
-• Data da Situação: ${cnpjData.estabelecimento?.data_situacao_cadastral}
-• Última Atualização: ${cnpjData.atualizado_em}
-
-👥 SÓCIOS:
-${cnpjData.socios?.map(socio => 
-  `• ${socio.nome} (${socio.qualificacao_socio?.descricao})`
-).join('\n') || 'N/A'}
-
-🎯 Dados obtidos automaticamente via CNPJ Enricher em ${new Date().toLocaleString('pt-BR')}
-    `.trim();
-
+    // ⚡ Usar mapeamento configurado pelo usuário
     const updatePayload = {
-      properties: {
-        teste_cnpj: todosOsDados
-      }
+      properties: {}
     };
 
-    console.log('📦 Payload TESTE - Todos os dados em teste_cnpj:', JSON.stringify(updatePayload, null, 2));
+    // Mapear campos conforme configuração do usuário
+    if (fieldMapping.razao_social) {
+      updatePayload.properties[fieldMapping.razao_social] = extract('Razão Social', cnpjData.razao_social);
+    }
+    
+    if (fieldMapping.nome_fantasia) {
+      updatePayload.properties[fieldMapping.nome_fantasia] = extract('Nome Fantasia', cnpjData.estabelecimento?.nome_fantasia);
+    }
+    
+    if (fieldMapping.situacao_cadastral) {
+      updatePayload.properties[fieldMapping.situacao_cadastral] = extract('Situação Cadastral', cnpjData.estabelecimento?.situacao_cadastral);
+    }
+    
+    if (fieldMapping.capital_social) {
+      updatePayload.properties[fieldMapping.capital_social] = extract('Capital Social', cnpjData.capital_social);
+    }
+    
+    if (fieldMapping.porte) {
+      updatePayload.properties[fieldMapping.porte] = extract('Porte', cnpjData.porte?.descricao);
+    }
+    
+    if (fieldMapping.atividade_principal) {
+      updatePayload.properties[fieldMapping.atividade_principal] = extract('Atividade Principal', cnpjData.estabelecimento?.atividade_principal?.descricao);
+    }
+    
+    if (fieldMapping.telefone) {
+      const telefoneFormatado = cnpjData.estabelecimento?.telefone1 ? 
+        `(${cnpjData.estabelecimento.ddd1}) ${cnpjData.estabelecimento.telefone1}` : '';
+      updatePayload.properties[fieldMapping.telefone] = extract('Telefone', telefoneFormatado);
+    }
+    
+    if (fieldMapping.email) {
+      updatePayload.properties[fieldMapping.email] = extract('Email', cnpjData.estabelecimento?.email);
+    }
+    
+    if (fieldMapping.endereco) {
+      const enderecoCompleto = cnpjData.estabelecimento?.logradouro ? 
+        `${cnpjData.estabelecimento.tipo_logradouro} ${cnpjData.estabelecimento.logradouro}, ${cnpjData.estabelecimento.numero}` : '';
+      updatePayload.properties[fieldMapping.endereco] = extract('Endereço', enderecoCompleto);
+    }
+    
+    if (fieldMapping.cidade) {
+      updatePayload.properties[fieldMapping.cidade] = extract('Cidade', cnpjData.estabelecimento?.cidade?.nome);
+    }
+    
+    if (fieldMapping.estado) {
+      updatePayload.properties[fieldMapping.estado] = extract('Estado', cnpjData.estabelecimento?.estado?.sigla);
+    }
+    
+    if (fieldMapping.cep) {
+      updatePayload.properties[fieldMapping.cep] = extract('CEP', cnpjData.estabelecimento?.cep);
+    }
+
+    // Remover campos vazios
+    Object.keys(updatePayload.properties).forEach(key => {
+      if (!updatePayload.properties[key] || updatePayload.properties[key].trim() === '') {
+        delete updatePayload.properties[key];
+      }
+    });
+
+    console.log('📦 Payload usando mapeamento configurado:', JSON.stringify(updatePayload, null, 2));
+    console.log('⚙️ Mapeamento atual:', fieldMapping);
+
+    if (Object.keys(updatePayload.properties).length === 0) {
+      return res.status(400).json({
+        error: 'Nenhum campo configurado para mapeamento',
+        message: 'Configure o mapeamento de campos em /settings',
+        settingsUrl: '/settings',
+        dadosDisponiveis: {
+          razaoSocial: cnpjData.razao_social,
+          nomeFantasia: cnpjData.estabelecimento?.nome_fantasia,
+          cidade: cnpjData.estabelecimento?.cidade?.nome,
+          estado: cnpjData.estabelecimento?.estado?.sigla
+        }
+      });
+    }
 
     console.log('📦 Payload TESTE - Todos os dados em teste_cnpj:', JSON.stringify(updatePayload, null, 2));
 
-    console.log('📡 Atualizando empresa no HubSpot (campo teste_cnpj)...');
+    console.log('📡 Atualizando empresa no HubSpot (usando mapeamento configurado)...');
     
     await axios.patch(
       `https://api.hubapi.com/crm/v3/objects/companies/${companyId}`,
@@ -448,7 +926,7 @@ ${cnpjData.socios?.map(socio =>
       }
     );
 
-    console.log('✅ Empresa atualizada com sucesso no campo teste_cnpj!');
+    console.log('✅ Empresa atualizada com sucesso usando mapeamento configurado!');
     
     // ⚡ Dados resumidos da empresa para o log e resposta
     const dadosEmpresa = {
@@ -463,7 +941,7 @@ ${cnpjData.socios?.map(socio =>
       telefone: cnpjData.estabelecimento?.telefone1
     };
     
-    console.log('🎉 SUCESSO COMPLETO - Dados da empresa salvos em teste_cnpj:');
+    console.log('🎉 SUCESSO COMPLETO - Dados da empresa atualizados conforme configuração:');
     console.log('🏢 Razão Social:', dadosEmpresa.razaoSocial);
     console.log('✨ Nome Fantasia:', dadosEmpresa.nomeFantasia);
     console.log('📊 Situação:', dadosEmpresa.situacao);
@@ -474,9 +952,8 @@ ${cnpjData.socios?.map(socio =>
 
     res.json({ 
       success: true,
-      message: '🎉 Empresa enriquecida com sucesso! (Dados salvos em teste_cnpj)',
+      message: '🎉 Empresa enriquecida com sucesso usando mapeamento configurado!',
       cnpj: cnpj,
-      campoAtualizado: 'teste_cnpj',
       empresa: {
         razaoSocial: dadosEmpresa.razaoSocial,
         nomeFantasia: dadosEmpresa.nomeFantasia,
@@ -489,9 +966,24 @@ ${cnpjData.socios?.map(socio =>
         },
         atividade: dadosEmpresa.atividade
       },
-      observacao: 'Todos os dados foram salvos no campo teste_cnpj para fins de teste',
-      proximoPasso: 'Verificar no HubSpot se o campo teste_cnpj foi preenchido com todos os dados',
-      caracteresGravados: todosOsDados.length
+      mapeamento: {
+        camposAtualizados: Object.keys(updatePayload.properties),
+        totalCampos: Object.keys(updatePayload.properties).length,
+        configuracaoUsada: fieldMapping,
+        camposPorDado: Object.keys(updatePayload.properties).map(field => {
+          // Encontrar qual dado do CNPJ foi mapeado para este campo
+          const reverseMapping = Object.entries(fieldMapping).find(([key, value]) => value === field);
+          return {
+            campoHubSpot: field,
+            dadoCNPJ: reverseMapping ? reverseMapping[0] : 'desconhecido',
+            valor: updatePayload.properties[field]
+          };
+        })
+      },
+      configuracoes: {
+        settingsUrl: '/settings',
+        message: 'Configure o mapeamento de campos em /settings'
+      }
     });
 
   } catch (error) {
@@ -520,24 +1012,33 @@ ${cnpjData.socios?.map(socio =>
     
     // ⚡ TRATAR ERRO DE PROPRIEDADES QUE NÃO EXISTEM
     if (error.response?.status === 400 && error.response?.data?.message?.includes('does not exist')) {
-      console.log('⚠️ Campo teste_cnpj não existe no HubSpot');
+      console.log('⚠️ Algumas propriedades configuradas não existem no HubSpot');
+      
+      const missingProps = error.response.data.errors?.map(err => err.context?.propertyName || 'unknown') || [];
+      console.log('📋 Propriedades faltando:', missingProps);
       
       return res.status(400).json({ 
-        error: 'Campo teste_cnpj não existe no HubSpot',
-        message: 'O campo teste_cnpj precisa ser criado primeiro',
-        solucao: 'Execute: POST /create-test-field',
+        error: 'Propriedades configuradas não existem no HubSpot',
+        message: 'Alguns campos do mapeamento não foram criados no HubSpot',
+        propriedadesFaltando: missingProps,
+        solucoes: [
+          '1. Acesse /settings e configure campos que existem',
+          '2. Ou use: POST /create-cnpj-properties para criar campos customizados',
+          '3. Dados foram obtidos com sucesso da Receita Federal'
+        ],
         dadosObtidos: {
           cnpj: cnpj,
           razaoSocial: cnpjData.razao_social,
           nomeFantasia: cnpjData.estabelecimento?.nome_fantasia,
           situacao: cnpjData.estabelecimento?.situacao_cadastral,
           cidade: cnpjData.estabelecimento?.cidade?.nome,
-          estado: cnpjData.estabelecimento?.estado?.sigla,
-          observacao: 'Dados foram obtidos com sucesso da Receita Federal'
+          estado: cnpjData.estabelecimento?.estado?.sigla
         },
+        mapeamentoAtual: fieldMapping,
         proximosPasses: [
-          '1. Execute: POST /create-test-field',
-          '2. Depois execute: POST /enrich novamente'
+          'Configure campos válidos em: /settings',
+          'Ou crie propriedades customizadas: POST /create-cnpj-properties',
+          'Depois execute: POST /enrich novamente'
         ]
       });
     }
@@ -851,8 +1352,7 @@ app.post('/create-test-company', async (req, res) => {
           cnpj: '14665903000104', // ⚡ Mesmo CNPJ que você tem
           domain: 'teste.com.br',
           phone: '11999999999',
-          website: 'https://teste.com.br',
-          teste_cnpj: 'Campo de teste criado para receber dados do CNPJ'
+          website: 'https://teste.com.br'
         }
       },
       {
@@ -873,11 +1373,15 @@ app.post('/create-test-company', async (req, res) => {
       cnpj: '14665903000104',
       testEnrichUrl: `POST /enrich com {"companyId": "${response.data.id}"}`,
       debugUrl: `/debug-company/${response.data.id}`,
-      observacao: 'Campo teste_cnpj incluído para receber todos os dados',
+      configuracao: {
+        settingsUrl: '/settings',
+        message: 'Configure o mapeamento de campos antes de enriquecer',
+        mapeamentoAtual: fieldMapping
+      },
       proximoTeste: {
         url: 'POST /enrich',
         body: { companyId: response.data.id },
-        expectativa: 'Todos os dados do CNPJ serão salvos no campo teste_cnpj'
+        expectativa: 'Dados do CNPJ serão mapeados conforme configuração em /settings'
       }
     });
   } catch (error) {
