@@ -11,8 +11,32 @@ let HUBSPOT_ACCESS_TOKEN = process.env.HUBSPOT_ACCESS_TOKEN; // ⚡ Mudança: le
 const HUBSPOT_REFRESH_TOKEN = process.env.HUBSPOT_REFRESH_TOKEN;
 const REDIRECT_URI = process.env.REDIRECT_URI;
 
+// ⚡ Função melhorada para limpar CNPJ - aceita qualquer formato
 function cleanCNPJ(cnpj) {
-  return cnpj ? cnpj.replace(/[^\d]/g, '') : '';
+  console.log('🧹 Limpando CNPJ:', cnpj, 'Tipo:', typeof cnpj);
+  
+  if (!cnpj) {
+    console.log('🧹 CNPJ vazio ou null');
+    return '';
+  }
+  
+  // Converter para string se necessário
+  const cnpjString = String(cnpj).trim();
+  console.log('🧹 CNPJ como string:', cnpjString);
+  
+  // Remover tudo que não é dígito (aceita qualquer formato)
+  const cleaned = cnpjString.replace(/[^\d]/g, '');
+  console.log('🧹 CNPJ após limpeza:', cleaned, 'Tamanho:', cleaned.length);
+  
+  // Log de exemplos de formatos aceitos
+  if (cleaned.length !== 14 && cnpjString.length > 0) {
+    console.log('⚠️ Formatos aceitos:');
+    console.log('   14665903000104 (sem pontuação)');
+    console.log('   14.665.903/0001-04 (com pontuação)');
+    console.log('   14 665 903 0001 04 (com espaços)');
+  }
+  
+  return cleaned;
 }
 
 // Status do app
@@ -155,6 +179,62 @@ app.get('/test-token', async (req, res) => {
   }
 });
 
+// 🔍 Endpoint Debug - Investigar Campos
+app.get('/debug-company/:companyId', async (req, res) => {
+  const { companyId } = req.params;
+
+  if (!HUBSPOT_ACCESS_TOKEN) {
+    return res.status(401).json({ error: 'Token não configurado' });
+  }
+
+  try {
+    console.log('🔍 Buscando todas as propriedades da empresa:', companyId);
+    
+    const hubspotCompany = await axios.get(
+      `https://api.hubapi.com/crm/v3/objects/companies/${companyId}`,
+      {
+        headers: { 
+          Authorization: `Bearer ${HUBSPOT_ACCESS_TOKEN}`,
+          'Content-Type': 'application/json'
+        }
+      }
+    );
+
+    const properties = hubspotCompany.data.properties;
+    
+    console.log('📋 TODAS as propriedades encontradas:');
+    Object.keys(properties).forEach(key => {
+      console.log(`   ${key}: ${properties[key]}`);
+    });
+
+    // Procurar campos que podem ser CNPJ
+    const cnpjFields = Object.keys(properties).filter(key => 
+      key.toLowerCase().includes('cnpj') || 
+      key.toLowerCase().includes('registration') ||
+      key.toLowerCase().includes('document')
+    );
+
+    console.log('🔍 Campos que podem ser CNPJ:', cnpjFields);
+
+    res.json({
+      success: true,
+      companyId: companyId,
+      allProperties: properties,
+      possibleCNPJFields: cnpjFields,
+      cnpjFieldValue: properties.cnpj,
+      cnpjFieldExists: 'cnpj' in properties,
+      totalFields: Object.keys(properties).length
+    });
+
+  } catch (error) {
+    console.error('❌ Erro ao buscar empresa:', error.response?.data);
+    res.status(error.response?.status || 500).json({
+      error: 'Erro ao buscar empresa',
+      details: error.response?.data
+    });
+  }
+});
+
 // Enrichment com CNPJ - Versão com debug melhorado
 app.post('/enrich', async (req, res) => {
   const { companyId } = req.body;
@@ -179,7 +259,7 @@ app.post('/enrich', async (req, res) => {
   try {
     console.log('📡 Buscando empresa no HubSpot...');
     
-    // Buscar empresa no HubSpot
+    // ⚡ Buscar empresa no HubSpot com TODAS as propriedades (sem filtro)
     const hubspotCompany = await axios.get(
       `https://api.hubapi.com/crm/v3/objects/companies/${companyId}`,
       {
@@ -191,20 +271,89 @@ app.post('/enrich', async (req, res) => {
     );
 
     console.log('✅ Empresa encontrada no HubSpot');
-    console.log('📋 Propriedades da empresa:', hubspotCompany.data.properties);
+    console.log('📋 Propriedades da empresa:', JSON.stringify(hubspotCompany.data.properties, null, 2));
 
-    const cnpjRaw = hubspotCompany.data.properties.cnpj;
+    // ⚡ Buscar CNPJ com múltiplas tentativas e debug completo
+    const properties = hubspotCompany.data.properties;
+    
+    console.log('🔍 TODAS as propriedades disponíveis:');
+    Object.keys(properties).forEach(key => {
+      console.log(`   ${key}: "${properties[key]}"`);
+    });
+    
+    // Procurar campos que podem conter CNPJ
+    const allKeys = Object.keys(properties);
+    const cnpjPossibleKeys = allKeys.filter(key => 
+      key.toLowerCase().includes('cnpj') || 
+      key.toLowerCase().includes('registration') ||
+      key.toLowerCase().includes('document') ||
+      key.toLowerCase().includes('tax') ||
+      key.toLowerCase().includes('federal') ||
+      key.toLowerCase().includes('company_id') ||
+      key.toLowerCase().includes('business_id')
+    );
+    
+    console.log('🔍 Campos que podem ser CNPJ:', cnpjPossibleKeys);
+    
+    let cnpjRaw = properties.cnpj || 
+                  properties.CNPJ ||
+                  properties.registration_number ||
+                  properties.company_cnpj ||
+                  properties.document_number ||
+                  properties.tax_id ||
+                  properties.federal_id;
+
+    // Se não encontrou, tentar procurar em qualquer campo que contenha números com 14 dígitos
+    if (!cnpjRaw) {
+      console.log('🔍 CNPJ não encontrado nos campos padrão, procurando em todos os campos...');
+      
+      for (const [key, value] of Object.entries(properties)) {
+        if (value && typeof value === 'string') {
+          const cleaned = cleanCNPJ(value);
+          if (cleaned.length === 14) {
+            console.log(`🎯 CNPJ encontrado no campo "${key}": ${value} -> ${cleaned}`);
+            cnpjRaw = value;
+            break;
+          }
+        }
+      }
+    }
+
     console.log('🔍 CNPJ bruto encontrado:', cnpjRaw);
+    console.log('🔍 Tipo do CNPJ:', typeof cnpjRaw);
+    console.log('🔍 Campo cnpj existe?', 'cnpj' in properties);
+    console.log('🔍 Total de propriedades:', allKeys.length);
 
+    // ⚡ Limpeza melhorada do CNPJ
     const cnpj = cleanCNPJ(cnpjRaw);
     console.log('🧹 CNPJ limpo:', cnpj);
+    console.log('🧹 Tamanho do CNPJ limpo:', cnpj.length);
 
     if (!cnpj || cnpj.length !== 14) {
       console.warn('⚠️ CNPJ inválido ou não encontrado');
+      
+      // Sugestões específicas baseadas no problema
+      let sugestoes = [];
+      if (!cnpjRaw) {
+        sugestoes.push('Campo CNPJ não encontrado na empresa');
+        sugestoes.push(`Use: POST /add-cnpj/${companyId} com {"cnpj": "14665903000104"}`);
+      } else if (cnpj.length === 0) {
+        sugestoes.push('Campo CNPJ existe mas está vazio');
+      } else if (cnpj.length !== 14) {
+        sugestoes.push(`CNPJ tem ${cnpj.length} dígitos, precisa ter 14`);
+        sugestoes.push('Formatos aceitos: 14665903000104 ou 14.665.903/0001-04');
+      }
+      
       return res.status(400).json({ 
         error: 'CNPJ inválido ou não encontrado',
         cnpjRaw: cnpjRaw,
-        cnpjLimpo: cnpj
+        cnpjLimpo: cnpj,
+        cnpjTamanho: cnpj.length,
+        campoExiste: 'cnpj' in properties,
+        todasPropriedades: Object.keys(properties),
+        camposPossiveisCNPJ: cnpjPossibleKeys,
+        sugestoes: sugestoes,
+        debug: `Valor original: "${cnpjRaw}" | Tipo: ${typeof cnpjRaw} | Limpo: "${cnpj}"`
       });
     }
 
@@ -311,22 +460,27 @@ app.post('/enrich', async (req, res) => {
   }
 });
 
-// ⚡ Criar empresa de teste
-app.post('/create-test-company', async (req, res) => {
+// ⚡ Endpoint para adicionar CNPJ a uma empresa existente
+app.post('/add-cnpj/:companyId', async (req, res) => {
+  const { companyId } = req.params;
+  const { cnpj } = req.body;
+
   if (!HUBSPOT_ACCESS_TOKEN) {
-    return res.status(401).json({ 
-      error: 'Token não configurado',
-      authUrl: `https://app.hubspot.com/oauth/authorize?client_id=${CLIENT_ID}&scope=crm.objects.companies.read%20crm.objects.companies.write&redirect_uri=${REDIRECT_URI}`
-    });
+    return res.status(401).json({ error: 'Token não configurado' });
+  }
+
+  if (!cnpj) {
+    return res.status(400).json({ error: 'CNPJ é obrigatório no body: {"cnpj": "14665903000104"}' });
   }
 
   try {
-    const response = await axios.post(
-      'https://api.hubapi.com/crm/v3/objects/companies',
+    console.log('📝 Adicionando CNPJ à empresa:', companyId);
+    
+    const response = await axios.patch(
+      `https://api.hubapi.com/crm/v3/objects/companies/${companyId}`,
       {
         properties: {
-          name: 'Empresa Teste CNPJ',
-          cnpj: '11.222.333/0001-81'
+          cnpj: cnpj
         }
       },
       {
@@ -337,13 +491,69 @@ app.post('/create-test-company', async (req, res) => {
       }
     );
 
+    console.log('✅ CNPJ adicionado com sucesso');
+
+    res.json({
+      success: true,
+      companyId: companyId,
+      cnpjAdicionado: cnpj,
+      message: 'CNPJ adicionado à empresa com sucesso',
+      testeEnrichUrl: `POST /enrich com {"companyId": "${companyId}"}`
+    });
+  } catch (error) {
+    console.error('❌ Erro ao adicionar CNPJ:', error.response?.data);
+    res.status(500).json({
+      error: 'Erro ao adicionar CNPJ',
+      details: error.response?.data
+    });
+  }
+});
+
+// ⚡ Criar empresa de teste com CNPJ
+app.post('/create-test-company', async (req, res) => {
+  if (!HUBSPOT_ACCESS_TOKEN) {
+    return res.status(401).json({ 
+      error: 'Token não configurado',
+      authUrl: `https://app.hubspot.com/oauth/authorize?client_id=${CLIENT_ID}&scope=crm.objects.companies.read%20crm.objects.companies.write&redirect_uri=${REDIRECT_URI}`
+    });
+  }
+
+  try {
+    console.log('🏢 Criando empresa de teste...');
+    
+    const response = await axios.post(
+      'https://api.hubapi.com/crm/v3/objects/companies',
+      {
+        properties: {
+          name: 'Empresa Teste CNPJ - ' + new Date().getTime(),
+          cnpj: '14665903000104', // ⚡ Mesmo CNPJ que você tem
+          domain: 'teste.com.br',
+          phone: '11999999999',
+          website: 'https://teste.com.br'
+        }
+      },
+      {
+        headers: {
+          Authorization: `Bearer ${HUBSPOT_ACCESS_TOKEN}`,
+          'Content-Type': 'application/json'
+        }
+      }
+    );
+
+    console.log('✅ Empresa criada com sucesso:', response.data.id);
+    console.log('📋 Propriedades criadas:', response.data.properties);
+
     res.json({
       success: true,
       companyId: response.data.id,
-      message: 'Empresa de teste criada',
-      testUrl: `/enrich com {"companyId": "${response.data.id}"}`
+      message: 'Empresa de teste criada com CNPJ 14665903000104',
+      cnpj: '14665903000104',
+      testEnrichUrl: `POST /enrich com {"companyId": "${response.data.id}"}`,
+      debugUrl: `/debug-company/${response.data.id}`,
+      addCnpjUrl: `POST /add-cnpj/${response.data.id} com {"cnpj": "14665903000104"}`
     });
   } catch (error) {
+    console.error('❌ Erro ao criar empresa teste:', error.response?.data);
     res.status(500).json({
       error: 'Erro ao criar empresa teste',
       details: error.response?.data
