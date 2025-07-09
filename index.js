@@ -1712,4 +1712,4 @@ console.log('🔧 Sistema de mapeamento de campos CNPJ carregado com sucesso!');
 console.log('🗺️ Sistema de mapeamento individual carregado com sucesso!');
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`🚀 CNPJ Enricher rodando na porta ${PORT}`));
+app.listen(PORT, () => console.log(`🚀 CNPJ- Enricher rodando na porta ${PORT}`));
