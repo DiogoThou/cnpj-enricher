@@ -1,10 +1,10 @@
-export default async function handler(req, res) {
+// pages/api/sync-cnpj.js
+
+export default function handler(req, res) {
   if (req.method === 'GET') {
-    return res.status(200).json({
-      status: 'ok',
-      message: 'Endpoint /api/sync-cnpj funcionando via GET!',
-    });
+    return res.status(200).json({ message: 'GET recebido com sucesso!' });
   }
 
-  return res.status(405).json({ error: 'Method not allowed' });
+  res.setHeader('Allow', ['GET']);
+  return res.status(405).end(`Método ${req.method} não permitido`);
 }
