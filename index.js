@@ -1252,8 +1252,19 @@ app.post('/api/sync-cnpj', async (req, res) => {
 });
 
 
-
-
+app.post('/api/accounts-fetch', (req, res) => {
+  console.log('🔁 Recebido chamada de /api/accounts-fetch do HubSpot');
+  return res.json({
+    response: {
+      accounts: [
+        {
+          accountId: 'default-account',
+          accountName: 'Conta padrão'
+        }
+      ]
+    }
+  });
+});
 
 
 const PORT = process.env.PORT || 3000;
