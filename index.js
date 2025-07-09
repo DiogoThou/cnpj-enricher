@@ -258,8 +258,12 @@ app.get('/test-token', async (req, res) => {
 });
 
 // ⚡ Página de configurações do app
+// ⚙️ Página de configurações do app - 100% compatível com HubSpot
 app.get('/settings', (req, res) => {
-  // Retornar a página HTML de configurações
+  res.setHeader("X-Frame-Options", "ALLOWALL");
+  res.setHeader("Content-Security-Policy", "frame-ancestors 'self' https://app.hubspot.com https://app-eu1.hubspot.com;");
+  res.setHeader("Access-Control-Allow-Origin", "*");
+
   res.send(`
 <!DOCTYPE html>
 <html lang="pt-BR">
@@ -267,51 +271,70 @@ app.get('/settings', (req, res) => {
   <meta charset="UTF-8" />
   <title>Configurações | CNPJ Enricher</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
- 
+  <style>
+    body {
+      font-family: sans-serif;
+      margin: 20px;
+      padding: 0;
+      background: #fff;
+      color: #333;
+    }
+    h1 {
+      font-size: 20px;
+      margin-bottom: 10px;
+    }
+    .box {
+      background: #f9f9f9;
+      padding: 16px;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      margin-bottom: 16px;
+    }
+    button {
+      margin-right: 10px;
+      padding: 8px 16px;
+      border-radius: 6px;
+      border: 1px solid #ccc;
+      background: #0073e6;
+      color: white;
+      font-weight: bold;
+      cursor: pointer;
+    }
+    #status {
+      margin-top: 20px;
+      font-weight: bold;
+    }
+  </style>
 </head>
 <body>
-  <div class="container">
-    <h1>⚙️ Configurações do CNPJ Enricher</h1>
-    <p class="subtitle">Esta página permite validar a criação e teste do campo <strong>teste_cnpj</strong>.</p>
-
-    <div class="info-box">
-      <h3>📄 Sobre o Campo teste_cnpj</h3>
-      <p>Todos os dados extraídos via CNPJ são salvos como texto formatado no campo <strong>teste_cnpj</strong> do HubSpot.</p>
-    </div>
-
-    <div class="info-box">
-      <h3>🛠️ Criar Campo</h3>
-      <p>Cria automaticamente o campo "teste_cnpj" no seu CRM se ele ainda não existir.</p>
-    </div>
-
-    <div class="info-box">
-      <h3>🧪 Testar Enriquecimento</h3>
-      <p>Cria uma empresa fictícia e preenche o campo <strong>teste_cnpj</strong> com dados reais de exemplo.</p>
-    </div>
-
-    <div class="button-row">
-      <button class="btn-secondary" onclick="createTestField()">Criar Campo</button>
-      <button class="btn-primary" onclick="testEnrichment()">Testar Enriquecimento</button>
-    </div>
-
-    <div class="status" id="status"></div>
+  <h1>⚙️ Configurações do CNPJ Enricher</h1>
+  <div class="box">
+    <p>Todos os dados do CNPJ são salvos no campo <strong>teste_cnpj</strong> do HubSpot como texto completo.</p>
   </div>
+  <div class="box">
+    <button onclick="createTestField()">Criar Campo teste_cnpj</button>
+    <button onclick="testEnrichment()">Testar Enriquecimento</button>
+  </div>
+  <div id="status"></div>
 
   <script>
-    function setStatus(text, color = '#333') {
+    function setStatus(msg, color = 'black') {
       const el = document.getElementById('status');
-      el.textContent = text;
+      el.innerText = msg;
       el.style.color = color;
     }
 
     async function createTestField() {
-      setStatus('Criando campo teste_cnpj...');
+      setStatus('Criando campo...');
       try {
         const res = await fetch('/create-test-field', { method: 'POST' });
         const json = await res.json();
-        if (res.ok) setStatus('✅ Campo criado/verificado com sucesso!', 'green');
-        else setStatus('❌ Erro: ' + (json?.error || 'Falha'), 'red');
-      } catch (e) {
+        if (res.ok) {
+          setStatus('✅ Campo criado/verificado com sucesso!', 'green');
+        } else {
+          setStatus('❌ Erro: ' + (json.error || 'Falha'), 'red');
+        }
+      } catch {
         setStatus('❌ Erro de conexão', 'red');
       }
     }
@@ -321,28 +344,28 @@ app.get('/settings', (req, res) => {
       try {
         const res = await fetch('/create-test-company', { method: 'POST' });
         const json = await res.json();
-        if (!res.ok) return setStatus('❌ Erro: ' + (json?.error || 'Falha'), 'red');
-
+        if (!res.ok) return setStatus('❌ Erro: ' + (json.error || 'Falha'), 'red');
         const companyId = json.companyId;
-        setStatus('Enriquecendo empresa com ID: ' + companyId + '...');
 
+        setStatus('Enriquecendo empresa com ID: ' + companyId + '...');
         const enrichRes = await fetch('/enrich', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ companyId })
         });
-
         const enrichJson = await enrichRes.json();
-        if (enrichRes.ok) setStatus('🎉 Enriquecimento concluído!', 'green');
-        else setStatus('❌ Erro no enriquecimento: ' + (enrichJson?.error || 'Falha'), 'red');
-      } catch (e) {
+        if (enrichRes.ok) {
+          setStatus('🎉 Enriquecimento concluído!', 'green');
+        } else {
+          setStatus('❌ Erro: ' + (enrichJson.error || 'Falha'), 'red');
+        }
+      } catch {
         setStatus('❌ Erro inesperado', 'red');
       }
     }
   </script>
 </body>
 </html>
-
   `);
 });
 
