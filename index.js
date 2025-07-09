@@ -383,30 +383,64 @@ app.post('/enrich', async (req, res) => {
 
     const updatePayload = {
       properties: {
+        // ⚡ Mapeamento para campos PADRÃO do HubSpot
+        name: extract('Nome da Empresa', cnpjData.estabelecimento?.nome_fantasia || cnpjData.razao_social),
+        phone: extract('Telefone', cnpjData.estabelecimento?.telefone1 ? `(${cnpjData.estabelecimento.ddd1}) ${cnpjData.estabelecimento.telefone1}` : ''),
+        city: extract('Cidade', cnpjData.estabelecimento?.cidade?.nome),
+        state: extract('Estado', cnpjData.estabelecimento?.estado?.sigla),
+        country: extract('País', cnpjData.estabelecimento?.pais?.nome),
+        zip: extract('CEP', cnpjData.estabelecimento?.cep),
+        address: extract('Endereço', cnpjData.estabelecimento?.logradouro ? 
+          `${cnpjData.estabelecimento.tipo_logradouro} ${cnpjData.estabelecimento.logradouro}, ${cnpjData.estabelecimento.numero}` : ''),
+        address2: extract('Complemento', cnpjData.estabelecimento?.complemento),
+        
+        // ⚡ Campos customizados que PODEM existir (se não existir, HubSpot ignora)
+        description: extract('Descrição', 
+          `Razão Social: ${cnpjData.razao_social}\n` +
+          `Nome Fantasia: ${cnpjData.estabelecimento?.nome_fantasia || 'N/A'}\n` +
+          `Situação: ${cnpjData.estabelecimento?.situacao_cadastral}\n` +
+          `Porte: ${cnpjData.porte?.descricao}\n` +
+          `Atividade Principal: ${cnpjData.estabelecimento?.atividade_principal?.descricao}\n` +
+          `Capital Social: R$ ${cnpjData.capital_social}`
+        ),
+        
+        // ⚡ Campos que podem existir
+        website: extract('Website', cnpjData.estabelecimento?.email ? `https://${cnpjData.estabelecimento.email.split('@')[1]}` : ''),
+        
+        // ⚡ Campos customizados (apenas se existirem)
         razao_social: extract('Razão Social', cnpjData.razao_social),
         nome_fantasia: extract('Nome Fantasia', cnpjData.estabelecimento?.nome_fantasia),
         situacao_cadastral: extract('Situação Cadastral', cnpjData.estabelecimento?.situacao_cadastral),
         capital_social: extract('Capital Social', cnpjData.capital_social),
         porte: extract('Porte', cnpjData.porte?.descricao),
         atividade_principal: extract('Atividade Principal', cnpjData.estabelecimento?.atividade_principal?.descricao),
-        telefone: extract('Telefone', cnpjData.estabelecimento?.telefone1),
-        email: extract('Email', cnpjData.estabelecimento?.email),
-        logradouro: extract('Logradouro', cnpjData.estabelecimento?.logradouro),
-        numero: extract('Número', cnpjData.estabelecimento?.numero),
-        bairro: extract('Bairro', cnpjData.estabelecimento?.bairro),
-        cep: extract('CEP', cnpjData.estabelecimento?.cep),
-        cidade: extract('Cidade', cnpjData.estabelecimento?.cidade?.nome),
-        estado: extract('Estado', cnpjData.estabelecimento?.estado?.sigla)
+        cnpj_email: extract('Email CNPJ', cnpjData.estabelecimento?.email),
+        bairro: extract('Bairro', cnpjData.estabelecimento?.bairro)
       }
     };
 
-    console.log('📦 Payload final enviado ao HubSpot:', JSON.stringify(updatePayload, null, 2));
+    console.log('📦 Payload inicial criado:', JSON.stringify(updatePayload, null, 2));
+
+    // ⚡ Remover campos vazios para evitar erros
+    const cleanPayload = {
+      properties: {}
+    };
+    
+    Object.keys(updatePayload.properties).forEach(key => {
+      const value = updatePayload.properties[key];
+      if (value && value.trim() !== '') {
+        cleanPayload.properties[key] = value;
+      }
+    });
+
+    console.log('📦 Payload final enviado ao HubSpot (campos vazios removidos):', JSON.stringify(cleanPayload, null, 2));
+    console.log('📊 Total de campos a serem atualizados:', Object.keys(cleanPayload.properties).length);
 
     console.log('📡 Atualizando empresa no HubSpot...');
     
     await axios.patch(
       `https://api.hubapi.com/crm/v3/objects/companies/${companyId}`,
-      updatePayload,
+      cleanPayload,
       {
         headers: {
           Authorization: `Bearer ${HUBSPOT_ACCESS_TOKEN}`,
@@ -443,7 +477,7 @@ app.post('/enrich', async (req, res) => {
       success: true,
       message: '🎉 Empresa enriquecida com sucesso!',
       cnpj: cnpj,
-      dadosEncontrados: Object.keys(updatePayload.properties).filter(key => updatePayload.properties[key]),
+      dadosEncontrados: Object.keys(cleanPayload.properties),
       empresa: {
         razaoSocial: dadosEmpresa.razaoSocial,
         nomeFantasia: dadosEmpresa.nomeFantasia,
@@ -456,7 +490,16 @@ app.post('/enrich', async (req, res) => {
         },
         atividade: dadosEmpresa.atividade
       },
-      totalCamposAtualizados: Object.keys(updatePayload.properties).filter(key => updatePayload.properties[key]).length
+      totalCamposAtualizados: Object.keys(cleanPayload.properties).length,
+      camposAtualizados: Object.keys(cleanPayload.properties),
+      hubspotMapping: {
+        'Nome da empresa': cleanPayload.properties.name,
+        'Cidade': cleanPayload.properties.city,
+        'Estado': cleanPayload.properties.state,
+        'Telefone': cleanPayload.properties.phone,
+        'CEP': cleanPayload.properties.zip,
+        'Endereço': cleanPayload.properties.address
+      }
     });
 
   } catch (error) {
@@ -480,6 +523,37 @@ app.post('/enrich', async (req, res) => {
       return res.status(404).json({ 
         error: 'Empresa não encontrada no HubSpot',
         companyId: companyId
+      });
+    }
+    
+    // ⚡ TRATAR ERRO DE PROPRIEDADES QUE NÃO EXISTEM
+    if (error.response?.status === 400 && error.response?.data?.message?.includes('does not exist')) {
+      console.log('⚠️ Algumas propriedades não existem no HubSpot');
+      
+      const missingProps = error.response.data.errors?.map(err => err.context?.propertyName || 'unknown') || [];
+      console.log('📋 Propriedades faltando:', missingProps);
+      
+      return res.status(400).json({ 
+        error: 'Propriedades customizadas não existem no HubSpot',
+        message: 'Algumas propriedades CNPJ não foram criadas ainda',
+        propriedadesFaltando: missingProps,
+        solucoes: [
+          '1. Use: POST /create-cnpj-properties (cria todas as propriedades)',
+          '2. Ou aguarde - o sistema vai tentar usar apenas campos padrão',
+          '3. Dados foram obtidos com sucesso da Receita Federal'
+        ],
+        dadosObtidos: {
+          cnpj: cnpj,
+          razaoSocial: cnpjData.razao_social,
+          nomeFantasia: cnpjData.estabelecimento?.nome_fantasia,
+          situacao: cnpjData.estabelecimento?.situacao_cadastral,
+          cidade: cnpjData.estabelecimento?.cidade?.nome,
+          estado: cnpjData.estabelecimento?.estado?.sigla
+        },
+        proximosPasses: [
+          'Execute: POST /create-cnpj-properties',
+          'Depois execute: POST /enrich novamente'
+        ]
       });
     }
     
@@ -516,6 +590,94 @@ app.post('/enrich', async (req, res) => {
       error: 'Erro ao enriquecer dados',
       details: error.message,
       step: 'Erro não identificado - verifique os logs'
+    });
+  }
+});
+
+// ⚡ Endpoint para criar propriedades customizadas no HubSpot
+app.post('/create-cnpj-properties', async (req, res) => {
+  if (!HUBSPOT_ACCESS_TOKEN) {
+    return res.status(401).json({ error: 'Token não configurado' });
+  }
+
+  const properties = [
+    { name: 'razao_social', label: 'Razão Social', type: 'string', description: 'Razão social da empresa' },
+    { name: 'nome_fantasia', label: 'Nome Fantasia', type: 'string', description: 'Nome fantasia da empresa' },
+    { name: 'situacao_cadastral', label: 'Situação Cadastral', type: 'string', description: 'Situação cadastral na Receita Federal' },
+    { name: 'capital_social', label: 'Capital Social', type: 'string', description: 'Capital social da empresa' },
+    { name: 'porte', label: 'Porte', type: 'string', description: 'Porte da empresa' },
+    { name: 'atividade_principal', label: 'Atividade Principal', type: 'string', description: 'Atividade principal da empresa' },
+    { name: 'cnpj_email', label: 'Email CNPJ', type: 'string', description: 'Email cadastrado na Receita Federal' },
+    { name: 'bairro', label: 'Bairro', type: 'string', description: 'Bairro da empresa' }
+  ];
+
+  const results = [];
+
+  try {
+    console.log('🔧 Criando propriedades customizadas no HubSpot...');
+
+    for (const prop of properties) {
+      try {
+        console.log(`📝 Criando propriedade: ${prop.name}`);
+        
+        const response = await axios.post(
+          'https://api.hubapi.com/crm/v3/properties/companies',
+          {
+            name: prop.name,
+            label: prop.label,
+            type: prop.type,
+            fieldType: 'text',
+            description: prop.description,
+            groupName: 'companyinformation',
+            hasUniqueValue: false,
+            hidden: false,
+            displayOrder: -1
+          },
+          {
+            headers: {
+              Authorization: `Bearer ${HUBSPOT_ACCESS_TOKEN}`,
+              'Content-Type': 'application/json'
+            }
+          }
+        );
+
+        console.log(`✅ Propriedade ${prop.name} criada com sucesso`);
+        results.push({ property: prop.name, status: 'created', id: response.data.name });
+        
+      } catch (error) {
+        if (error.response?.status === 409) {
+          console.log(`⚠️ Propriedade ${prop.name} já existe`);
+          results.push({ property: prop.name, status: 'already_exists' });
+        } else {
+          console.error(`❌ Erro ao criar ${prop.name}:`, error.response?.data);
+          results.push({ property: prop.name, status: 'error', details: error.response?.data });
+        }
+      }
+    }
+
+    const created = results.filter(r => r.status === 'created').length;
+    const existing = results.filter(r => r.status === 'already_exists').length;
+    const errors = results.filter(r => r.status === 'error').length;
+
+    res.json({
+      success: true,
+      message: `Propriedades CNPJ configuradas: ${created} criadas, ${existing} já existiam, ${errors} erros`,
+      results: results,
+      summary: {
+        created: created,
+        already_exists: existing,
+        errors: errors,
+        total: properties.length
+      },
+      nextStep: 'Agora você pode usar todos os campos específicos do CNPJ no enriquecimento!'
+    });
+
+  } catch (error) {
+    console.error('❌ Erro geral ao criar propriedades:', error);
+    res.status(500).json({
+      error: 'Erro ao criar propriedades customizadas',
+      details: error.message,
+      results: results
     });
   }
 });
