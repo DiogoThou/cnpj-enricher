@@ -1254,17 +1254,51 @@ app.post('/api/sync-cnpj', async (req, res) => {
 
 app.post('/api/accounts-fetch', (req, res) => {
   console.log('🔁 Recebido chamada de /api/accounts-fetch do HubSpot');
+
   return res.json({
     response: {
       accounts: [
         {
           accountId: 'default-account',
-          accountName: 'Conta padrão'
+          accountName: 'Enriquecedor CNPJ - CRM Hub',
+          accountLogoUrl: 'https://crmhub.com.br/logo.png' // insira a URL pública do seu logo aqui
         }
       ]
     }
   });
 });
+
+let selectedOption = 'nenhum';
+
+app.post('/api/dropdown-fetch', (req, res) => {
+  return res.json({
+    response: {
+      options: [
+        { text: 'Nenhum campo mapeado', value: 'nenhum' },
+        { text: 'Nome Fantasia → nome_fantasia', value: 'nome_fantasia' },
+        { text: 'Porte → porte', value: 'porte' },
+        { text: 'Telefone → telefone', value: 'telefone' }
+      ],
+      selectedOption,
+      placeholder: 'Escolha o campo a mapear'
+    }
+  });
+});
+
+app.post('/api/dropdown-update', (req, res) => {
+  selectedOption = req.body.selectedOption || 'nenhum';
+
+  console.log('📥 Novo campo selecionado:', selectedOption);
+
+  res.json({
+    response: {
+      actionType: 'DROPDOWN_UPDATE',
+      selectedOption,
+      message: `Campo atualizado para: ${selectedOption}`
+    }
+  });
+});
+
 
 
 const PORT = process.env.PORT || 3000;
