@@ -1,9 +1,49 @@
+// ⚡ SERVIDOR OTIMIZADO PARA HUBSPOT
 const express = require('express');
 const axios = require('axios');
-const syncCNPJs = require('./syncCNPJs');
+const cors = require('cors');
+const path = require('path');
 const app = express();
 
+// ⚡ CORS configurado especificamente para HubSpot
+app.use(cors({
+  origin: [
+    'https://app.hubspot.com',
+    'https://app-eu1.hubspot.com', 
+    'https://app.hubspot.eu',
+    'https://local.hubspot.com:8080',
+    'http://localhost:3000',
+    'http://localhost:5173'
+  ],
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: [
+    'Content-Type',
+    'Authorization', 
+    'X-Requested-With',
+    'Accept',
+    'Origin',
+    'X-HubSpot-Signature'
+  ]
+}));
+
+// ⚡ Headers específicos para iframe do HubSpot
+app.use((req, res, next) => {
+  // Permitir iframe do HubSpot
+  res.setHeader('X-Frame-Options', 'ALLOWALL');
+  res.setHeader('Content-Security-Policy', "frame-ancestors 'self' https://*.hubspot.com https://*.hubspot.eu");
+  
+  // Headers CORS adicionais
+  res.setHeader('Access-Control-Allow-Origin', req.headers.origin || '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept, Origin, X-HubSpot-Signature');
+  res.setHeader('Access-Control-Allow-Credentials', 'true');
+  
+  next();
+});
+
 app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 
 const CLIENT_ID = process.env.CLIENT_ID;
 const CLIENT_SECRET = process.env.CLIENT_SECRET;
@@ -259,7 +299,10 @@ app.get('/test-token', async (req, res) => {
 
 // ⚡ Página de configurações do app
 app.get('/settings', (req, res) => {
-  // Retornar a página HTML de configurações
+  // ⚡ Retornar página React otimizada para HubSpot
+  res.setHeader('X-Frame-Options', 'ALLOWALL');
+  res.setHeader('Content-Security-Policy', "frame-ancestors 'self' https://*.hubspot.com https://*.hubspot.eu");
+  
   res.send(`
 <!DOCTYPE html>
 <html lang="pt-BR">
@@ -267,265 +310,195 @@ app.get('/settings', (req, res) => {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>CNPJ Enricher - Configurações</title>
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://unpkg.com/lucide-react@latest/dist/umd/lucide-react.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
     <style>
-        body {
-            font-family: 'Lexend', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            margin: 0;
-            padding: 20px;
-            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
-            min-height: 100vh;
-            color: #33475b;
-        }
-        
-        .container {
-            max-width: 800px;
-            margin: 0 auto;
-            background: white;
-            border-radius: 16px;
-            padding: 32px;
-            box-shadow: 0 20px 60px rgba(0,0,0,0.1);
-            border: 1px solid rgba(255,255,255,0.2);
-        }
-        
-        h1 {
-            color: #33475b;
-            text-align: center;
-            margin-bottom: 8px;
-            font-size: 2.2em;
-            font-weight: 700;
-        }
-        
-        .subtitle {
-            text-align: center;
-            color: #7c98b6;
-            margin-bottom: 40px;
-            font-size: 1.1em;
-        }
-        
-        .mapping-section {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            padding: 24px;
-            border-radius: 12px;
-            margin-bottom: 32px;
-        }
-        
-        .mapping-section h3 {
-            margin-top: 0;
-            font-size: 1.4em;
-            margin-bottom: 16px;
-        }
-        
-        .field-mapping {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 20px;
-            margin-bottom: 20px;
-            align-items: center;
-        }
-        
-        .cnpj-field {
-            background: rgba(255,255,255,0.15);
-            padding: 12px 16px;
-            border-radius: 8px;
-            font-weight: 600;
-            backdrop-filter: blur(10px);
-        }
-        
-        .hubspot-field select {
-            width: 100%;
-            padding: 12px 16px;
-            border: 2px solid rgba(255,255,255,0.3);
-            border-radius: 8px;
-            background: rgba(255,255,255,0.9);
-            color: #33475b;
-            font-size: 14px;
-            font-weight: 500;
-        }
-        
-        .actions {
-            display: flex;
-            gap: 16px;
-            justify-content: center;
-            margin-top: 32px;
-        }
-        
-        button {
-            padding: 14px 28px;
-            border: none;
-            border-radius: 8px;
-            font-weight: 600;
-            font-size: 16px;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            min-width: 140px;
-        }
-        
-        .btn-primary {
-            background: linear-gradient(135deg, #4299e1, #3182ce);
-            color: white;
-        }
-        
-        .btn-secondary {
-            background: #f7fafc;
-            color: #4a5568;
-            border: 2px solid #e2e8f0;
-        }
-        
-        .status {
-            padding: 16px;
-            border-radius: 8px;
-            margin: 16px 0;
-            font-weight: 600;
-            text-align: center;
-        }
-        
-        .status.success {
-            background: #c6f6d5;
-            color: #2f855a;
-            border: 2px solid #68d391;
-        }
-        
-        .status.error {
-            background: #fed7d7;
-            color: #c53030;
-            border: 2px solid #fc8181;
-        }
-
-        .info-box {
-            background: #e6fffa;
-            border: 2px solid #38b2ac;
-            border-radius: 8px;
-            padding: 16px;
-            margin-bottom: 24px;
-        }
-
-        .info-box h4 {
-            color: #2c7a7b;
-            margin: 0 0 8px 0;
-        }
-
-        .info-box p {
-            color: #2c7a7b;
-            margin: 0;
-        }
+        body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
+        .gradient-bg { background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%); }
     </style>
 </head>
 <body>
-    <div class="container">
-        <h1>⚙️ Configurações CNPJ Enricher</h1>
-        <p class="subtitle">Todos os dados são salvos no campo teste_cnpj como texto formatado</p>
+    <div id="root"></div>
+    
+    <script type="text/babel">
+        const { useState, useEffect } = React;
+        const { Settings, Database, CheckCircle, AlertCircle, Loader2 } = lucideReact;
         
-        <div class="info-box">
-            <h4>📋 Novo Comportamento</h4>
-            <p>Todos os dados do CNPJ (Razão Social, Nome Fantasia, Endereço, Telefone, etc.) são salvos em um único campo chamado <strong>teste_cnpj</strong> como texto formatado e legível.</p>
-        </div>
+        function HubSpotSettings() {
+            const [status, setStatus] = useState('');
+            const [statusType, setStatusType] = useState('info');
+            const [loading, setLoading] = useState(false);
+            const [configStatus, setConfigStatus] = useState(null);
 
-        <div class="mapping-section">
-            <h3>🎯 Campo de Destino</h3>
-            <p>Campo HubSpot: <strong>teste_cnpj</strong></p>
-            <p>Tipo: Texto longo (textarea)</p>
-            <p>Conteúdo: Todos os dados da Receita Federal formatados</p>
-        </div>
-        
-        <div class="actions">
-            <button type="button" class="btn-secondary" onclick="createTestField()">
-                🔧 Criar Campo teste_cnpj
-            </button>
-            <button type="button" class="btn-primary" onclick="testEnrichment()">
-                🧪 Testar Enriquecimento
-            </button>
-        </div>
-        
-        <div id="status"></div>
-    </div>
+            useEffect(() => {
+                loadConfigStatus();
+            }, []);
 
-    <script>
-        async function createTestField() {
-            try {
-                showStatus('Criando campo teste_cnpj...', 'info');
-                
-                const response = await fetch('/create-test-field', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    }
-                });
-
-                const result = await response.json();
-
-                if (response.ok) {
-                    showStatus('✅ Campo teste_cnpj criado/verificado com sucesso!', 'success');
-                } else {
-                    showStatus('❌ Erro: ' + result.error, 'error');
+            const loadConfigStatus = async () => {
+                try {
+                    const response = await fetch('/api/config-status');
+                    const result = await response.json();
+                    setConfigStatus(result);
+                } catch (error) {
+                    console.error('Erro ao carregar status:', error);
                 }
-            } catch (error) {
-                showStatus('❌ Erro ao criar campo teste_cnpj', 'error');
-            }
-        }
+            };
 
-        async function testEnrichment() {
-            try {
-                showStatus('Criando empresa de teste...', 'info');
+            const showStatus = (message, type) => {
+                setStatus(message);
+                setStatusType(type);
                 
-                const response = await fetch('/create-test-company', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    }
-                });
+                if (type === 'success') {
+                    setTimeout(() => setStatus(''), 5000);
+                }
+            };
 
-                const result = await response.json();
-
-                if (response.ok) {
-                    showStatus('✅ Empresa criada! ID: ' + result.companyId + '. Agora testando enriquecimento...', 'success');
+            const createTestField = async () => {
+                setLoading(true);
+                try {
+                    showStatus('Criando campo teste_cnpj...', 'info');
                     
-                    // Aguardar um pouco e fazer o enriquecimento
-                    setTimeout(async () => {
-                        await enrichCompany(result.companyId);
-                    }, 1000);
-                } else {
-                    showStatus('❌ Erro ao criar empresa: ' + result.error, 'error');
+                    const response = await fetch('/create-test-field', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' }
+                    });
+
+                    const result = await response.json();
+
+                    if (response.ok) {
+                        showStatus('✅ Campo teste_cnpj criado/verificado com sucesso!', 'success');
+                        await loadConfigStatus();
+                    } else {
+                        showStatus('❌ Erro: ' + result.error, 'error');
+                    }
+                } catch (error) {
+                    showStatus('❌ Erro ao criar campo teste_cnpj', 'error');
+                } finally {
+                    setLoading(false);
                 }
-            } catch (error) {
-                showStatus('❌ Erro no teste', 'error');
-            }
-        }
+            };
 
-        async function enrichCompany(companyId) {
-            try {
-                showStatus('Enriquecendo empresa com dados do CNPJ...', 'info');
-                
-                const response = await fetch('/enrich', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({ companyId: companyId })
-                });
+            const testEnrichment = async () => {
+                setLoading(true);
+                try {
+                    showStatus('Criando empresa de teste...', 'info');
+                    
+                    const response = await fetch('/create-test-company', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' }
+                    });
 
-                const result = await response.json();
+                    const result = await response.json();
 
-                if (response.ok) {
-                    showStatus('🎉 Enriquecimento concluído! Dados salvos no campo teste_cnpj', 'success');
-                } else {
-                    showStatus('❌ Erro no enriquecimento: ' + result.error, 'error');
+                    if (response.ok) {
+                        showStatus('✅ Empresa criada! ID: ' + result.companyId + '. Testando enriquecimento...', 'success');
+                        
+                        setTimeout(async () => {
+                            await enrichCompany(result.companyId);
+                        }, 1000);
+                    } else {
+                        showStatus('❌ Erro ao criar empresa: ' + result.error, 'error');
+                    }
+                } catch (error) {
+                    showStatus('❌ Erro no teste', 'error');
+                } finally {
+                    setLoading(false);
                 }
-            } catch (error) {
-                showStatus('❌ Erro no enriquecimento', 'error');
-            }
-        }
+            };
 
-        function showStatus(message, type) {
-            const statusDiv = document.getElementById('status');
-            statusDiv.innerHTML = '<div class="status ' + type + '">' + message + '</div>';
-            
-            if (type === 'success') {
-                setTimeout(() => {
-                    statusDiv.innerHTML = '';
-                }, 5000);
-            }
+            const enrichCompany = async (companyId) => {
+                try {
+                    showStatus('Enriquecendo empresa com dados do CNPJ...', 'info');
+                    
+                    const response = await fetch('/enrich', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ companyId: companyId })
+                    });
+
+                    const result = await response.json();
+
+                    if (response.ok) {
+                        showStatus('🎉 Enriquecimento concluído! Dados salvos no campo teste_cnpj', 'success');
+                    } else {
+                        showStatus('❌ Erro no enriquecimento: ' + result.error, 'error');
+                    }
+                } catch (error) {
+                    showStatus('❌ Erro no enriquecimento', 'error');
+                }
+            };
+
+            return React.createElement('div', { className: 'min-h-screen gradient-bg p-6' },
+                React.createElement('div', { className: 'max-w-4xl mx-auto' },
+                    React.createElement('div', { className: 'bg-white rounded-2xl shadow-xl border border-slate-200 overflow-hidden' },
+                        // Header
+                        React.createElement('div', { className: 'bg-gradient-to-r from-blue-600 to-purple-600 px-8 py-6 text-white' },
+                            React.createElement('div', { className: 'flex items-center gap-3' },
+                                React.createElement(Settings, { className: 'w-8 h-8' }),
+                                React.createElement('div', {},
+                                    React.createElement('h1', { className: 'text-2xl font-bold' }, 'CNPJ Enricher - Configurações'),
+                                    React.createElement('p', { className: 'text-blue-100 mt-1' }, 'Todos os dados são salvos no campo teste_cnpj como texto formatado')
+                                )
+                            )
+                        ),
+                        
+                        // Content
+                        React.createElement('div', { className: 'p-8' },
+                            // Info Box
+                            React.createElement('div', { className: 'bg-teal-50 border-2 border-teal-200 rounded-xl p-6 mb-8' },
+                                React.createElement('div', { className: 'flex items-start gap-3' },
+                                    React.createElement(Database, { className: 'w-6 h-6 text-teal-600 mt-1' }),
+                                    React.createElement('div', {},
+                                        React.createElement('h3', { className: 'text-lg font-semibold text-teal-800 mb-2' }, '📋 Novo Comportamento'),
+                                        React.createElement('p', { className: 'text-teal-700' }, 'Todos os dados do CNPJ (Razão Social, Nome Fantasia, Endereço, Telefone, etc.) são salvos em um único campo chamado teste_cnpj como texto formatado e legível.')
+                                    )
+                                )
+                            ),
+                            
+                            // Status Display
+                            status && React.createElement('div', { 
+                                className: 'rounded-lg p-4 mb-6 flex items-center gap-3 ' + (
+                                    statusType === 'success' ? 'bg-green-50 border border-green-200 text-green-800' :
+                                    statusType === 'error' ? 'bg-red-50 border border-red-200 text-red-800' :
+                                    'bg-blue-50 border border-blue-200 text-blue-800'
+                                )
+                            },
+                                statusType === 'success' && React.createElement(CheckCircle, { className: 'w-5 h-5' }),
+                                statusType === 'error' && React.createElement(AlertCircle, { className: 'w-5 h-5' }),
+                                statusType === 'info' && React.createElement(Loader2, { className: 'w-5 h-5 animate-spin' }),
+                                React.createElement('span', { className: 'font-medium' }, status)
+                            ),
+                            
+                            // Action Buttons
+                            React.createElement('div', { className: 'flex flex-col sm:flex-row gap-4 justify-center' },
+                                React.createElement('button', {
+                                    onClick: createTestField,
+                                    disabled: loading,
+                                    className: 'flex items-center justify-center gap-2 px-6 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold rounded-lg border-2 border-slate-300 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed'
+                                },
+                                    loading ? React.createElement(Loader2, { className: 'w-5 h-5 animate-spin' }) : React.createElement(Settings, { className: 'w-5 h-5' }),
+                                    '🔧 Criar Campo teste_cnpj'
+                                ),
+                                
+                                React.createElement('button', {
+                                    onClick: testEnrichment,
+                                    disabled: loading,
+                                    className: 'flex items-center justify-center gap-2 px-6 py-3 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white font-semibold rounded-lg transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed'
+                                },
+                                    loading ? React.createElement(Loader2, { className: 'w-5 h-5 animate-spin' }) : React.createElement(Database, { className: 'w-5 h-5' }),
+                                    '🧪 Testar Enriquecimento'
+                                )
+                            )
+                        )
+                    )
+                )
+            );
         }
+        
+        ReactDOM.render(React.createElement(HubSpotSettings), document.getElementById('root'));
     </script>
 </body>
 </html>
