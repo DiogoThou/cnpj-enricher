@@ -687,7 +687,7 @@ app.get('/debug-company/:companyId', async (req, res) => {
 });
 
 // Enrichment com CNPJ - Versão com debug melhorado
-app.post('/enrich', async async (req, res) => {
+app.post('/enrich', async (req, res) => {
   const { companyId } = req.body;
 
   console.log('🔍 Iniciando enriquecimento para companyId:', companyId);
