@@ -1268,36 +1268,35 @@ app.post('/api/accounts-fetch', (req, res) => {
   });
 });
 
-let selectedOption = 'nenhum';
+let selectedField = 'teste_cnpj'; // valor padrão
 
 app.post('/api/dropdown-fetch', (req, res) => {
   return res.json({
     response: {
       options: [
-        { text: 'Nenhum campo mapeado', value: 'nenhum' },
+        { text: 'Salvar tudo no teste_cnpj', value: 'teste_cnpj' },
         { text: 'Nome Fantasia → nome_fantasia', value: 'nome_fantasia' },
-        { text: 'Porte → porte', value: 'porte' },
-        { text: 'Telefone → telefone', value: 'telefone' }
+        { text: 'Telefone → telefone', value: 'telefone' },
+        { text: 'Porte → porte', value: 'porte' }
       ],
-      selectedOption,
-      placeholder: 'Escolha o campo a mapear'
+      selectedOption: selectedField,
+      placeholder: 'Selecione um campo para mapeamento'
     }
   });
 });
 
 app.post('/api/dropdown-update', (req, res) => {
-  selectedOption = req.body.selectedOption || 'nenhum';
-
-  console.log('📥 Novo campo selecionado:', selectedOption);
-
+  selectedField = req.body.selectedOption || 'teste_cnpj';
+  console.log('🛠️ Campo mapeado atualizado para:', selectedField);
   res.json({
     response: {
       actionType: 'DROPDOWN_UPDATE',
-      selectedOption,
-      message: `Campo atualizado para: ${selectedOption}`
+      selectedOption: selectedField,
+      message: `O campo mapeado agora é: ${selectedField}`
     }
   });
 });
+
 
 
 
