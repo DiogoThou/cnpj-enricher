@@ -1,21 +1,21 @@
 const express = require('express');
 const axios = require('axios');
+const syncCNPJs = require('./syncCNPJs'); // importa a função do outro arquivo
 const app = express();
 
 app.use(express.json());
 
 const CLIENT_ID = process.env.CLIENT_ID;
 const CLIENT_SECRET = process.env.CLIENT_SECRET;
-const HUBSPOT_ACCESS_TOKEN = process.env.HUBSPOT_ACCESS_TOKEN; // inicialmente gerado no fluxo
+const HUBSPOT_ACCESS_TOKEN = process.env.HUBSPOT_ACCESS_TOKEN;
 const HUBSPOT_REFRESH_TOKEN = process.env.HUBSPOT_REFRESH_TOKEN;
 const REDIRECT_URI = process.env.REDIRECT_URI;
 
-// Limpa CNPJ removendo pontos, traços e barras
 function cleanCNPJ(cnpj) {
   return cnpj ? cnpj.replace(/[^\d]/g, '') : '';
 }
 
-// Account Component - status do app
+// Status do app
 app.get('/account', (req, res) => {
   res.json({
     status: 'connected',
@@ -24,13 +24,10 @@ app.get('/account', (req, res) => {
   });
 });
 
-// OAuth callback - troca o code por access_token e refresh_token
+// OAuth Callback
 app.get('/oauth/callback', async (req, res) => {
   const code = req.query.code;
-
-  if (!code) {
-    return res.status(400).send('❌ Código de autorização não fornecido.');
-  }
+  if (!code) return res.status(400).send('❌ Código de autorização não fornecido.');
 
   try {
     const response = await axios.post(
@@ -53,8 +50,7 @@ app.get('/oauth/callback', async (req, res) => {
     console.log('🔁 Refresh Token:', refresh_token);
     console.log('⏰ Expira em (segundos):', expires_in);
 
-    res.send('✅ App autorizado com sucesso! Access token gerado. Verifique o console do servidor.');
-
+    res.send('✅ App autorizado com sucesso! Access token gerado. Verifique o console.');
   } catch (error) {
     console.error('❌ Erro ao trocar o code pelo token:', error.response?.data || error.message);
     res.status(500).send('❌ Erro ao gerar token.');
@@ -63,9 +59,7 @@ app.get('/oauth/callback', async (req, res) => {
 
 // Refresh do token
 app.get('/refresh', async (req, res) => {
-  if (!HUBSPOT_REFRESH_TOKEN) {
-    return res.status(400).send('❌ Refresh token não configurado.');
-  }
+  if (!HUBSPOT_REFRESH_TOKEN) return res.status(400).send('❌ Refresh token não configurado.');
 
   try {
     const response = await axios.post(
@@ -88,20 +82,17 @@ app.get('/refresh', async (req, res) => {
     console.log('⏰ Expira em (segundos):', expires_in);
 
     res.send('✅ Novo access_token gerado com sucesso! Verifique o console.');
-
   } catch (error) {
     console.error('❌ Erro ao fazer refresh do token:', error.response?.data || error.message);
     res.status(500).send('❌ Erro ao gerar novo token.');
   }
 });
 
-// Enrichment
+// Enrichment com CNPJ
 app.post('/enrich', async (req, res) => {
   const { companyId } = req.body;
 
-  if (!companyId) {
-    return res.status(400).json({ error: 'Company ID is required' });
-  }
+  if (!companyId) return res.status(400).json({ error: 'Company ID is required' });
 
   try {
     const hubspotCompany = await axios.get(`https://api.hubapi.com/crm/v3/objects/companies/${companyId}`, {
@@ -111,9 +102,7 @@ app.post('/enrich', async (req, res) => {
     const cnpjRaw = hubspotCompany.data.properties.cnpj;
     const cnpj = cleanCNPJ(cnpjRaw);
 
-    if (!cnpj) {
-      return res.status(400).json({ error: 'CNPJ not found or invalid in HubSpot company record' });
-    }
+    if (!cnpj) return res.status(400).json({ error: 'CNPJ inválido ou não encontrado' });
 
     const cnpjDataResponse = await axios.get(`https://publica.cnpj.ws/cnpj/${cnpj}`);
     const cnpjData = cnpjDataResponse.data;
@@ -145,13 +134,23 @@ app.post('/enrich', async (req, res) => {
     });
 
     res.json({ status: 'success', message: 'Empresa atualizada com dados do CNPJ' });
-
   } catch (error) {
     console.error('❌ Erro no enriquecimento:', error.response?.data || error.message);
     res.status(500).json({ error: 'Erro ao enriquecer dados' });
   }
 });
 
-// Porta no Vercel
+// ✅ Nova rota: Sincronização GET
+app.get('/api/sync-cnpj', async (req, res) => {
+  try {
+    await syncCNPJs(); // chama o arquivo externo
+    res.json({ status: 'success', message: 'Sync concluído com sucesso' });
+  } catch (error) {
+    console.error('❌ Erro no sync-cnpj:', error.message);
+    res.status(500).json({ error: 'Erro na sincronização' });
+  }
+});
+
+// Roda servidor (compatível com Vercel)
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`🚀 CNPJ Enricher rodando na porta ${PORT}`));
