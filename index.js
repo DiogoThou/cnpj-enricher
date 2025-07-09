@@ -1058,7 +1058,7 @@ app.post('/api/accounts-fetch', (req, res) => {
 // Substitua essa parte no seu index.js
 
 // ⚡ Variáveis globais para mapeamento
-let selectedDestinationField = 'nenhum'; // ⚡ CORREÇÃO: "não mapear" como padrão
+let selectedDestinationField = 'teste_cnpj'; // ✅ Correto
 let availableFields = []; // Cache dos campos disponíveis
 
 // ⚡ Função CORRIGIDA para buscar todos os campos de texto de empresa no HubSpot
