@@ -267,237 +267,26 @@ app.get('/settings', (req, res) => {
 
   // Retornar a página HTML de configurações
   res.send(`
-<!DOCTYPE html>
-<html lang="pt-BR">
-<head>
-  <meta charset="UTF-8" />
-  <title>Configurações | CNPJ Enricher</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { 
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-      background: #f8f9fa;
-      padding: 20px;
-      line-height: 1.6;
-    }
-    .container {
-      max-width: 800px;
-      margin: 0 auto;
-      background: white;
-      border-radius: 8px;
-      box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-      overflow: hidden;
-    }
-    .header {
-      background: #0066cc;
-      color: white;
-      padding: 20px;
-      text-align: center;
-    }
-    .header h1 { font-size: 1.5rem; margin-bottom: 5px; }
-    .subtitle { opacity: 0.9; font-size: 0.9rem; }
-    .content { padding: 30px; }
-    .info-box {
-      background: #f8f9fa;
-      border-left: 4px solid #0066cc;
-      padding: 15px;
-      margin: 15px 0;
-      border-radius: 0 4px 4px 0;
-    }
-    .info-box h3 { color: #0066cc; margin-bottom: 8px; font-size: 1rem; }
-    .info-box p { font-size: 0.9rem; color: #666; }
-    .button-row {
-      display: flex;
-      gap: 15px;
-      margin: 25px 0;
-      flex-wrap: wrap;
-    }
-    .btn-primary, .btn-secondary {
-      flex: 1;
-      padding: 12px 20px;
-      border: none;
-      border-radius: 6px;
-      font-size: 0.9rem;
-      font-weight: 600;
-      cursor: pointer;
-      transition: all 0.2s ease;
-      min-width: 150px;
-    }
-    .btn-primary {
-      background: #28a745;
-      color: white;
-    }
-    .btn-primary:hover { background: #218838; }
-    .btn-secondary {
-      background: #6f42c1;
-      color: white;
-    }
-    .btn-secondary:hover { background: #5a32a3; }
-    .btn-primary:disabled, .btn-secondary:disabled {
-      background: #ccc;
-      cursor: not-allowed;
-    }
-    .status {
-      margin-top: 20px;
-      padding: 12px;
-      border-radius: 6px;
-      background: #e9ecef;
-      font-weight: 500;
-      text-align: center;
-      min-height: 45px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 0.9rem;
-    }
-    .tech-details {
-      background: #f8f9fa;
-      border-radius: 6px;
-      padding: 20px;
-      margin-top: 25px;
-    }
-    .tech-row {
-      display: flex;
-      justify-content: space-between;
-      padding: 8px 0;
-      border-bottom: 1px solid #dee2e6;
-      font-size: 0.85rem;
-    }
-    .tech-row:last-child { border-bottom: none; }
-    code {
-      background: #e9ecef;
-      padding: 2px 6px;
-      border-radius: 3px;
-      font-family: 'Monaco', 'Consolas', monospace;
-      font-size: 0.8rem;
-    }
-    strong { color: #0066cc; }
-  </style>
-</head>
-<body>
-  <div class="container">
-    <div class="header">
-      <h1>⚙️ CNPJ Enricher</h1>
-      <p class="subtitle">Configurações e Testes do Sistema</p>
-    </div>
-    
-    <div class="content">
-      <div class="info-box">
-        <h3>📄 Como funciona</h3>
-        <p>Todos os dados extraídos via CNPJ são salvos como texto formatado no campo <strong>teste_cnpj</strong> do HubSpot.</p>
-      </div>
+<div class="field-mapping">
+  <label for="company_name_field">Nome da empresa →</label>
+  <input id="company_name_field" placeholder="Ex: nome_fantasia" />
+</div>
+<button onclick="saveMapping()">Salvar mapeamento</button>
 
-      <div class="info-box">
-        <h3>🛠️ Criar Campo</h3>
-        <p>Cria automaticamente o campo "teste_cnpj" no seu CRM se ele ainda não existir.</p>
-      </div>
+<script>
+  async function saveMapping() {
+    const field = document.getElementById("company_name_field").value;
+    const res = await fetch("/api/save-mapping", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ mapping: { company_name: field } })
+    });
 
-      <div class="info-box">
-        <h3>🧪 Testar Enriquecimento</h3>
-        <p>Cria uma empresa fictícia e preenche o campo <strong>teste_cnpj</strong> com dados reais de exemplo.</p>
-      </div>
+    const result = await res.json();
+    alert(result.message || "Mapeamento salvo!");
+  }
+</script>
 
-      <div class="button-row">
-        <button class="btn-secondary" onclick="createTestField()" id="createBtn">🛠️ Criar Campo</button>
-        <button class="btn-primary" onclick="testEnrichment()" id="testBtn">🧪 Testar Enriquecimento</button>
-      </div>
-
-      <div class="status" id="status">Pronto para configurar</div>
-      
-      <div class="tech-details">
-        <h3 style="margin-bottom: 15px; color: #0066cc;">Detalhes Técnicos</h3>
-        <div class="tech-row">
-          <span>Campo de Destino:</span>
-          <code>teste_cnpj</code>
-        </div>
-        <div class="tech-row">
-          <span>Tipo de Conteúdo:</span>
-          <span>Texto formatado</span>
-        </div>
-        <div class="tech-row">
-          <span>Fonte de Dados:</span>
-          <span>Receita Federal</span>
-        </div>
-        <div class="tech-row">
-          <span>API:</span>
-          <code>publica.cnpj.ws</code>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <script>
-    function setStatus(text, color = '#333') {
-      const el = document.getElementById('status');
-      el.textContent = text;
-      el.style.color = color;
-      el.style.background = color === 'green' ? '#d4edda' : color === 'red' ? '#f8d7da' : '#e9ecef';
-    }
-
-    function disableButtons(disabled) {
-      document.getElementById('createBtn').disabled = disabled;
-      document.getElementById('testBtn').disabled = disabled;
-    }
-
-    async function createTestField() {
-      setStatus('Criando campo teste_cnpj...', '#0066cc');
-      disableButtons(true);
-      
-      try {
-        const res = await fetch('/create-test-field', { method: 'POST' });
-        const json = await res.json();
-        if (res.ok) {
-          setStatus('✅ Campo criado/verificado com sucesso!', 'green');
-        } else {
-          setStatus('❌ Erro: ' + (json?.error || 'Falha'), 'red');
-        }
-      } catch (e) {
-        setStatus('❌ Erro de conexão', 'red');
-      } finally {
-        disableButtons(false);
-      }
-    }
-
-    async function testEnrichment() {
-      setStatus('Criando empresa de teste...', '#0066cc');
-      disableButtons(true);
-      
-      try {
-        const res = await fetch('/create-test-company', { method: 'POST' });
-        const json = await res.json();
-        if (!res.ok) {
-          setStatus('❌ Erro: ' + (json?.error || 'Falha'), 'red');
-          return;
-        }
-
-        const companyId = json.companyId;
-        setStatus('Enriquecendo empresa com ID: ' + companyId + '...', '#0066cc');
-
-        const enrichRes = await fetch('/enrich', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ companyId })
-        });
-
-        const enrichJson = await enrichRes.json();
-        if (enrichRes.ok) {
-          setStatus('🎉 Enriquecimento concluído com sucesso!', 'green');
-        } else {
-          setStatus('❌ Erro no enriquecimento: ' + (enrichJson?.error || 'Falha'), 'red');
-        }
-      } catch (e) {
-        setStatus('❌ Erro inesperado', 'red');
-      } finally {
-        disableButtons(false);
-      }
-    }
-
-    // Status inicial
-    setStatus('Sistema pronto para configuração', '#0066cc');
-  </script>
-</body>
-</html>
   `);
 });
 
@@ -1268,35 +1057,19 @@ app.post('/api/accounts-fetch', (req, res) => {
   });
 });
 
-let selectedField = 'teste_cnpj'; // valor padrão
+let fieldMapping = {
+  company_name: null // ← onde será salvo o name do campo (ex: "nome_fantasia")
+};
 
-app.post('/api/dropdown-fetch', (req, res) => {
-  return res.json({
-    response: {
-      options: [
-        { text: 'Salvar tudo no teste_cnpj', value: 'teste_cnpj' },
-        { text: 'Nome Fantasia → nome_fantasia', value: 'nome_fantasia' },
-        { text: 'Telefone → telefone', value: 'telefone' },
-        { text: 'Porte → porte', value: 'porte' }
-      ],
-      selectedOption: selectedField,
-      placeholder: 'Selecione um campo para mapeamento'
-    }
-  });
+app.post('/api/save-mapping', (req, res) => {
+  const { mapping } = req.body;
+  if (mapping?.company_name) {
+    fieldMapping.company_name = mapping.company_name;
+    console.log('🧩 Campo personalizado para nome da empresa:', fieldMapping.company_name);
+    return res.json({ message: `Campo personalizado salvo como: ${fieldMapping.company_name}` });
+  }
+  return res.status(400).json({ message: "Nenhum mapeamento válido enviado." });
 });
-
-app.post('/api/dropdown-update', (req, res) => {
-  selectedField = req.body.selectedOption || 'teste_cnpj';
-  console.log('🛠️ Campo mapeado atualizado para:', selectedField);
-  res.json({
-    response: {
-      actionType: 'DROPDOWN_UPDATE',
-      selectedOption: selectedField,
-      message: `O campo mapeado agora é: ${selectedField}`
-    }
-  });
-});
-
 
 
 
