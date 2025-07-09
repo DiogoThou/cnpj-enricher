@@ -1,49 +1,9 @@
-// ⚡ SERVIDOR OTIMIZADO PARA HUBSPOT
 const express = require('express');
 const axios = require('axios');
-const cors = require('cors');
-const path = require('path');
+const syncCNPJs = require('./syncCNPJs');
 const app = express();
 
-// ⚡ CORS configurado especificamente para HubSpot
-app.use(cors({
-  origin: [
-    'https://app.hubspot.com',
-    'https://app-eu1.hubspot.com', 
-    'https://app.hubspot.eu',
-    'https://local.hubspot.com:8080',
-    'http://localhost:3000',
-    'http://localhost:5173'
-  ],
-  credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: [
-    'Content-Type',
-    'Authorization', 
-    'X-Requested-With',
-    'Accept',
-    'Origin',
-    'X-HubSpot-Signature'
-  ]
-}));
-
-// ⚡ Headers específicos para iframe do HubSpot
-app.use((req, res, next) => {
-  // Permitir iframe do HubSpot
-  res.setHeader('X-Frame-Options', 'ALLOWALL');
-  res.setHeader('Content-Security-Policy', "frame-ancestors 'self' https://*.hubspot.com https://*.hubspot.eu");
-  
-  // Headers CORS adicionais
-  res.setHeader('Access-Control-Allow-Origin', req.headers.origin || '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept, Origin, X-HubSpot-Signature');
-  res.setHeader('Access-Control-Allow-Credentials', 'true');
-  
-  next();
-});
-
 app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
 
 const CLIENT_ID = process.env.CLIENT_ID;
 const CLIENT_SECRET = process.env.CLIENT_SECRET;
