@@ -140,17 +140,28 @@ app.post('/enrich', async (req, res) => {
   }
 });
 
-// ✅ Nova rota: Sincronização GET
+// 🔁 Sincronização via GET
 app.get('/api/sync-cnpj', async (req, res) => {
   try {
-    await syncCNPJs(); // chama o arquivo externo
-    res.json({ status: 'success', message: 'Sync concluído com sucesso' });
+    await syncCNPJs();
+    res.json({ status: 'success', message: 'Sync concluído com sucesso (GET)' });
   } catch (error) {
-    console.error('❌ Erro no sync-cnpj:', error.message);
+    console.error('❌ Erro no sync-cnpj (GET):', error.message);
     res.status(500).json({ error: 'Erro na sincronização' });
   }
 });
 
-// Roda servidor (compatível com Vercel)
+// 🔁 Sincronização via POST
+app.post('/api/sync-cnpj', async (req, res) => {
+  try {
+    await syncCNPJs();
+    res.json({ status: 'success', message: 'Sync concluído com sucesso (POST)' });
+  } catch (error) {
+    console.error('❌ Erro no sync-cnpj (POST):', error.message);
+    res.status(500).json({ error: 'Erro na sincronização' });
+  }
+});
+
+// Inicializa o servidor
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`🚀 CNPJ Enricher rodando na porta ${PORT}`));
