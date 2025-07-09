@@ -3,61 +3,80 @@
 <html lang="pt-BR">
 <head>
   <meta charset="UTF-8" />
-  <title>Configurações do Enriquecimento de CNPJ</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Configurações do Enriquecedor</title>
   <style>
-    body { font-family: Arial, sans-serif; margin: 20px; }
-    .disabled { opacity: 0.6; pointer-events: none; }
-    .toggle { display: flex; align-items: center; margin-bottom: 20px; }
-    .toggle input { margin-right: 10px; }
-    label { display: block; margin-top: 10px; }
+    body {
+      font-family: Arial, sans-serif;
+      padding: 20px;
+    }
+    .toggle {
+      display: flex;
+      align-items: center;
+      margin-bottom: 20px;
+    }
+    .toggle input[type="checkbox"] {
+      width: 40px;
+      height: 20px;
+      appearance: none;
+      background: #ccc;
+      outline: none;
+      border-radius: 20px;
+      position: relative;
+      transition: background 0.3s;
+    }
+    .toggle input:checked {
+      background: #4CAF50;
+    }
+    .toggle input::before {
+      content: '';
+      position: absolute;
+      width: 18px;
+      height: 18px;
+      background: #fff;
+      border-radius: 50%;
+      top: 1px;
+      left: 1px;
+      transition: transform 0.3s;
+    }
+    .toggle input:checked::before {
+      transform: translateX(20px);
+    }
+    .map-section {
+      opacity: 1;
+      transition: opacity 0.5s;
+    }
+    .map-section.disabled {
+      opacity: 0.3;
+      pointer-events: none;
+    }
   </style>
 </head>
 <body>
-  <h2>🔧 Configurações de Enriquecimento</h2>
+  <h1>Configurações de Enriquecimento</h1>
   <div class="toggle">
-    <input type="checkbox" id="modoAvancado" />
-    <label for="modoAvancado">Ativar Modo Avançado (Salvar nos campos reais do HubSpot)</label>
+    <label>Modo Simples:</label>
+    <input type="checkbox" id="toggleMode"/>
+  </div>
+  <p id="modeDescription">Todos os campos serão salvos no campo único "teste_cnpj".</p>
+
+  <div class="map-section" id="mapSection">
+    <h3>Mapeamento de Campos</h3>
+    <p>(Desabilitado no modo simples)</p>
+    <!-- Campos de mapeamento estariam aqui -->
   </div>
 
-  <form id="configForm">
-    <fieldset id="mapFields" class="disabled">
-      <legend>Mapeamento de Campos (só no Modo Avançado)</legend>
-      <label>Razão Social: <input name="razao_social" placeholder="ex: name" /></label>
-      <label>Nome Fantasia: <input name="nome_fantasia" placeholder="ex: description" /></label>
-      <label>Telefone: <input name="telefone" placeholder="ex: phone" /></label>
-      <label>Email: <input name="email" placeholder="ex: email" /></label>
-      <label>Cidade: <input name="cidade" placeholder="ex: city" /></label>
-      <label>Estado: <input name="estado" placeholder="ex: state" /></label>
-      <label>CEP: <input name="cep" placeholder="ex: zip" /></label>
-    </fieldset>
-    <br />
-    <button type="submit">Salvar</button>
-  </form>
-
   <script>
-    const modoCheckbox = document.getElementById('modoAvancado');
-    const fieldset = document.getElementById('mapFields');
-    modoCheckbox.addEventListener('change', () => {
-      fieldset.classList.toggle('disabled', !modoCheckbox.checked);
-    });
+    const toggle = document.getElementById('toggleMode');
+    const mapSection = document.getElementById('mapSection');
+    const desc = document.getElementById('modeDescription');
 
-    document.getElementById('configForm').addEventListener('submit', async (e) => {
-      e.preventDefault();
-      const data = {
-        modoAvancado: modoCheckbox.checked,
-        mapeamento: {}
-      };
-      if (modoCheckbox.checked) {
-        document.querySelectorAll('#mapFields input').forEach(input => {
-          if (input.value) data.mapeamento[input.name] = input.value;
-        });
-      }
-      const res = await fetch('/settings', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data)
-      });
-      alert('Configurações salvas!');
+    toggle.addEventListener('change', () => {
+      const isSimple = toggle.checked;
+      desc.textContent = isSimple
+        ? 'Todos os campos serão salvos no campo único "teste_cnpj".'
+        : 'Você pode mapear campos para propriedades específicas do HubSpot.';
+      mapSection.classList.toggle('disabled', isSimple);
     });
   </script>
 </body>
