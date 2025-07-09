@@ -259,9 +259,9 @@ app.post('/enrich', async (req, res) => {
   try {
     console.log('📡 Buscando empresa no HubSpot...');
     
-    // ⚡ Buscar empresa no HubSpot com TODAS as propriedades (sem filtro)
+    // ⚡ Buscar empresa no HubSpot solicitando EXPLICITAMENTE o campo CNPJ
     const hubspotCompany = await axios.get(
-      `https://api.hubapi.com/crm/v3/objects/companies/${companyId}`,
+      `https://api.hubapi.com/crm/v3/objects/companies/${companyId}?properties=cnpj,name,domain,website,phone,city,state,country,createdate,hs_lastmodifieddate`,
       {
         headers: { 
           Authorization: `Bearer ${HUBSPOT_ACCESS_TOKEN}`,
