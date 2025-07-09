@@ -1,9 +1,15 @@
-// syncCNPJs.js
-module.exports = async function syncCNPJs() {
-  console.log('🔁 Sincronização iniciada via POST');
-  
-  // Exemplo de processamento
-  await new Promise(resolve => setTimeout(resolve, 1000)); // simula um delay
-
-  console.log('✅ Sincronização finalizada');
-};
+{
+  "version": 2,
+  "builds": [
+    {
+      "src": "index.js",
+      "use": "@vercel/node"
+    }
+  ],
+  "routes": [
+    {
+      "src": "/(.*)",
+      "dest": "index.js"
+    }
+  ]
+}
