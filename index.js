@@ -948,11 +948,11 @@ cnpj/${companyId} com {"cnpj": "14665903000104"}`);
         solucao: 'POST /create-test-field',
         dadosObtidos: {
           cnpj: cnpjLimpo,
-          razaoSocial: cnpjData.razao_social,
-          nomeFantasia: cnpjData.estabelecimento?.nome_fantasia,
-          situacao: cnpjData.estabelecimento?.situacao_cadastral,
-          cidade: cnpjData.estabelecimento?.cidade?.nome,
-          estado: cnpjData.estabelecimento?.estado?.sigla
+          razaoSocial: cnpjData?.razao_social,
+          nomeFantasia: cnpjData?.estabelecimento?.nome_fantasia,
+          situacao: cnpjData?.estabelecimento?.situacao_cadastral,
+          cidade: cnpjData?.estabelecimento?.cidade?.nome,
+          estado: cnpjData?.estabelecimento?.estado?.sigla
         },
         proximosPasses: [
           '1. Execute: POST /create-test-field',
