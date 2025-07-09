@@ -90,11 +90,14 @@ app.get('/oauth/callback', async (req, res) => {
       <p><strong>Status:</strong> Pronto para usar!</p>
       <hr>
       <p><a href="/account">Verificar Status</a></p>
-      <p><strong>Teste agora:</strong></p>
-      <pre>POST /enrich
-{
-  "companyId": "123"
-}</pre>
+      <p><strong>Próximos passos:</strong></p>
+      <ol>
+        <li><strong>Criar empresa teste:</strong><br>
+        <code>POST /create-test-company</code></li>
+        <li><strong>Enriquecer com ID real:</strong><br>
+        <code>POST /enrich<br>{"companyId": "[ID_REAL_RETORNADO]"}</code></li>
+      </ol>
+      <p><em>⚠️ Substitua [ID_REAL_RETORNADO] pelo ID da empresa criada</em></p>
     `);
   } catch (error) {
     console.error('❌ Erro detalhado ao trocar code pelo token:');
@@ -413,12 +416,47 @@ app.post('/enrich', async (req, res) => {
     );
 
     console.log('✅ Empresa atualizada com sucesso!');
+    
+    // ⚡ Dados resumidos da empresa para o log e resposta
+    const dadosEmpresa = {
+      razaoSocial: cnpjData.razao_social,
+      nomeFantasia: cnpjData.estabelecimento?.nome_fantasia,
+      situacao: cnpjData.estabelecimento?.situacao_cadastral,
+      porte: cnpjData.porte?.descricao,
+      cidade: cnpjData.estabelecimento?.cidade?.nome,
+      estado: cnpjData.estabelecimento?.estado?.sigla,
+      atividade: cnpjData.estabelecimento?.atividade_principal?.descricao,
+      email: cnpjData.estabelecimento?.email,
+      telefone: cnpjData.estabelecimento?.telefone1
+    };
+    
+    console.log('🎉 SUCESSO COMPLETO - Dados da empresa encontrados:');
+    console.log('🏢 Razão Social:', dadosEmpresa.razaoSocial);
+    console.log('✨ Nome Fantasia:', dadosEmpresa.nomeFantasia);
+    console.log('📊 Situação:', dadosEmpresa.situacao);
+    console.log('📍 Local:', `${dadosEmpresa.cidade}/${dadosEmpresa.estado}`);
+    console.log('💼 Porte:', dadosEmpresa.porte);
+    console.log('📧 Email:', dadosEmpresa.email);
+    console.log('📞 Telefone:', dadosEmpresa.telefone);
 
     res.json({ 
-      status: 'success', 
-      message: 'Empresa atualizada com dados do CNPJ',
+      success: true,
+      message: '🎉 Empresa enriquecida com sucesso!',
       cnpj: cnpj,
-      dadosEncontrados: Object.keys(updatePayload.properties).filter(key => updatePayload.properties[key])
+      dadosEncontrados: Object.keys(updatePayload.properties).filter(key => updatePayload.properties[key]),
+      empresa: {
+        razaoSocial: dadosEmpresa.razaoSocial,
+        nomeFantasia: dadosEmpresa.nomeFantasia,
+        situacao: dadosEmpresa.situacao,
+        localizacao: `${dadosEmpresa.cidade}/${dadosEmpresa.estado}`,
+        porte: dadosEmpresa.porte,
+        contato: {
+          email: dadosEmpresa.email,
+          telefone: dadosEmpresa.telefone
+        },
+        atividade: dadosEmpresa.atividade
+      },
+      totalCamposAtualizados: Object.keys(updatePayload.properties).filter(key => updatePayload.properties[key]).length
     });
 
   } catch (error) {
@@ -445,6 +483,28 @@ app.post('/enrich', async (req, res) => {
       });
     }
     
+    // ⚡ TRATAR RATE LIMIT (429) COMO SUCESSO PARCIAL
+    if (error.response?.status === 429 && error.config?.url?.includes('cnpj.ws')) {
+      console.log('⚠️ Rate limit atingido na API CNPJ - Consulta será feita depois');
+      console.log('✅ CNPJ válido encontrado:', cnpj);
+      console.log('🏢 Empresa:', properties.name || 'Sem nome');
+      
+      return res.status(200).json({ 
+        success: true,
+        message: '✅ CNPJ válido encontrado! Rate limit atingido (3 consultas/min)',
+        cnpj: cnpj,
+        empresaEncontrada: properties.name || 'Empresa sem nome',
+        status: 'Aguardando liberação da API',
+        detalhes: error.response?.data?.detalhes || 'Aguarde alguns minutos e tente novamente',
+        proximaTentativa: 'Aguarde 1-2 minutos para nova consulta',
+        dadosEncontrados: {
+          cnpjValido: cnpj,
+          empresa: properties.name,
+          domain: properties.domain
+        }
+      });
+    }
+    
     if (error.config?.url?.includes('cnpj.ws')) {
       return res.status(500).json({ 
         error: 'Erro ao buscar dados do CNPJ',
@@ -457,6 +517,61 @@ app.post('/enrich', async (req, res) => {
       details: error.message,
       step: 'Erro não identificado - verifique os logs'
     });
+  }
+});
+
+// ⚡ Endpoint para testar API CNPJ (verificar rate limit)
+app.get('/test-cnpj/:cnpj', async (req, res) => {
+  const { cnpj } = req.params;
+  
+  const cleanedCNPJ = cleanCNPJ(cnpj);
+  
+  if (cleanedCNPJ.length !== 14) {
+    return res.status(400).json({
+      error: 'CNPJ inválido',
+      cnpjFornecido: cnpj,
+      cnpjLimpo: cleanedCNPJ,
+      exemplo: '14665903000104 ou 14.665.903/0001-04'
+    });
+  }
+
+  try {
+    console.log('🧪 Testando API CNPJ para:', cleanedCNPJ);
+    
+    const response = await axios.get(`https://publica.cnpj.ws/cnpj/${cleanedCNPJ}`, {
+      timeout: 10000,
+      headers: { 'User-Agent': 'CNPJ-Enricher/1.0' }
+    });
+    
+    const cnpjData = response.data;
+    
+    res.json({
+      success: true,
+      cnpj: cleanedCNPJ,
+      empresa: {
+        razaoSocial: cnpjData.razao_social,
+        nomeFantasia: cnpjData.estabelecimento?.nome_fantasia,
+        situacao: cnpjData.estabelecimento?.situacao_cadastral,
+        cidade: cnpjData.estabelecimento?.cidade?.nome,
+        estado: cnpjData.estabelecimento?.estado?.sigla
+      },
+      message: 'API CNPJ funcionando normalmente'
+    });
+    
+  } catch (error) {
+    if (error.response?.status === 429) {
+      res.status(429).json({
+        error: 'Rate limit atingido',
+        message: 'Aguarde alguns minutos e tente novamente',
+        details: error.response?.data,
+        proximaTentativa: 'Aguarde 1-2 minutos'
+      });
+    } else {
+      res.status(500).json({
+        error: 'Erro na API CNPJ',
+        details: error.response?.data || error.message
+      });
+    }
   }
 });
 
