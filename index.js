@@ -1,17 +1,24 @@
 const express = require('express');
 const axios = require('axios');
-const syncCNPJs = require('./syncCNPJs');
+const cors = require('cors');
 const app = express();
 
+// Middleware
 app.use(express.json());
+app.use(cors({
+  origin: '*',
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
+}));
 
+// Variáveis de ambiente
 const CLIENT_ID = process.env.CLIENT_ID;
 const CLIENT_SECRET = process.env.CLIENT_SECRET;
 let HUBSPOT_ACCESS_TOKEN = process.env.HUBSPOT_ACCESS_TOKEN;
 const HUBSPOT_REFRESH_TOKEN = process.env.HUBSPOT_REFRESH_TOKEN;
 const REDIRECT_URI = process.env.REDIRECT_URI;
 
-// ⚡ Armazenamento temporário para mapeamento
+// Configuração de mapeamento
 let fieldMapping = {
   razao_social: 'name',
   nome_fantasia: 'description', 
@@ -27,7 +34,7 @@ let fieldMapping = {
   cep: 'zip'
 };
 
-// ⚡ Função melhorada para limpar CNPJ
+// Função para limpar CNPJ
 function cleanCNPJ(cnpjInput) {
   console.log('🧹 Limpando CNPJ:', cnpjInput, 'Tipo:', typeof cnpjInput);
   
@@ -46,12 +53,13 @@ function cleanCNPJ(cnpjInput) {
     console.log('⚠️ Formatos aceitos:');
     console.log('   14665903000104 (sem pontuação)');
     console.log('   14.665.903/0001-04 (com pontuação)');
+    console.log('   14 665 903 0001 04 (com espaços)');
   }
   
   return cleaned;
 }
 
-// ⚡ Função para formatar dados do CNPJ em texto legível
+// Função para formatar dados do CNPJ
 function formatCNPJData(cnpjData, cnpjNumber) {
   const estabelecimento = cnpjData.estabelecimento || {};
   const endereco = estabelecimento.logradouro ? 
@@ -97,14 +105,23 @@ Atualizado em: ${new Date().toLocaleString('pt-BR')}
   return formattedData;
 }
 
+// ============= ENDPOINTS PRINCIPAIS =============
+
 // Status do app
 app.get('/account', (req, res) => {
+  res.set({
+    'Content-Type': 'application/json',
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization'
+  });
+
   const camposConfigurados = Object.keys(fieldMapping).filter(key => fieldMapping[key] && fieldMapping[key].trim() !== '');
   
   res.json({
     status: 'connected',
     app: 'CNPJ Enricher',
-    version: '1.0',
+    version: '2.0',
     tokenStatus: HUBSPOT_ACCESS_TOKEN ? 'Configurado' : 'Não configurado',
     configuracao: {
       mapeamentoConfigurado: camposConfigurados.length > 0,
@@ -120,10 +137,21 @@ app.get('/account', (req, res) => {
   });
 });
 
-// ⚡ OAuth Callback CORRIGIDO
+// OAuth Callback
 app.get('/oauth/callback', async (req, res) => {
   const code = req.query.code;
-  if (!code) return res.status(400).send('❌ Código de autorização não fornecido.');
+  if (!code) {
+    return res.status(400).send(`
+      <!DOCTYPE html>
+      <html>
+      <head><title>Erro de Autorização</title></head>
+      <body style="font-family: Arial, sans-serif; padding: 20px;">
+        <h2>❌ Código de autorização não fornecido</h2>
+        <p>Tente novamente o processo de autorização.</p>
+      </body>
+      </html>
+    `);
+  }
 
   console.log('🔍 Código recebido:', code);
   console.log('🔑 CLIENT_ID:', CLIENT_ID);
@@ -153,254 +181,284 @@ app.get('/oauth/callback', async (req, res) => {
     console.log('⏰ Expira em (segundos):', expires_in);
 
     res.send(`
-      <h2>✅ Token gerado com sucesso!</h2>
-      <p><strong>Access Token:</strong> ${access_token.substring(0, 20)}...</p>
-      <p><strong>Expira em:</strong> ${expires_in} segundos</p>
-      <p><strong>Status:</strong> Pronto para usar!</p>
-      <hr>
-      <p><a href="/account">Verificar Status</a></p>
-      <p><strong>Próximos passos:</strong></p>
-      <ol>
-        <li><strong>Criar empresa teste:</strong><br>
-        <code>POST /create-test-company</code></li>
-        <li><strong>Enriquecer com ID real:</strong><br>
-        <code>POST /enrich<br>{"companyId": "[ID_REAL_RETORNADO]"}</code></li>
-      </ol>
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>Autorização Concluída</title>
+        <style>
+          body { font-family: Arial, sans-serif; padding: 20px; background: #f5f5f5; }
+          .container { max-width: 600px; margin: 0 auto; background: white; padding: 30px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+          .success { color: #28a745; }
+          .code { background: #f8f9fa; padding: 10px; border-radius: 4px; font-family: monospace; }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <h2 class="success">✅ Token gerado com sucesso!</h2>
+          <p><strong>Access Token:</strong> <span class="code">${access_token.substring(0, 20)}...</span></p>
+          <p><strong>Expira em:</strong> ${expires_in} segundos</p>
+          <p><strong>Status:</strong> Pronto para usar!</p>
+          <hr>
+          <p><a href="/account">Verificar Status</a></p>
+          <h3>Próximos passos:</h3>
+          <ol>
+            <li><strong>Criar empresa teste:</strong><br>
+            <span class="code">POST /create-test-company</span></li>
+            <li><strong>Enriquecer com ID real:</strong><br>
+            <span class="code">POST /enrich<br>{"companyId": "[ID_REAL_RETORNADO]"}</span></li>
+          </ol>
+          <p><em>⚠️ Substitua [ID_REAL_RETORNADO] pelo ID da empresa criada</em></p>
+        </div>
+      </body>
+      </html>
     `);
   } catch (error) {
     console.error('❌ Erro detalhado ao trocar code pelo token:');
     console.error('📊 Status:', error.response?.status);
     console.error('📄 Data:', error.response?.data);
+    console.error('🔗 URL:', error.config?.url);
+    console.error('📡 Payload:', error.config?.data);
     
     res.status(500).send(`
-      <h2>❌ Erro ao gerar token</h2>
-      <p><strong>Status:</strong> ${error.response?.status}</p>
-      <p><strong>Erro:</strong> ${JSON.stringify(error.response?.data)}</p>
+      <!DOCTYPE html>
+      <html>
+      <head><title>Erro de Autorização</title></head>
+      <body style="font-family: Arial, sans-serif; padding: 20px;">
+        <h2>❌ Erro ao gerar token</h2>
+        <p><strong>Status:</strong> ${error.response?.status}</p>
+        <p><strong>Erro:</strong> ${JSON.stringify(error.response?.data)}</p>
+        <p><strong>CLIENT_ID:</strong> ${CLIENT_ID}</p>
+        <p><strong>REDIRECT_URI:</strong> ${REDIRECT_URI}</p>
+      </body>
+      </html>
     `);
   }
 });
 
-// ⚡ Refresh do token
-app.get('/refresh', async (req, res) => {
-  if (!HUBSPOT_REFRESH_TOKEN) return res.status(400).send('❌ Refresh token não configurado.');
-
-  try {
-    const response = await axios.post(
-      'https://api.hubapi.com/oauth/v1/token',
-      new URLSearchParams({
-        grant_type: 'refresh_token',
-        client_id: CLIENT_ID,
-        client_secret: CLIENT_SECRET,
-        refresh_token: HUBSPOT_REFRESH_TOKEN
-      }),
-      {
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
-      }
-    );
-
-    const { access_token, refresh_token, expires_in } = response.data;
-    HUBSPOT_ACCESS_TOKEN = access_token;
-
-    console.log('✅ Novo Access Token:', access_token);
-    console.log('🔁 Novo Refresh Token:', refresh_token);
-
-    res.send('✅ Novo access_token gerado com sucesso!');
-  } catch (error) {
-    console.error('❌ Erro ao fazer refresh do token:', error.response?.data || error.message);
-    res.status(500).send('❌ Erro ao gerar novo token.');
-  }
-});
-
-// ⚡ Endpoint para testar token
-app.get('/test-token', async (req, res) => {
-  if (!HUBSPOT_ACCESS_TOKEN) {
-    return res.json({
-      status: 'error',
-      message: 'Token não configurado',
-      needsAuth: true,
-      authUrl: `https://app.hubspot.com/oauth/authorize?client_id=${CLIENT_ID}&scope=crm.objects.companies.read%20crm.objects.companies.write&redirect_uri=${REDIRECT_URI}`
-    });
-  }
-
-  try {
-    const response = await axios.get('https://api.hubapi.com/crm/v3/objects/companies?limit=1', {
-      headers: { Authorization: `Bearer ${HUBSPOT_ACCESS_TOKEN}` }
-    });
-    
-    res.json({
-      status: 'success',
-      message: 'Token funcionando!',
-      tokenPreview: HUBSPOT_ACCESS_TOKEN.substring(0, 20) + '...',
-      companiesFound: response.data.results.length
-    });
-  } catch (error) {
-    res.json({
-      status: 'error',
-      message: 'Token inválido',
-      error: error.response?.data,
-      needsAuth: true
-    });
-  }
-});
-
-// ⚡ PÁGINA DE CONFIGURAÇÕES SIMPLIFICADA PARA HUBSPOT APP
+// ⚡ PÁGINA DE CONFIGURAÇÕES CORRIGIDA PARA HUBSPOT
 app.get('/settings', (req, res) => {
-  res.send(`
+  // Headers específicos para compatibilidade com HubSpot
+  res.set({
+    'Content-Type': 'text/html; charset=utf-8',
+    'Cache-Control': 'no-cache, no-store, must-revalidate',
+    'Pragma': 'no-cache',
+    'Expires': '0',
+    'X-Frame-Options': 'ALLOWALL',
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Requested-With'
+  });
+
+  const settingsHTML = `
 <!DOCTYPE html>
-<html>
+<html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>CNPJ Enricher - Configurações</title>
     <style>
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        * {
             margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
             padding: 20px;
-            background: #f5f8fa;
-            color: #33475b;
-            line-height: 1.6;
+            color: #333;
         }
         
         .container {
-            max-width: 600px;
+            max-width: 900px;
             margin: 0 auto;
             background: white;
+            border-radius: 12px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            overflow: hidden;
+        }
+        
+        .header {
+            background: linear-gradient(135deg, #4CAF50, #45a049);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+        
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+            font-weight: 300;
+        }
+        
+        .header p {
+            font-size: 1.2em;
+            opacity: 0.9;
+        }
+        
+        .content {
+            padding: 40px;
+        }
+        
+        .info-card {
+            background: #e8f5e8;
+            border: 2px solid #4CAF50;
             border-radius: 8px;
-            padding: 24px;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            padding: 20px;
+            margin-bottom: 30px;
         }
         
-        h1 {
-            color: #33475b;
-            text-align: center;
-            margin-bottom: 8px;
-            font-size: 1.8em;
-            font-weight: 600;
+        .info-card h3 {
+            color: #2e7d32;
+            margin-bottom: 10px;
+            font-size: 1.3em;
         }
         
-        .subtitle {
-            text-align: center;
-            color: #7c98b6;
-            margin-bottom: 32px;
-            font-size: 1em;
-        }
-        
-        .info-box {
-            background: #e6f7ff;
-            border: 1px solid #91d5ff;
-            border-radius: 6px;
-            padding: 16px;
-            margin-bottom: 24px;
-        }
-        
-        .info-box h3 {
-            color: #1890ff;
-            margin: 0 0 8px 0;
-            font-size: 1.1em;
-        }
-        
-        .info-box p {
-            color: #096dd9;
-            margin: 0;
-            font-size: 0.95em;
+        .info-card p {
+            color: #2e7d32;
+            line-height: 1.6;
         }
         
         .config-section {
-            background: #f0f7ff;
-            border: 1px solid #d6e4ff;
-            border-radius: 6px;
-            padding: 20px;
-            margin-bottom: 24px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            padding: 25px;
+            margin-bottom: 30px;
+            border-left: 4px solid #667eea;
         }
         
         .config-section h3 {
-            margin-top: 0;
-            color: #1890ff;
-            font-size: 1.2em;
+            color: #495057;
+            margin-bottom: 15px;
+            font-size: 1.4em;
         }
         
         .field-info {
             background: white;
-            border: 1px solid #e8e8e8;
-            border-radius: 4px;
-            padding: 12px;
-            margin: 8px 0;
+            padding: 15px;
+            border-radius: 6px;
+            border: 1px solid #dee2e6;
+            margin: 10px 0;
         }
         
         .field-info strong {
-            color: #1890ff;
+            color: #495057;
         }
         
         .actions {
             display: flex;
-            gap: 12px;
+            gap: 15px;
             justify-content: center;
-            margin-top: 24px;
             flex-wrap: wrap;
+            margin-top: 30px;
         }
         
-        button {
-            padding: 10px 20px;
+        .btn {
+            padding: 12px 25px;
             border: none;
-            border-radius: 4px;
-            font-weight: 500;
-            font-size: 14px;
+            border-radius: 6px;
+            font-weight: 600;
+            font-size: 16px;
             cursor: pointer;
-            transition: all 0.2s ease;
-            min-width: 120px;
+            transition: all 0.3s ease;
+            min-width: 180px;
+            text-decoration: none;
+            display: inline-block;
+            text-align: center;
         }
         
         .btn-primary {
-            background: #1890ff;
+            background: linear-gradient(135deg, #007bff, #0056b3);
             color: white;
         }
         
         .btn-primary:hover {
-            background: #40a9ff;
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0,123,255,0.3);
         }
         
         .btn-secondary {
-            background: #f5f5f5;
-            color: #595959;
-            border: 1px solid #d9d9d9;
+            background: #6c757d;
+            color: white;
         }
         
         .btn-secondary:hover {
-            background: #fff;
-            border-color: #40a9ff;
+            background: #545b62;
+            transform: translateY(-2px);
         }
         
         .status {
-            padding: 12px;
-            border-radius: 4px;
-            margin: 16px 0;
-            font-weight: 500;
+            padding: 15px;
+            border-radius: 6px;
+            margin: 20px 0;
+            font-weight: 600;
             text-align: center;
+            display: none;
         }
         
         .status.success {
-            background: #f6ffed;
-            color: #52c41a;
-            border: 1px solid #b7eb8f;
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+            display: block;
         }
         
         .status.error {
-            background: #fff2f0;
-            color: #ff4d4f;
-            border: 1px solid #ffccc7;
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+            display: block;
         }
         
         .status.info {
-            background: #f0f7ff;
-            color: #1890ff;
-            border: 1px solid #d6e4ff;
+            background: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+            display: block;
         }
         
-        @media (max-width: 600px) {
+        .feature-list {
+            list-style: none;
+            padding: 0;
+        }
+        
+        .feature-list li {
+            padding: 8px 0;
+            border-bottom: 1px solid #eee;
+        }
+        
+        .feature-list li:before {
+            content: "✓ ";
+            color: #4CAF50;
+            font-weight: bold;
+            margin-right: 8px;
+        }
+        
+        .loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #3498db;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-right: 10px;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        @media (max-width: 768px) {
             .container {
                 margin: 10px;
-                padding: 16px;
+            }
+            
+            .content {
+                padding: 20px;
             }
             
             .actions {
@@ -408,58 +466,86 @@ app.get('/settings', (req, res) => {
                 align-items: center;
             }
             
-            button {
+            .btn {
                 width: 100%;
-                max-width: 200px;
+                max-width: 300px;
             }
         }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>⚙️ CNPJ Enricher</h1>
-        <p class="subtitle">Configurações do App</p>
-        
-        <div class="info-box">
-            <h3>📋 Como funciona</h3>
-            <p>Este app enriquece automaticamente os dados das empresas no HubSpot consultando o CNPJ na Receita Federal. Todos os dados são salvos no campo <strong>teste_cnpj</strong> como texto formatado.</p>
+        <div class="header">
+            <h1>⚙️ CNPJ Enricher</h1>
+            <p>Sistema de Enriquecimento de Dados Empresariais</p>
         </div>
+        
+        <div class="content">
+            <div class="info-card">
+                <h3>📋 Como Funciona</h3>
+                <p>O CNPJ Enricher busca automaticamente dados da Receita Federal e salva todas as informações em um campo único chamado <strong>teste_cnpj</strong> de forma organizada e legível.</p>
+            </div>
 
-        <div class="config-section">
-            <h3>🎯 Configuração Atual</h3>
-            <div class="field-info">
-                <strong>Campo de destino:</strong> teste_cnpj
+            <div class="config-section">
+                <h3>🎯 Configuração Atual</h3>
+                <div class="field-info">
+                    <strong>Campo de Destino:</strong> teste_cnpj
+                </div>
+                <div class="field-info">
+                    <strong>Tipo:</strong> Texto longo (textarea)
+                </div>
+                <div class="field-info">
+                    <strong>Conteúdo:</strong> Dados completos da Receita Federal formatados
+                </div>
             </div>
-            <div class="field-info">
-                <strong>Tipo:</strong> Texto longo (textarea)
+            
+            <div class="config-section">
+                <h3>📊 Dados Incluídos</h3>
+                <ul class="feature-list">
+                    <li>Razão Social e Nome Fantasia</li>
+                    <li>Situação Cadastral e Data</li>
+                    <li>Porte da Empresa</li>
+                    <li>Capital Social</li>
+                    <li>Atividade Principal</li>
+                    <li>Endereço Completo</li>
+                    <li>Telefone e Email</li>
+                    <li>Natureza Jurídica</li>
+                    <li>Data de Início das Atividades</li>
+                </ul>
             </div>
-            <div class="field-info">
-                <strong>Conteúdo:</strong> Todos os dados da Receita Federal formatados
+            
+            <div class="actions">
+                <button type="button" class="btn btn-secondary" onclick="createTestField()">
+                    🔧 Criar Campo teste_cnpj
+                </button>
+                <button type="button" class="btn btn-primary" onclick="testEnrichment()">
+                    🧪 Testar Enriquecimento
+                </button>
             </div>
-            <div class="field-info">
-                <strong>Dados incluídos:</strong> Razão Social, Nome Fantasia, Endereço, Telefone, Email, Situação Cadastral, Porte, Atividade Principal
-            </div>
+            
+            <div id="status"></div>
         </div>
-        
-        <div class="actions">
-            <button type="button" class="btn-secondary" onclick="createTestField()">
-                🔧 Criar Campo
-            </button>
-            <button type="button" class="btn-primary" onclick="testEnrichment()">
-                🧪 Testar App
-            </button>
-            <button type="button" class="btn-secondary" onclick="checkStatus()">
-                📊 Verificar Status
-            </button>
-        </div>
-        
-        <div id="status"></div>
     </div>
 
     <script>
+        // Função para mostrar status
+        function showStatus(message, type) {
+            const statusDiv = document.getElementById('status');
+            statusDiv.className = 'status ' + type;
+            statusDiv.innerHTML = message;
+            statusDiv.style.display = 'block';
+            
+            if (type === 'success') {
+                setTimeout(() => {
+                    statusDiv.style.display = 'none';
+                }, 8000);
+            }
+        }
+
+        // Função para criar campo de teste
         async function createTestField() {
             try {
-                showStatus('Criando campo teste_cnpj no HubSpot...', 'info');
+                showStatus('<div class="loading"></div>Criando campo teste_cnpj no HubSpot...', 'info');
                 
                 const response = await fetch('/create-test-field', {
                     method: 'POST',
@@ -471,18 +557,20 @@ app.get('/settings', (req, res) => {
                 const result = await response.json();
 
                 if (response.ok) {
-                    showStatus('✅ Campo teste_cnpj criado/verificado com sucesso!', 'success');
+                    showStatus('✅ Campo teste_cnpj criado/verificado com sucesso! Agora você pode usar o enriquecimento.', 'success');
                 } else {
-                    showStatus('❌ Erro: ' + result.error, 'error');
+                    showStatus('❌ Erro ao criar campo: ' + (result.error || 'Erro desconhecido'), 'error');
                 }
             } catch (error) {
-                showStatus('❌ Erro ao criar campo', 'error');
+                console.error('Erro:', error);
+                showStatus('❌ Erro de conexão ao criar campo teste_cnpj', 'error');
             }
         }
 
+        // Função para testar enriquecimento
         async function testEnrichment() {
             try {
-                showStatus('Criando empresa de teste...', 'info');
+                showStatus('<div class="loading"></div>Criando empresa de teste...', 'info');
                 
                 const response = await fetch('/create-test-company', {
                     method: 'POST',
@@ -494,21 +582,26 @@ app.get('/settings', (req, res) => {
                 const result = await response.json();
 
                 if (response.ok) {
-                    showStatus('✅ Empresa criada! Testando enriquecimento...', 'info');
+                    showStatus('✅ Empresa criada! ID: ' + result.companyId + '. Iniciando enriquecimento...', 'info');
                     
+                    // Aguardar e fazer o enriquecimento
                     setTimeout(async () => {
                         await enrichCompany(result.companyId);
-                    }, 1000);
+                    }, 2000);
                 } else {
-                    showStatus('❌ Erro ao criar empresa: ' + result.error, 'error');
+                    showStatus('❌ Erro ao criar empresa: ' + (result.error || 'Erro desconhecido'), 'error');
                 }
             } catch (error) {
-                showStatus('❌ Erro no teste', 'error');
+                console.error('Erro:', error);
+                showStatus('❌ Erro de conexão no teste', 'error');
             }
         }
 
+        // Função para enriquecer empresa
         async function enrichCompany(companyId) {
             try {
+                showStatus('<div class="loading"></div>Buscando dados do CNPJ na Receita Federal...', 'info');
+                
                 const response = await fetch('/enrich', {
                     method: 'POST',
                     headers: {
@@ -520,60 +613,35 @@ app.get('/settings', (req, res) => {
                 const result = await response.json();
 
                 if (response.ok) {
-                    showStatus('🎉 Teste concluído! Dados salvos no campo teste_cnpj. Verifique a empresa no HubSpot.', 'success');
+                    showStatus('🎉 Enriquecimento concluído com sucesso!<br><strong>Empresa:</strong> ' + (result.empresa?.razaoSocial || 'N/A') + '<br><strong>Localização:</strong> ' + (result.empresa?.localizacao || 'N/A') + '<br><br>Verifique o campo <strong>teste_cnpj</strong> na empresa no HubSpot.', 'success');
                 } else {
-                    showStatus('❌ Erro no enriquecimento: ' + result.error, 'error');
+                    showStatus('❌ Erro no enriquecimento: ' + (result.error || 'Erro desconhecido'), 'error');
                 }
             } catch (error) {
-                showStatus('❌ Erro no enriquecimento', 'error');
+                console.error('Erro:', error);
+                showStatus('❌ Erro de conexão no enriquecimento', 'error');
             }
         }
 
-        async function checkStatus() {
-            try {
-                showStatus('Verificando status da aplicação...', 'info');
-                
-                const response = await fetch('/account');
-                const result = await response.json();
-
-                if (response.ok) {
-                    showStatus(\`✅ Status: \${result.status} | Token: \${result.tokenStatus}\`, 'success');
-                } else {
-                    showStatus('❌ Erro ao verificar status', 'error');
-                }
-            } catch (error) {
-                showStatus('❌ Erro ao verificar status', 'error');
-            }
-        }
-
-        function showStatus(message, type) {
-            const statusDiv = document.getElementById('status');
-            statusDiv.innerHTML = \`<div class="status \${type}">\${message}</div>\`;
-            
-            if (type === 'success') {
-                setTimeout(() => {
-                    statusDiv.innerHTML = '';
-                }, 8000);
-            }
-        }
-
-        // Notificar o HubSpot quando a página carregar
+        // Verificar status inicial
         window.addEventListener('load', function() {
-            if (window.parent && window.parent.postMessage) {
-                window.parent.postMessage({
-                    type: 'IFRAME_RESIZE',
-                    height: document.body.scrollHeight
-                }, '*');
-            }
+            showStatus('✅ Página de configurações carregada com sucesso!', 'success');
         });
     </script>
 </body>
 </html>
-  `);
+  `;
+
+  res.send(settingsHTML);
 });
 
-// ⚡ Status das configurações
+// Status das configurações
 app.get('/api/config-status', (req, res) => {
+  res.set({
+    'Content-Type': 'application/json',
+    'Access-Control-Allow-Origin': '*'
+  });
+
   try {
     res.json({
       success: true,
@@ -597,89 +665,9 @@ app.get('/api/config-status', (req, res) => {
   }
 });
 
-// ⚡ API para salvar mapeamento (mantido para compatibilidade)
-app.post('/api/save-mapping', (req, res) => {
-  try {
-    res.json({ 
-      success: true, 
-      message: 'Sistema configurado para usar campo único teste_cnpj',
-      modo: 'campo_unico'
-    });
-  } catch (error) {
-    console.error('❌ Erro ao salvar mapeamento:', error);
-    res.status(500).json({ error: 'Erro interno do servidor' });
-  }
-});
+// ============= ENDPOINTS DE ENRIQUECIMENTO =============
 
-// ⚡ API para recuperar mapeamento (mantido para compatibilidade)
-app.get('/api/get-mapping', (req, res) => {
-  try {
-    res.json({ 
-      success: true, 
-      mapping: { modo: 'campo_unico', campo: 'teste_cnpj' }
-    });
-  } catch (error) {
-    console.error('❌ Erro ao recuperar mapeamento:', error);
-    res.status(500).json({ error: 'Erro interno do servidor' });
-  }
-});
-
-// 🔍 Endpoint Debug - Investigar Campos
-app.get('/debug-company/:companyId', async (req, res) => {
-  const { companyId } = req.params;
-
-  if (!HUBSPOT_ACCESS_TOKEN) {
-    return res.status(401).json({ error: 'Token não configurado' });
-  }
-
-  try {
-    console.log('🔍 Buscando todas as propriedades da empresa:', companyId);
-    
-    const hubspotCompany = await axios.get(
-      `https://api.hubapi.com/crm/v3/objects/companies/${companyId}`,
-      {
-        headers: { 
-          Authorization: `Bearer ${HUBSPOT_ACCESS_TOKEN}`,
-          'Content-Type': 'application/json'
-        }
-      }
-    );
-
-    const properties = hubspotCompany.data.properties;
-    
-    console.log('📋 TODAS as propriedades encontradas:');
-    Object.keys(properties).forEach(key => {
-      console.log(`   ${key}: ${properties[key]}`);
-    });
-
-    const cnpjFields = Object.keys(properties).filter(key => 
-      key.toLowerCase().includes('cnpj') || 
-      key.toLowerCase().includes('registration') ||
-      key.toLowerCase().includes('document')
-    );
-
-    console.log('🔍 Campos que podem ser CNPJ:', cnpjFields);
-
-    res.json({
-      success: true,
-      companyId: companyId,
-      allProperties: properties,
-      possibleCNPJFields: cnpjFields,
-      cnpjFieldValue: properties.cnpj,
-      cnpjFieldExists: 'cnpj' in properties,
-      totalFields: Object.keys(properties).length
-    });
-
-  } catch (error) {
-    console.error('❌ Erro ao buscar empresa:', error.response?.data);
-    res.status(error.response?.status || 500).json({
-      error: 'Erro ao buscar empresa',
-      details: error.response?.data
-    });
-  }
-});
-
-// ⚡ ENRICHMENT PRINCIPAL - SALVA TUDO NO CAMPO teste_cnpj
+// Endpoint principal de enriquecimento
 app.post('/enrich', async (req, res) => {
   const { companyId } = req.body;
 
@@ -761,6 +749,7 @@ app.post('/enrich', async (req, res) => {
     console.log('🔍 CNPJ bruto encontrado:', cnpjRaw);
     console.log('🔍 Tipo do CNPJ:', typeof cnpjRaw);
     console.log('🔍 Campo cnpj existe?', 'cnpj' in properties);
+    console.log('🔍 Total de propriedades:', allKeys.length);
 
     const cnpjLimpo = cleanCNPJ(cnpjRaw);
     console.log('🧹 CNPJ limpo:', cnpjLimpo);
@@ -772,7 +761,7 @@ app.post('/enrich', async (req, res) => {
       let sugestoes = [];
       if (!cnpjRaw) {
         sugestoes.push('Campo CNPJ não encontrado na empresa');
-cnpj/${companyId} com {"cnpj": "14665903000104"}`);
+        sugestoes.push(`Use: POST /add-cnpj/${companyId} com {"cnpj": "14665903000104"}`);
       } else if (cnpjLimpo.length === 0) {
         sugestoes.push('Campo CNPJ existe mas está vazio');
       } else if (cnpjLimpo.length !== 14) {
@@ -796,9 +785,9 @@ cnpj/${companyId} com {"cnpj": "14665903000104"}`);
     console.log('📡 Buscando dados do CNPJ na API externa...');
     
     const cnpjDataResponse = await axios.get(`https://publica.cnpj.ws/cnpj/${cnpjLimpo}`, {
-      timeout: 10000,
+      timeout: 15000,
       headers: {
-        'User-Agent': 'CNPJ-Enricher/1.0'
+        'User-Agent': 'CNPJ-Enricher/2.0'
       }
     });
 
@@ -813,7 +802,6 @@ cnpj/${companyId} com {"cnpj": "14665903000104"}`);
       return value || '';
     };
 
-    // ⚡ EXTRAIR DADOS PRINCIPAIS
     const razaoSocial = extract('Razão Social', cnpjData.razao_social);
     const nomeFantasia = extract('Nome Fantasia', cnpjData.estabelecimento?.nome_fantasia);
     const situacaoCadastral = extract('Situação Cadastral', cnpjData.estabelecimento?.situacao_cadastral);
@@ -835,13 +823,11 @@ cnpj/${companyId} com {"cnpj": "14665903000104"}`);
     const estado = extract('Estado', cnpjData.estabelecimento?.estado?.sigla);
     const cep = extract('CEP', cnpjData.estabelecimento?.cep);
 
-    // ⚡ FORMATAR TODOS OS DADOS EM TEXTO LEGÍVEL
     const dadosFormatados = formatCNPJData(cnpjData, cnpjLimpo);
     
     console.log('📦 Dados formatados para campo teste_cnpj:');
     console.log(dadosFormatados);
 
-    // ⚡ PAYLOAD SIMPLIFICADO - APENAS CAMPO teste_cnpj
     const updatePayload = {
       properties: {
         teste_cnpj: dadosFormatados
@@ -882,6 +868,9 @@ cnpj/${companyId} com {"cnpj": "14665903000104"}`);
     console.log('✨ Nome Fantasia:', dadosEmpresa.nomeFantasia);
     console.log('📊 Situação:', dadosEmpresa.situacao);
     console.log('📍 Local:', `${dadosEmpresa.cidade}/${dadosEmpresa.estado}`);
+    console.log('💼 Porte:', dadosEmpresa.porte);
+    console.log('📧 Email:', dadosEmpresa.email);
+    console.log('📞 Telefone:', dadosEmpresa.telefone);
 
     res.json({ 
       success: true,
@@ -923,6 +912,8 @@ cnpj/${companyId} com {"cnpj": "14665903000104"}`);
     console.error('📋 Mensagem:', error.message);
     console.error('📊 Status:', error.response?.status);
     console.error('📄 Response data:', error.response?.data);
+    console.error('🔗 URL tentada:', error.config?.url);
+    console.error('📡 Headers enviados:', error.config?.headers);
     
     if (error.response?.status === 401) {
       return res.status(401).json({ 
@@ -946,14 +937,6 @@ cnpj/${companyId} com {"cnpj": "14665903000104"}`);
         error: 'Campo teste_cnpj não existe no HubSpot',
         message: 'Execute POST /create-test-field para criar o campo',
         solucao: 'POST /create-test-field',
-        dadosObtidos: {
-          cnpj: cnpjLimpo,
-          razaoSocial: cnpjData?.razao_social,
-          nomeFantasia: cnpjData?.estabelecimento?.nome_fantasia,
-          situacao: cnpjData?.estabelecimento?.situacao_cadastral,
-          cidade: cnpjData?.estabelecimento?.cidade?.nome,
-          estado: cnpjData?.estabelecimento?.estado?.sigla
-        },
         proximosPasses: [
           '1. Execute: POST /create-test-field',
           '2. Depois execute: POST /enrich novamente'
@@ -962,8 +945,9 @@ cnpj/${companyId} com {"cnpj": "14665903000104"}`);
     }
     
     if (error.response?.status === 429 && error.config?.url?.includes('cnpj.ws')) {
-      console.log('⚠️ Rate limit atingido na API CNPJ');
+      console.log('⚠️ Rate limit atingido na API CNPJ - Consulta será feita depois');
       console.log('✅ CNPJ válido encontrado:', cnpjLimpo);
+      console.log('🏢 Empresa:', properties.name || 'Sem nome');
       
       return res.status(200).json({ 
         success: true,
@@ -971,8 +955,13 @@ cnpj/${companyId} com {"cnpj": "14665903000104"}`);
         cnpj: cnpjLimpo,
         empresaEncontrada: properties.name || 'Empresa sem nome',
         status: 'Aguardando liberação da API',
-        detalhes: 'Aguarde alguns minutos e tente novamente',
-        proximaTentativa: 'Aguarde 1-2 minutos para nova consulta'
+        detalhes: error.response?.data?.detalhes || 'Aguarde alguns minutos e tente novamente',
+        proximaTentativa: 'Aguarde 1-2 minutos para nova consulta',
+        dadosEncontrados: {
+          cnpjValido: cnpjLimpo,
+          empresa: properties.name,
+          domain: properties.domain
+        }
       });
     }
     
@@ -991,7 +980,9 @@ cnpj/${companyId} com {"cnpj": "14665903000104"}`);
   }
 });
 
-// ⚡ Endpoint para criar o campo teste_cnpj
+// ============= ENDPOINTS AUXILIARES =============
+
+// Criar campo de teste
 app.post('/create-test-field', async (req, res) => {
   if (!HUBSPOT_ACCESS_TOKEN) {
     return res.status(401).json({ error: 'Token não configurado' });
@@ -1007,7 +998,7 @@ app.post('/create-test-field', async (req, res) => {
         label: 'Dados CNPJ',
         type: 'string',
         fieldType: 'textarea',
-        description: 'Dados completos do CNPJ obtidos da Receita Federal',
+        description: 'Campo para dados completos do CNPJ da Receita Federal',
         groupName: 'companyinformation',
         hasUniqueValue: false,
         hidden: false,
@@ -1045,74 +1036,73 @@ app.post('/create-test-field', async (req, res) => {
       res.status(500).json({
         error: 'Erro ao criar campo teste_cnpj',
         details: error.response?.data,
-        solucao: 'Campo pode já existir ou faltam permissões'
+        solucao: 'Campo teste_cnpj pode já existir ou você precisa de permissões'
       });
     }
   }
 });
 
-// ⚡ Endpoint para criar propriedades customizadas (compatibilidade)
-app.post('/create-cnpj-properties', async (req, res) => {
-  // Redireciona para criar apenas o campo teste_cnpj
-  return res.redirect(307, '/create-test-field');
-});
-
-// ⚡ Endpoint para testar API CNPJ
-app.get('/test-cnpj/:cnpj', async (req, res) => {
-  const { cnpj } = req.params;
-  
-  const cleanedCNPJ = cleanCNPJ(cnpj);
-  
-  if (cleanedCNPJ.length !== 14) {
-    return res.status(400).json({
-      error: 'CNPJ inválido',
-      cnpjFornecido: cnpj,
-      cnpjLimpo: cleanedCNPJ,
-      exemplo: '14665903000104 ou 14.665.903/0001-04'
+// Criar empresa de teste
+app.post('/create-test-company', async (req, res) => {
+  if (!HUBSPOT_ACCESS_TOKEN) {
+    return res.status(401).json({ 
+      error: 'Token não configurado',
+      authUrl: `https://app.hubspot.com/oauth/authorize?client_id=${CLIENT_ID}&scope=crm.objects.companies.read%20crm.objects.companies.write&redirect_uri=${REDIRECT_URI}`
     });
   }
 
   try {
-    console.log('🧪 Testando API CNPJ para:', cleanedCNPJ);
+    console.log('🏢 Criando empresa de teste...');
     
-    const response = await axios.get(`https://publica.cnpj.ws/cnpj/${cleanedCNPJ}`, {
-      timeout: 10000,
-      headers: { 'User-Agent': 'CNPJ-Enricher/1.0' }
-    });
-    
-    const cnpjData = response.data;
-    
+    const response = await axios.post(
+      'https://api.hubapi.com/crm/v3/objects/companies',
+      {
+        properties: {
+          name: 'Empresa Teste CNPJ - ' + new Date().getTime(),
+          cnpj: '14665903000104',
+          domain: 'teste.com.br',
+          phone: '11999999999',
+          website: 'https://teste.com.br'
+        }
+      },
+      {
+        headers: {
+          Authorization: `Bearer ${HUBSPOT_ACCESS_TOKEN}`,
+          'Content-Type': 'application/json'
+        }
+      }
+    );
+
+    console.log('✅ Empresa criada com sucesso:', response.data.id);
+    console.log('📋 Propriedades criadas:', response.data.properties);
+
     res.json({
       success: true,
-      cnpj: cleanedCNPJ,
-      empresa: {
-        razaoSocial: cnpjData.razao_social,
-        nomeFantasia: cnpjData.estabelecimento?.nome_fantasia,
-        situacao: cnpjData.estabelecimento?.situacao_cadastral,
-        cidade: cnpjData.estabelecimento?.cidade?.nome,
-        estado: cnpjData.estabelecimento?.estado?.sigla
+      companyId: response.data.id,
+      message: 'Empresa de teste criada com CNPJ 14665903000104',
+      cnpj: '14665903000104',
+      testEnrichUrl: `POST /enrich com {"companyId": "${response.data.id}"}`,
+      configuracao: {
+        campoDestino: 'teste_cnpj',
+        tipoConteudo: 'Todos os dados formatados em texto',
+        criarCampo: 'POST /create-test-field (se necessário)'
       },
-      message: 'API CNPJ funcionando normalmente'
+      proximoTeste: {
+        url: 'POST /enrich',
+        body: { companyId: response.data.id },
+        expectativa: 'Dados do CNPJ serão salvos no campo teste_cnpj'
+      }
     });
-    
   } catch (error) {
-    if (error.response?.status === 429) {
-      res.status(429).json({
-        error: 'Rate limit atingido',
-        message: 'Aguarde alguns minutos e tente novamente',
-        details: error.response?.data,
-        proximaTentativa: 'Aguarde 1-2 minutos'
-      });
-    } else {
-      res.status(500).json({
-        error: 'Erro na API CNPJ',
-        details: error.response?.data || error.message
-      });
-    }
+    console.error('❌ Erro ao criar empresa teste:', error.response?.data);
+    res.status(500).json({
+      error: 'Erro ao criar empresa teste',
+      details: error.response?.data
+    });
   }
 });
 
-// ⚡ Endpoint para adicionar CNPJ a uma empresa
+// Adicionar CNPJ a empresa existente
 app.post('/add-cnpj/:companyId', async (req, res) => {
   const { companyId } = req.params;
   const { cnpj } = req.body;
@@ -1161,87 +1151,236 @@ app.post('/add-cnpj/:companyId', async (req, res) => {
   }
 });
 
-// ⚡ Criar empresa de teste com CNPJ
-app.post('/create-test-company', async (req, res) => {
+// Testar API CNPJ
+app.get('/test-cnpj/:cnpj', async (req, res) => {
+  const { cnpj } = req.params;
+  
+  const cleanedCNPJ = cleanCNPJ(cnpj);
+  
+  if (cleanedCNPJ.length !== 14) {
+    return res.status(400).json({
+      error: 'CNPJ inválido',
+      cnpjFornecido: cnpj,
+      cnpjLimpo: cleanedCNPJ,
+      exemplo: '14665903000104 ou 14.665.903/0001-04'
+    });
+  }
+
+  try {
+    console.log('🧪 Testando API CNPJ para:', cleanedCNPJ);
+    
+    const response = await axios.get(`https://publica.cnpj.ws/cnpj/${cleanedCNPJ}`, {
+      timeout: 10000,
+      headers: { 'User-Agent': 'CNPJ-Enricher/2.0' }
+    });
+    
+    const cnpjData = response.data;
+    
+    res.json({
+      success: true,
+      cnpj: cleanedCNPJ,
+      empresa: {
+        razaoSocial: cnpjData.razao_social,
+        nomeFantasia: cnpjData.estabelecimento?.nome_fantasia,
+        situacao: cnpjData.estabelecimento?.situacao_cadastral,
+        cidade: cnpjData.estabelecimento?.cidade?.nome,
+        estado: cnpjData.estabelecimento?.estado?.sigla
+      },
+      message: 'API CNPJ funcionando normalmente'
+    });
+    
+  } catch (error) {
+    if (error.response?.status === 429) {
+      res.status(429).json({
+        error: 'Rate limit atingido',
+        message: 'Aguarde alguns minutos e tente novamente',
+        details: error.response?.data,
+        proximaTentativa: 'Aguarde 1-2 minutos'
+      });
+    } else {
+      res.status(500).json({
+        error: 'Erro na API CNPJ',
+        details: error.response?.data || error.message
+      });
+    }
+  }
+});
+
+// Refresh token
+app.get('/refresh', async (req, res) => {
+  if (!HUBSPOT_REFRESH_TOKEN) return res.status(400).send('❌ Refresh token não configurado.');
+
+  try {
+    const response = await axios.post(
+      'https://api.hubapi.com/oauth/v1/token',
+      new URLSearchParams({
+        grant_type: 'refresh_token',
+        client_id: CLIENT_ID,
+        client_secret: CLIENT_SECRET,
+        refresh_token: HUBSPOT_REFRESH_TOKEN
+      }),
+      {
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
+      }
+    );
+
+    const { access_token, refresh_token, expires_in } = response.data;
+    HUBSPOT_ACCESS_TOKEN = access_token;
+
+    console.log('✅ Novo Access Token:', access_token);
+    console.log('🔁 Novo Refresh Token:', refresh_token);
+    console.log('⏰ Expira em (segundos):', expires_in);
+
+    res.send('✅ Novo access_token gerado com sucesso! Verifique o console.');
+  } catch (error) {
+    console.error('❌ Erro ao fazer refresh do token:', error.response?.data || error.message);
+    res.status(500).send('❌ Erro ao gerar novo token.');
+  }
+});
+
+// Testar token
+app.get('/test-token', async (req, res) => {
   if (!HUBSPOT_ACCESS_TOKEN) {
-    return res.status(401).json({ 
-      error: 'Token não configurado',
+    return res.json({
+      status: 'error',
+      message: 'Token não configurado',
+      needsAuth: true,
       authUrl: `https://app.hubspot.com/oauth/authorize?client_id=${CLIENT_ID}&scope=crm.objects.companies.read%20crm.objects.companies.write&redirect_uri=${REDIRECT_URI}`
     });
   }
 
   try {
-    console.log('🏢 Criando empresa de teste...');
+    const response = await axios.get('https://api.hubapi.com/crm/v3/objects/companies?limit=1', {
+      headers: { Authorization: `Bearer ${HUBSPOT_ACCESS_TOKEN}` }
+    });
     
-    const response = await axios.post(
-      'https://api.hubapi.com/crm/v3/objects/companies',
+    res.json({
+      status: 'success',
+      message: 'Token funcionando!',
+      tokenPreview: HUBSPOT_ACCESS_TOKEN.substring(0, 20) + '...',
+      companiesFound: response.data.results.length
+    });
+  } catch (error) {
+    res.json({
+      status: 'error',
+      message: 'Token inválido',
+      error: error.response?.data,
+      needsAuth: true
+    });
+  }
+});
+
+// Debug empresa
+app.get('/debug-company/:companyId', async (req, res) => {
+  const { companyId } = req.params;
+
+  if (!HUBSPOT_ACCESS_TOKEN) {
+    return res.status(401).json({ error: 'Token não configurado' });
+  }
+
+  try {
+    console.log('🔍 Buscando todas as propriedades da empresa:', companyId);
+    
+    const hubspotCompany = await axios.get(
+      `https://api.hubapi.com/crm/v3/objects/companies/${companyId}`,
       {
-        properties: {
-          name: 'Empresa Teste CNPJ - ' + new Date().getTime(),
-          cnpj: '14665903000104',
-          domain: 'teste.com.br',
-          phone: '11999999999',
-          website: 'https://teste.com.br'
-        }
-      },
-      {
-        headers: {
+        headers: { 
           Authorization: `Bearer ${HUBSPOT_ACCESS_TOKEN}`,
           'Content-Type': 'application/json'
         }
       }
     );
 
-    console.log('✅ Empresa criada com sucesso:', response.data.id);
+    const properties = hubspotCompany.data.properties;
+    
+    console.log('📋 TODAS as propriedades encontradas:');
+    Object.keys(properties).forEach(key => {
+      console.log(`   ${key}: ${properties[key]}`);
+    });
+
+    const cnpjFields = Object.keys(properties).filter(key => 
+      key.toLowerCase().includes('cnpj') || 
+      key.toLowerCase().includes('registration') ||
+      key.toLowerCase().includes('document')
+    );
+
+    console.log('🔍 Campos que podem ser CNPJ:', cnpjFields);
 
     res.json({
       success: true,
-      companyId: response.data.id,
-      message: 'Empresa de teste criada com CNPJ 14665903000104',
-      cnpj: '14665903000104',
-      testEnrichUrl: `POST /enrich com {"companyId": "${response.data.id}"}`,
-      debugUrl: `/debug-company/${response.data.id}`,
-      configuracao: {
-        campoDestino: 'teste_cnpj',
-        tipoConteudo: 'Todos os dados formatados em texto',
-        criarCampo: 'POST /create-test-field (se necessário)'
-      },
-      proximoTeste: {
-        url: 'POST /enrich',
-        body: { companyId: response.data.id },
-        expectativa: 'Dados do CNPJ serão salvos no campo teste_cnpj'
-      }
+      companyId: companyId,
+      allProperties: properties,
+      possibleCNPJFields: cnpjFields,
+      cnpjFieldValue: properties.cnpj,
+      cnpjFieldExists: 'cnpj' in properties,
+      totalFields: Object.keys(properties).length
     });
+
   } catch (error) {
-    console.error('❌ Erro ao criar empresa teste:', error.response?.data);
-    res.status(500).json({
-      error: 'Erro ao criar empresa teste',
+    console.error('❌ Erro ao buscar empresa:', error.response?.data);
+    res.status(error.response?.status || 500).json({
+      error: 'Erro ao buscar empresa',
       details: error.response?.data
     });
   }
 });
 
-// Sincronização via GET
+// ============= ENDPOINTS DE COMPATIBILIDADE =============
+
+app.post('/api/save-mapping', (req, res) => {
+  try {
+    res.json({ 
+      success: true, 
+      message: 'Sistema configurado para usar campo único teste_cnpj',
+      modo: 'campo_unico'
+    });
+  } catch (error) {
+    console.error('❌ Erro ao salvar mapeamento:', error);
+    res.status(500).json({ error: 'Erro interno do servidor' });
+  }
+});
+
+app.get('/api/get-mapping', (req, res) => {
+  try {
+    res.json({ 
+      success: true, 
+      mapping: { modo: 'campo_unico', campo: 'teste_cnpj' }
+    });
+  } catch (error) {
+    console.error('❌ Erro ao recuperar mapeamento:', error);
+    res.status(500).json({ error: 'Erro interno do servidor' });
+  }
+});
+
+// Sincronização (mantido para compatibilidade)
 app.get('/api/sync-cnpj', async (req, res) => {
   try {
-    await syncCNPJs();
-    res.json({ status: 'success', message: 'Sync concluído com sucesso (GET)' });
+    res.json({ status: 'success', message: 'Sync não implementado nesta versão' });
   } catch (error) {
     console.error('❌ Erro no sync-cnpj (GET):', error.message);
     res.status(500).json({ error: 'Erro na sincronização' });
   }
 });
 
-// Sincronização via POST
 app.post('/api/sync-cnpj', async (req, res) => {
   try {
-    await syncCNPJs();
-    res.json({ status: 'success', message: 'Sync concluído com sucesso (POST)' });
+    res.json({ status: 'success', message: 'Sync não implementado nesta versão' });
   } catch (error) {
     console.error('❌ Erro no sync-cnpj (POST):', error.message);
     res.status(500).json({ error: 'Erro na sincronização' });
   }
 });
 
+// ============= INICIALIZAÇÃO DO SERVIDOR =============
+
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`🚀 CNPJ Enricher rodando na porta ${PORT}`));
+app.listen(PORT, () => {
+  console.log(`🚀 CNPJ Enricher v2.0 rodando na porta ${PORT}`);
+  console.log(`📋 Endpoints disponíveis:`);
+  console.log(`   GET  /account - Status do app`);
+  console.log(`   GET  /settings - Página de configurações`);
+  console.log(`   POST /enrich - Enriquecer empresa`);
+  console.log(`   POST /create-test-company - Criar empresa teste`);
+  console.log(`   POST /create-test-field - Criar campo teste_cnpj`);
+  console.log(`   GET  /oauth/callback - OAuth callback`);
+});
