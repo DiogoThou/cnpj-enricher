@@ -783,7 +783,7 @@ ${sociosStr || 'Nenhum sócio encontrado'}
   }
 });
 
-  }
+  
 
   // Verificar se as variáveis de ambiente estão configuradas
   if (!HUBSPOT_ACCESS_TOKEN) {
