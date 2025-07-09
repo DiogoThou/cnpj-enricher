@@ -260,6 +260,7 @@ app.get('/test-token', async (req, res) => {
 // ⚡ Página de configurações do app
 app.get('/settings', (req, res) => {
   res.setHeader('Content-Type', 'text/html; charset=utf-8');
+  res.setHeader('Cache-Control', 'no-store');
   res.status(200).send(`
 <!DOCTYPE html>
 <html>
