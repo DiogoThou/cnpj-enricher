@@ -27,10 +27,10 @@ let fieldMapping = {
   cep: 'zip'
 };
 
-// ⚡ Armazenamento para modo de mapeamento
+// ⚡ NOVO: Armazenamento para modo de mapeamento
 let mappingMode = 'campo_unico'; // 'campo_unico' ou 'campos_separados'
 
-// ⚡ Armazenamento para telefone
+// ⚡ NOVO: Armazenamento para telefone
 let telefoneMapping = 'phone'; // Campo padrão para telefone
 
 // ⚡ Função para limpar CNPJ
@@ -110,12 +110,14 @@ app.get('/account', (req, res) => {
   
   res.json({
     status: 'connected',
-    app: 'CNPJ Enricher',
-    version: '1.0',
+    app: 'CNPJ Enricher v2',
+    version: '2.0',
     tokenStatus: HUBSPOT_ACCESS_TOKEN ? 'Configurado' : 'Não configurado',
     configuracao: {
       mapeamentoConfigurado: camposConfigurados.length > 0,
       totalCamposMapeados: camposConfigurados.length,
+      modoAtual: mappingMode,
+      telefoneField: telefoneMapping,
       settingsUrl: '/settings'
     },
     endpoints: {
@@ -257,7 +259,7 @@ app.get('/test-token', async (req, res) => {
 });
 
 // ⚡ DROPDOWN FETCH - MODO DE MAPEAMENTO (FUNCIONANDO)
-app.post('/api/dropdown-fetch', async (req, res) => {
+app.post('/api/mapping-mode-options', async (req, res) => {
   console.log('🗺️ HubSpot solicitando opções do dropdown MODO DE MAPEAMENTO...');
   console.log('📥 Request body:', req.body);
 
@@ -281,13 +283,13 @@ app.post('/api/dropdown-fetch', async (req, res) => {
       results: options
     });
   } catch (error) {
-    console.error('❌ Erro no dropdown-fetch MODO DE MAPEAMENTO:', error);
+    console.error('❌ Erro no mapping-mode-options:', error);
     res.status(500).json({ error: 'Erro interno' });
   }
 });
 
 // ⚡ DROPDOWN UPDATE - MODO DE MAPEAMENTO (FUNCIONANDO)
-app.post('/api/dropdown-update', async (req, res) => {
+app.post('/api/mapping-mode-save', async (req, res) => {
   console.log('🗺️ HubSpot enviando seleção do MODO DE MAPEAMENTO...');
   console.log('📥 Request body:', req.body);
 
@@ -307,15 +309,15 @@ app.post('/api/dropdown-update', async (req, res) => {
       res.status(400).json({ error: 'Campo modo_mapeamento não encontrado' });
     }
   } catch (error) {
-    console.error('❌ Erro no dropdown-update MODO DE MAPEAMENTO:', error);
+    console.error('❌ Erro no mapping-mode-save:', error);
     res.status(500).json({ error: 'Erro interno' });
   }
 });
 
-// ⚡ DROPDOWN FETCH - TELEFONE (NOVA ESTRUTURA CORRETA)
-app.post('/api/telefone-fetch', async (req, res) => {
+// ⚡ NOVO: DROPDOWN FETCH - TELEFONE (URLs COMPLETAMENTE DIFERENTES)
+app.post('/api/telefone-field-options', async (req, res) => {
   console.log('📞 HubSpot solicitando opções do dropdown TELEFONE...');
-  console.log('📥 Request body:', req.body);
+  console.log('📥 Request body telefone-field-options:', req.body);
 
   if (!HUBSPOT_ACCESS_TOKEN) {
     console.log('❌ Token não configurado para buscar campos do HubSpot');
@@ -323,7 +325,7 @@ app.post('/api/telefone-fetch', async (req, res) => {
   }
 
   try {
-    console.log('📡 Buscando propriedades de empresas no HubSpot...');
+    console.log('📡 Buscando propriedades de empresas no HubSpot para TELEFONE...');
     
     const response = await axios.get(
       'https://api.hubapi.com/crm/v3/properties/companies',
@@ -333,7 +335,7 @@ app.post('/api/telefone-fetch', async (req, res) => {
     );
 
     const properties = response.data.results || [];
-    console.log('📋 Total de propriedades encontradas:', properties.length);
+    console.log('📋 Total de propriedades encontradas para TELEFONE:', properties.length);
 
     // Filtrar campos de texto/telefone
     const phoneFields = properties.filter(prop => 
@@ -341,13 +343,15 @@ app.post('/api/telefone-fetch', async (req, res) => {
       prop.type === 'phonenumber' ||
       prop.name.toLowerCase().includes('phone') ||
       prop.name.toLowerCase().includes('telefone') ||
-      prop.name.toLowerCase().includes('tel')
+      prop.name.toLowerCase().includes('tel') ||
+      prop.name.toLowerCase().includes('mobile') ||
+      prop.name.toLowerCase().includes('celular')
     );
 
     const options = phoneFields.map(field => ({
       label: `${field.label} (${field.name})`,
       value: field.name,
-      description: field.description || `Campo ${field.type}`
+      description: field.description || `Campo ${field.type} para telefone`
     }));
 
     console.log('📞 Retornando', options.length, 'opções para o dropdown TELEFONE');
@@ -356,15 +360,15 @@ app.post('/api/telefone-fetch', async (req, res) => {
       results: options
     });
   } catch (error) {
-    console.error('❌ Erro no telefone-fetch:', error.response?.data);
-    res.status(500).json({ error: 'Erro ao buscar campos do HubSpot' });
+    console.error('❌ Erro no telefone-field-options:', error.response?.data);
+    res.status(500).json({ error: 'Erro ao buscar campos do HubSpot para telefone' });
   }
 });
 
-// ⚡ DROPDOWN UPDATE - TELEFONE (NOVA ESTRUTURA CORRETA)
-app.post('/api/telefone-update', async (req, res) => {
+// ⚡ NOVO: DROPDOWN UPDATE - TELEFONE (URLs COMPLETAMENTE DIFERENTES)
+app.post('/api/telefone-field-save', async (req, res) => {
   console.log('📞 HubSpot enviando seleção do TELEFONE...');
-  console.log('📥 Request body:', req.body);
+  console.log('📥 Request body telefone-field-save:', req.body);
 
   try {
     const { inputFields } = req.body;
@@ -375,19 +379,24 @@ app.post('/api/telefone-update', async (req, res) => {
       
       res.json({
         success: true,
-        message: `Campo "${telefoneMapping}" salvo para telefone!`
+        message: `Campo "${telefoneMapping}" salvo para telefone!`,
+        fieldSelected: telefoneMapping
       });
     } else {
-      console.log('⚠️ Campo telefone_field não encontrado');
-      res.status(400).json({ error: 'Campo telefone_field não encontrado' });
+      console.log('⚠️ Campo telefone_field não encontrado no request');
+      console.log('📋 InputFields recebidos:', inputFields);
+      res.status(400).json({ 
+        error: 'Campo telefone_field não encontrado',
+        receivedFields: inputFields
+      });
     }
   } catch (error) {
-    console.error('❌ Erro no telefone-update:', error);
-    res.status(500).json({ error: 'Erro interno' });
+    console.error('❌ Erro no telefone-field-save:', error);
+    res.status(500).json({ error: 'Erro interno no telefone-field-save' });
   }
 });
 
-// ⚡ Página de configurações do app
+// ⚡ Página de configurações do app ATUALIZADA
 app.get('/settings', (req, res) => {
   res.send(`
 <!DOCTYPE html>
@@ -395,7 +404,7 @@ app.get('/settings', (req, res) => {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>CNPJ Enricher - Configurações</title>
+    <title>CNPJ Enricher v2 - Configurações</title>
     <style>
         body {
             font-family: 'Lexend', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
@@ -407,7 +416,7 @@ app.get('/settings', (req, res) => {
         }
         
         .container {
-            max-width: 800px;
+            max-width: 900px;
             margin: 0 auto;
             background: white;
             border-radius: 16px;
@@ -431,7 +440,7 @@ app.get('/settings', (req, res) => {
             font-size: 1.1em;
         }
         
-        .mapping-section {
+        .config-section {
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             color: white;
             padding: 24px;
@@ -439,10 +448,35 @@ app.get('/settings', (req, res) => {
             margin-bottom: 32px;
         }
         
-        .mapping-section h3 {
+        .config-section h3 {
             margin-top: 0;
             font-size: 1.4em;
             margin-bottom: 16px;
+        }
+        
+        .config-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+        
+        .config-card {
+            background: rgba(255,255,255,0.1);
+            padding: 20px;
+            border-radius: 10px;
+            backdrop-filter: blur(10px);
+        }
+        
+        .config-card h4 {
+            margin: 0 0 10px 0;
+            color: #fff;
+        }
+        
+        .config-card p {
+            margin: 0;
+            color: rgba(255,255,255,0.9);
+            font-size: 14px;
         }
         
         .actions {
@@ -450,6 +484,7 @@ app.get('/settings', (req, res) => {
             gap: 16px;
             justify-content: center;
             margin-top: 32px;
+            flex-wrap: wrap;
         }
         
         button {
@@ -474,6 +509,11 @@ app.get('/settings', (req, res) => {
             border: 2px solid #e2e8f0;
         }
         
+        .btn-success {
+            background: linear-gradient(135deg, #48bb78, #38a169);
+            color: white;
+        }
+        
         .status {
             padding: 16px;
             border-radius: 8px;
@@ -493,6 +533,12 @@ app.get('/settings', (req, res) => {
             color: #c53030;
             border: 2px solid #fc8181;
         }
+        
+        .status.info {
+            background: #bee3f8;
+            color: #2b6cb0;
+            border: 2px solid #63b3ed;
+        }
 
         .info-box {
             background: #e6fffa;
@@ -511,32 +557,55 @@ app.get('/settings', (req, res) => {
             color: #2c7a7b;
             margin: 0;
         }
+        
+        .version-badge {
+            background: linear-gradient(135deg, #ed8936, #dd6b20);
+            color: white;
+            padding: 5px 15px;
+            border-radius: 20px;
+            font-size: 0.9em;
+            display: inline-block;
+            margin-left: 10px;
+        }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>⚙️ Configurações CNPJ Enricher</h1>
+        <h1>⚙️ Configurações CNPJ Enricher <span class="version-badge">v2.0</span></h1>
         <p class="subtitle">Configure como os dados serão salvos no HubSpot</p>
         
         <div class="info-box">
             <h4>📋 Configuração Atual</h4>
-            <p><strong>Modo de Mapeamento:</strong> ${mappingMode}</p>
+            <p><strong>Modo de Mapeamento:</strong> ${mappingMode === 'campo_unico' ? 'Campo único (tudo junto)' : 'Campos separados'}</p>
             <p><strong>Campo Telefone:</strong> ${telefoneMapping}</p>
+            <p><strong>URLs Telefone:</strong> /api/telefone-field-options e /api/telefone-field-save</p>
         </div>
 
-        <div class="mapping-section">
+        <div class="config-section">
             <h3>🎯 Como funciona</h3>
-            <p><strong>Modo Campo Único:</strong> Todos os dados são salvos no campo teste_cnpj como texto formatado</p>
-            <p><strong>Modo Campos Separados:</strong> Cada dado é salvo em seu próprio campo</p>
-            <p><strong>Telefone:</strong> Salvo no campo selecionado: ${telefoneMapping}</p>
+            <div class="config-grid">
+                <div class="config-card">
+                    <h4>🗺️ Modo de Mapeamento</h4>
+                    <p><strong>Campo Único:</strong> Todos os dados são salvos no campo teste_cnpj como texto formatado</p>
+                    <p><strong>Campos Separados:</strong> Cada dado é salvo em seu próprio campo</p>
+                </div>
+                <div class="config-card">
+                    <h4>📞 Campo Telefone</h4>
+                    <p><strong>Selecionado:</strong> ${telefoneMapping}</p>
+                    <p>O telefone da empresa será salvo neste campo específico</p>
+                </div>
+            </div>
         </div>
         
         <div class="actions">
             <button type="button" class="btn-secondary" onclick="createTestField()">
                 🔧 Criar Campo teste_cnpj
             </button>
+            <button type="button" class="btn-success" onclick="testConfiguration()">
+                🧪 Testar Configuração
+            </button>
             <button type="button" class="btn-primary" onclick="testEnrichment()">
-                🧪 Testar Enriquecimento
+                🚀 Testar Enriquecimento
             </button>
         </div>
         
@@ -564,6 +633,23 @@ app.get('/settings', (req, res) => {
                 }
             } catch (error) {
                 showStatus('❌ Erro ao criar campo teste_cnpj', 'error');
+            }
+        }
+
+        async function testConfiguration() {
+            try {
+                showStatus('Testando configuração atual...', 'info');
+                
+                const response = await fetch('/api/config-status');
+                const result = await response.json();
+
+                if (response.ok) {
+                    showStatus('✅ Configuração: ' + result.configuracao.modo + ' | Telefone: ' + result.configuracao.telefone, 'success');
+                } else {
+                    showStatus('❌ Erro ao verificar configuração', 'error');
+                }
+            } catch (error) {
+                showStatus('❌ Erro ao testar configuração', 'error');
             }
         }
 
@@ -609,7 +695,7 @@ app.get('/settings', (req, res) => {
                 const result = await response.json();
 
                 if (response.ok) {
-                    showStatus('🎉 Enriquecimento concluído! Dados salvos conforme configuração', 'success');
+                    showStatus('🎉 Enriquecimento concluído! Modo: ' + result.configuracao.modo + ' | Telefone em: ' + result.configuracao.telefoneField, 'success');
                 } else {
                     showStatus('❌ Erro no enriquecimento: ' + result.error, 'error');
                 }
@@ -625,7 +711,7 @@ app.get('/settings', (req, res) => {
             if (type === 'success') {
                 setTimeout(() => {
                     statusDiv.innerHTML = '';
-                }, 5000);
+                }, 7000);
             }
         }
     </script>
@@ -634,7 +720,7 @@ app.get('/settings', (req, res) => {
   `);
 });
 
-// ⚡ Status das configurações
+// ⚡ Status das configurações ATUALIZADO
 app.get('/api/config-status', (req, res) => {
   try {
     res.json({
@@ -644,7 +730,11 @@ app.get('/api/config-status', (req, res) => {
         telefone: telefoneMapping,
         descricao: mappingMode === 'campo_unico' ? 
           'Todos os dados são salvos no campo teste_cnpj como texto formatado' :
-          'Cada dado é salvo em seu próprio campo'
+          'Cada dado é salvo em seu próprio campo',
+        urlsTelefone: {
+          fetch: '/api/telefone-field-options',
+          save: '/api/telefone-field-save'
+        }
       },
       urls: {
         configurar: '/settings',
@@ -652,7 +742,7 @@ app.get('/api/config-status', (req, res) => {
         criarEmpresaTeste: 'POST /create-test-company',
         criarCampo: 'POST /create-test-field'
       },
-      status: 'Configurado',
+      status: 'Configurado v2.0',
       proximoPasso: 'Execute POST /create-test-company para testar'
     });
   } catch (error) {
@@ -673,10 +763,10 @@ app.post('/create-test-field', async (req, res) => {
       'https://api.hubapi.com/crm/v3/properties/companies',
       {
         name: 'teste_cnpj',
-        label: 'Teste CNPJ',
+        label: 'Teste CNPJ v2',
         type: 'string',
         fieldType: 'textarea',
-        description: 'Campo de teste para dados do CNPJ - todos os dados da Receita Federal',
+        description: 'Campo de teste para dados do CNPJ - todos os dados da Receita Federal v2',
         groupName: 'companyinformation',
         hasUniqueValue: false,
         hidden: false,
@@ -697,6 +787,7 @@ app.post('/create-test-field', async (req, res) => {
       message: 'Campo teste_cnpj criado com sucesso!',
       fieldName: 'teste_cnpj',
       fieldType: 'textarea',
+      version: '2.0',
       proximoPasso: 'Agora execute POST /enrich para testar o enriquecimento'
     });
     
@@ -707,6 +798,7 @@ app.post('/create-test-field', async (req, res) => {
         success: true,
         message: 'Campo teste_cnpj já existe no HubSpot',
         status: 'already_exists',
+        version: '2.0',
         proximoPasso: 'Execute POST /enrich para testar o enriquecimento'
       });
     } else {
@@ -730,13 +822,13 @@ app.post('/create-test-company', async (req, res) => {
   }
 
   try {
-    console.log('🏢 Criando empresa de teste...');
+    console.log('🏢 Criando empresa de teste v2...');
     
     const response = await axios.post(
       'https://api.hubapi.com/crm/v3/objects/companies',
       {
         properties: {
-          name: 'Empresa Teste CNPJ - ' + new Date().getTime(),
+          name: 'Empresa Teste CNPJ v2 - ' + new Date().getTime(),
           cnpj: '14665903000104',
           domain: 'teste.com.br',
           phone: '11999999999',
@@ -757,18 +849,23 @@ app.post('/create-test-company', async (req, res) => {
     res.json({
       success: true,
       companyId: response.data.id,
-      message: 'Empresa de teste criada com CNPJ 14665903000104',
+      message: 'Empresa de teste v2 criada com CNPJ 14665903000104',
       cnpj: '14665903000104',
+      version: '2.0',
       testEnrichUrl: `POST /enrich com {"companyId": "${response.data.id}"}`,
       debugUrl: `/debug-company/${response.data.id}`,
       configuracao: {
         modo: mappingMode,
-        telefone: telefoneMapping
+        telefone: telefoneMapping,
+        urlsTelefone: {
+          fetch: '/api/telefone-field-options',
+          save: '/api/telefone-field-save'
+        }
       },
       proximoTeste: {
         url: 'POST /enrich',
         body: { companyId: response.data.id },
-        expectativa: `Dados salvos conforme modo: ${mappingMode}`
+        expectativa: `Dados salvos conforme modo: ${mappingMode}, telefone em: ${telefoneMapping}`
       }
     });
   } catch (error) {
@@ -780,11 +877,11 @@ app.post('/create-test-company', async (req, res) => {
   }
 });
 
-// ⚡ ENRICHMENT PRINCIPAL - VERSÃO COM MAPEAMENTO CONFIGURÁVEL
+// ⚡ ENRICHMENT PRINCIPAL - VERSÃO COM MAPEAMENTO CONFIGURÁVEL v2
 app.post('/enrich', async (req, res) => {
   const { companyId } = req.body;
 
-  console.log('🔍 Iniciando enriquecimento para companyId:', companyId);
+  console.log('🔍 Iniciando enriquecimento v2 para companyId:', companyId);
   console.log('⚙️ Modo de mapeamento:', mappingMode);
   console.log('📞 Campo telefone:', telefoneMapping);
 
@@ -902,7 +999,7 @@ app.post('/enrich', async (req, res) => {
     const cnpjDataResponse = await axios.get(`https://publica.cnpj.ws/cnpj/${cnpjLimpo}`, {
       timeout: 10000,
       headers: {
-        'User-Agent': 'CNPJ-Enricher/1.0'
+        'User-Agent': 'CNPJ-Enricher/2.0'
       }
     });
 
@@ -928,6 +1025,7 @@ app.post('/enrich', async (req, res) => {
     const telefoneFormatado = cnpjData.estabelecimento?.telefone1 ? 
       `(${cnpjData.estabelecimento.ddd1}) ${cnpjData.estabelecimento.telefone1}` : '';
     extract('Telefone', telefoneFormatado);
+    console.log('📞 Telefone:', telefoneFormatado);
     
     const emailCnpj = extract('Email', cnpjData.estabelecimento?.email);
     
@@ -939,14 +1037,14 @@ app.post('/enrich', async (req, res) => {
     const estado = extract('Estado', cnpjData.estabelecimento?.estado?.sigla);
     const cep = extract('CEP', cnpjData.estabelecimento?.cep);
 
-    // ⚡ PREPARAR PAYLOAD BASEADO NO MODO DE MAPEAMENTO
+    // ⚡ PREPARAR PAYLOAD BASEADO NO MODO DE MAPEAMENTO v2
     let updatePayload = { properties: {} };
 
     if (mappingMode === 'campo_unico') {
       // Modo campo único - todos os dados no teste_cnpj
       const dadosFormatados = formatCNPJData(cnpjData, cnpjLimpo);
       updatePayload.properties.teste_cnpj = dadosFormatados;
-      console.log('📦 Modo campo único - salvando tudo no teste_cnpj');
+      console.log('📦 Modo campo único v2 - salvando tudo no teste_cnpj');
     } else {
       // Modo campos separados - cada dado em seu campo
       updatePayload.properties = {
@@ -959,16 +1057,16 @@ app.post('/enrich', async (req, res) => {
         address: enderecoCompleto
       };
       
-      // Adicionar telefone no campo selecionado
-      if (telefoneFormatado && telefoneMapping) {
-        updatePayload.properties[telefoneMapping] = telefoneFormatado;
-        console.log(`📞 Salvando telefone "${telefoneFormatado}" no campo "${telefoneMapping}"`);
-      }
-      
-      console.log('📦 Modo campos separados - salvando cada dado em seu campo');
+      console.log('📦 Modo campos separados v2 - salvando cada dado em seu campo');
     }
 
-    console.log('📦 Payload final:', JSON.stringify(updatePayload, null, 2));
+    // ⚡ SEMPRE SALVAR TELEFONE NO CAMPO SELECIONADO (independente do modo)
+    if (telefoneFormatado && telefoneMapping) {
+      updatePayload.properties[telefoneMapping] = telefoneFormatado;
+      console.log(`📞 Salvando telefone "${telefoneFormatado}" no campo "${telefoneMapping}"`);
+    }
+
+    console.log('📦 Payload final v2:', JSON.stringify(updatePayload, null, 2));
 
     console.log('📡 Atualizando empresa no HubSpot...');
     
@@ -983,7 +1081,7 @@ app.post('/enrich', async (req, res) => {
       }
     );
 
-    console.log('✅ Empresa atualizada com sucesso!');
+    console.log('✅ Empresa atualizada com sucesso v2!');
     
     const dadosEmpresa = {
       razaoSocial: razaoSocial,
@@ -997,7 +1095,7 @@ app.post('/enrich', async (req, res) => {
       telefone: telefoneFormatado
     };
     
-    console.log('🎉 SUCESSO COMPLETO - Dados da empresa salvos:');
+    console.log('🎉 SUCESSO COMPLETO v2 - Dados da empresa salvos:');
     console.log('🏢 Razão Social:', dadosEmpresa.razaoSocial);
     console.log('✨ Nome Fantasia:', dadosEmpresa.nomeFantasia);
     console.log('📊 Situação:', dadosEmpresa.situacao);
@@ -1008,7 +1106,7 @@ app.post('/enrich', async (req, res) => {
 
     res.json({ 
       success: true,
-      message: '🎉 Empresa enriquecida com sucesso!',
+      message: '🎉 Empresa enriquecida com sucesso v2!',
       cnpj: cnpjLimpo,
       empresa: {
         razaoSocial: dadosEmpresa.razaoSocial,
@@ -1025,7 +1123,12 @@ app.post('/enrich', async (req, res) => {
       configuracao: {
         modo: mappingMode,
         telefoneField: telefoneMapping,
-        camposAtualizados: Object.keys(updatePayload.properties)
+        camposAtualizados: Object.keys(updatePayload.properties),
+        version: '2.0',
+        urlsTelefone: {
+          fetch: '/api/telefone-field-options',
+          save: '/api/telefone-field-save'
+        }
       },
       proximosPassos: [
         `Verifique os campos atualizados na empresa no HubSpot`,
@@ -1036,7 +1139,7 @@ app.post('/enrich', async (req, res) => {
     });
 
   } catch (error) {
-    console.error('❌ Erro detalhado no enriquecimento:');
+    console.error('❌ Erro detalhado no enriquecimento v2:');
     console.error('📋 Mensagem:', error.message);
     console.error('📊 Status:', error.response?.status);
     console.error('📄 Response data:', error.response?.data);
@@ -1120,7 +1223,7 @@ app.post('/enrich', async (req, res) => {
 app.get('/api/sync-cnpj', async (req, res) => {
   try {
     await syncCNPJs();
-    res.json({ status: 'success', message: 'Sync concluído com sucesso (GET)' });
+    res.json({ status: 'success', message: 'Sync concluído com sucesso (GET) v2' });
   } catch (error) {
     console.error('❌ Erro no sync-cnpj (GET):', error.message);
     res.status(500).json({ error: 'Erro na sincronização' });
@@ -1131,7 +1234,7 @@ app.get('/api/sync-cnpj', async (req, res) => {
 app.post('/api/sync-cnpj', async (req, res) => {
   try {
     await syncCNPJs();
-    res.json({ status: 'success', message: 'Sync concluído com sucesso (POST)' });
+    res.json({ status: 'success', message: 'Sync concluído com sucesso (POST) v2' });
   } catch (error) {
     console.error('❌ Erro no sync-cnpj (POST):', error.message);
     res.status(500).json({ error: 'Erro na sincronização' });
@@ -1139,4 +1242,4 @@ app.post('/api/sync-cnpj', async (req, res) => {
 });
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`🚀 CNPJ Enricher rodando na porta ${PORT}`));
+app.listen(PORT, () => console.log(`🚀 CNPJ Enricher v2.0 rodando na porta ${PORT}`));
