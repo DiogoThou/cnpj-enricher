@@ -625,10 +625,19 @@ app.get('/debug-company/:companyId', async (req, res) => {
 });
 
 // ⚡ FUNÇÃO CORRIGIDA para buscar todos os campos de texto de empresa no HubSpot
+// ⚡ FUNÇÃO CORRIGIDA para buscar todos os campos de texto de empresa no HubSpot
 async function fetchCompanyTextFields() {
   if (!HUBSPOT_ACCESS_TOKEN) {
     console.log('❌ Token não configurado para buscar campos');
-    return [];
+    // ⚡ RETORNAR CAMPOS PADRÃO SE NÃO TEM TOKEN
+    return [
+      { text: 'Nome da empresa (name)', value: 'name', type: 'string' },
+      { text: 'Descrição (description)', value: 'description', type: 'string' },
+      { text: 'Telefone (phone)', value: 'phone', type: 'string' },
+      { text: 'Cidade (city)', value: 'city', type: 'string' },
+      { text: 'Estado (state)', value: 'state', type: 'string' },
+      { text: 'Campo teste CNPJ (teste_cnpj)', value: 'teste_cnpj', type: 'string' }
+    ];
   }
 
   try {
@@ -641,7 +650,8 @@ async function fetchCompanyTextFields() {
         headers: {
           Authorization: `Bearer ${HUBSPOT_ACCESS_TOKEN}`,
           'Content-Type': 'application/json'
-        }
+        },
+        timeout: 5000 // ⚡ TIMEOUT DE 5 SEGUNDOS
       }
     );
 
@@ -679,7 +689,18 @@ async function fetchCompanyTextFields() {
     
   } catch (error) {
     console.error('❌ Erro ao buscar campos de empresa:', error.response?.data || error.message);
-    return [];
+    
+    // ⚡ RETORNAR CAMPOS PADRÃO EM CASO DE ERRO (TOKEN EXPIRADO)
+    console.log('🔄 Retornando campos padrão devido ao erro de autenticação');
+    return [
+      { text: 'Nome da empresa (name)', value: 'name', type: 'string' },
+      { text: 'Descrição (description)', value: 'description', type: 'string' },
+      { text: 'Telefone (phone)', value: 'phone', type: 'string' },
+      { text: 'Cidade (city)', value: 'city', type: 'string' },
+      { text: 'Estado (state)', value: 'state', type: 'string' },
+      { text: 'Website (website)', value: 'website', type: 'string' },
+      { text: 'Campo teste CNPJ (teste_cnpj)', value: 'teste_cnpj', type: 'string' }
+    ];
   }
 }
 
