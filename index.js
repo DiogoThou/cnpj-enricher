@@ -959,6 +959,7 @@ app.post('/api/accounts-fetch', (req, res) => {
 // ⚡ Dropdown fetch - VERSÃO CORRIGIDA SEM BUSCAR API
 app.post('/api/dropdown-fetch', async (req, res) => {
   console.log('🔍 HubSpot solicitando opções do dropdown...');
+  console.log('📥 Request body:', JSON.stringify(req.body, null, 2));
   
   try {
     // ⚡ FORMATO CORRETO PARA DROPDOWNS DO HUBSPOT
@@ -1009,6 +1010,8 @@ app.post('/api/dropdown-fetch', async (req, res) => {
 
 // ⚡ Dropdown update
 app.post('/api/dropdown-update', (req, res) => {
+  console.log('📥 Dropdown update recebido:', JSON.stringify(req.body, null, 2));
+  
   const newSelection = req.body.selectedOption || 'teste_cnpj';
   const previousSelection = savedUserChoice || selectedDestinationField;
   
@@ -1044,6 +1047,96 @@ app.post('/api/dropdown-update', (req, res) => {
   });
 });
 
+// ⚡ Telefone mapping fetch - USANDO MESMA ESTRUTURA QUE FUNCIONA
+app.post('/api/telefone-mapping-fetch', async (req, res) => {
+  console.log('📞 HubSpot solicitando opções do dropdown TELEFONE...');
+  console.log('📥 Request body:', JSON.stringify(req.body, null, 2));
+  
+  try {
+    // ⚡ MESMA ESTRUTURA QUE FUNCIONA NO MODO DE MAPEAMENTO
+    const options = [
+      { 
+        label: '🚫 Não mapear telefone', 
+        value: 'nenhum',
+        description: 'Telefone não será salvo'
+      },
+      ...HUBSPOT_STANDARD_FIELDS.map(field => ({
+        label: field.text,
+        value: field.value,
+        description: field.description
+      }))
+    ];
+
+    const currentSelection = individualMapping.telefone || 'phone';
+
+    console.log(`📞 Retornando ${options.length} opções para o dropdown TELEFONE`);
+    console.log(`🎯 Telefone selecionado: ${currentSelection}`);
+
+    return res.json({
+      response: {
+        options: options,
+        selectedOption: currentSelection,
+        placeholder: 'Escolha onde salvar o telefone do CNPJ'
+      }
+    });
+     
+  } catch (error) {
+    console.error('❌ Erro no dropdown telefone:', error);
+    
+    return res.json({
+      response: {
+        options: [
+          { 
+            label: '📞 Telefone (phone)', 
+            value: 'phone',
+            description: 'Campo padrão de telefone'
+          }
+        ],
+        selectedOption: individualMapping.telefone || 'phone',
+        placeholder: 'Escolha onde salvar o telefone do CNPJ'
+      }
+    });
+  }
+});
+
+// ⚡ Telefone mapping update - USANDO MESMA ESTRUTURA QUE FUNCIONA
+app.post('/api/telefone-mapping-save', (req, res) => {
+  console.log('📞 Telefone update recebido:', JSON.stringify(req.body, null, 2));
+  
+  const newSelection = req.body.selectedOption || 'phone';
+  const previousSelection = individualMapping.telefone || 'phone';
+  
+  console.log('📞 Atualizando mapeamento do telefone:');
+  console.log(`   Anterior: ${previousSelection}`);
+  console.log(`   Novo: ${newSelection}`);
+
+  individualMapping.telefone = newSelection;
+
+  let message = '';
+  
+  if (newSelection === 'phone') {
+    message = '✅ Telefone será salvo no campo phone do HubSpot';
+  } else if (newSelection === 'nenhum') {
+    message = '⚠️ Telefone não será salvo (apenas validação)';
+  } else {
+    message = `✅ Telefone será salvo no campo: ${newSelection}`;
+  }
+
+  console.log(`💬 Mensagem: ${message}`);
+  console.log(`💾 Mapeamento telefone salvo: ${individualMapping.telefone}`);
+
+  res.json({
+    response: {
+      actionType: 'DROPDOWN_UPDATE',
+      selectedOption: newSelection,
+      message: message,
+      configuracao: {
+        campoTelefone: newSelection,
+        mapeamentoCompleto: individualMapping
+      }
+    }
+  });
+});
 // ⚡ ENDPOINT ESPECÍFICO PARA TELEFONE - FETCH
 app.post('/api/telefone-mapping-fetch', (req, res) => {
   console.log('📞 HubSpot solicitando opções para campo Telefone...');
