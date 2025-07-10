@@ -313,7 +313,7 @@ app.post('/api/dropdown-update', async (req, res) => {
 });
 
 // ⚡ DROPDOWN FETCH - TELEFONE (COPIANDO ESTRUTURA)
-app.post('/api/telefone-mapping-fetch', async (req, res) => {
+app.post('/api/telefone-dropdown-fetch', async (req, res) => {
   console.log('📞 HubSpot solicitando opções do dropdown TELEFONE...');
   console.log('📥 Request body:', req.body);
 
@@ -362,15 +362,15 @@ app.post('/api/telefone-mapping-fetch', async (req, res) => {
 });
 
 // ⚡ DROPDOWN UPDATE - TELEFONE (COPIANDO ESTRUTURA)
-app.post('/api/telefone-mapping-save', async (req, res) => {
+app.post('/api/telefone-dropdown-update', async (req, res) => {
   console.log('📞 HubSpot enviando seleção do TELEFONE...');
   console.log('📥 Request body:', req.body);
 
   try {
     const { inputFields } = req.body;
     
-    if (inputFields && inputFields.telefone_campo) {
-      telefoneMapping = inputFields.telefone_campo;
+    if (inputFields && inputFields.telefone_field) {
+      telefoneMapping = inputFields.telefone_field;
       console.log('🎯 Campo de telefone selecionado:', telefoneMapping);
       
       res.json({
@@ -378,11 +378,11 @@ app.post('/api/telefone-mapping-save', async (req, res) => {
         message: `Campo "${telefoneMapping}" salvo para telefone!`
       });
     } else {
-      console.log('⚠️ Campo telefone_campo não encontrado');
-      res.status(400).json({ error: 'Campo telefone_campo não encontrado' });
+      console.log('⚠️ Campo telefone_field não encontrado');
+      res.status(400).json({ error: 'Campo telefone_field não encontrado' });
     }
   } catch (error) {
-    console.error('❌ Erro no telefone-mapping-save:', error);
+    console.error('❌ Erro no telefone-dropdown-update:', error);
     res.status(500).json({ error: 'Erro interno' });
   }
 });
