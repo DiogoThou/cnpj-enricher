@@ -1044,6 +1044,141 @@ app.post('/api/dropdown-update', (req, res) => {
   });
 });
 
+// ⚡ ENDPOINT ESPECÍFICO PARA TELEFONE - FETCH
+app.post('/api/telefone-mapping-fetch', (req, res) => {
+  console.log('📞 HubSpot solicitando opções para campo Telefone...');
+  
+  try {
+    // ⚡ MESMO FORMATO QUE FUNCIONOU NO MODO DE MAPEAMENTO
+    const options = [
+      { 
+        label: '🚫 Não mapear este campo', 
+        value: 'nenhum',
+        description: 'Telefone não será salvo em campo específico'
+      },
+      { 
+        label: '📞 Telefone (phone)', 
+        value: 'phone',
+        description: 'Campo padrão do HubSpot para telefone'
+      },
+      { 
+        label: '📝 Nome da empresa (name)', 
+        value: 'name',
+        description: 'Campo padrão do HubSpot'
+      },
+      { 
+        label: '📝 Descrição (description)', 
+        value: 'description',
+        description: 'Campo padrão do HubSpot'
+      },
+      { 
+        label: '🏙️ Cidade (city)', 
+        value: 'city',
+        description: 'Campo padrão do HubSpot'
+      },
+      { 
+        label: '🌎 Estado (state)', 
+        value: 'state',
+        description: 'Campo padrão do HubSpot'
+      },
+      { 
+        label: '🌐 Website (website)', 
+        value: 'website',
+        description: 'Campo padrão do HubSpot'
+      },
+      { 
+        label: '📧 Email (email)', 
+        value: 'email',
+        description: 'Campo padrão do HubSpot'
+      },
+      { 
+        label: '🏭 Indústria (industry)', 
+        value: 'industry',
+        description: 'Campo padrão do HubSpot'
+      },
+      { 
+        label: '📮 CEP (zip)', 
+        value: 'zip',
+        description: 'Campo padrão do HubSpot'
+      },
+      { 
+        label: '📋 Campo teste CNPJ (teste_cnpj)', 
+        value: 'teste_cnpj',
+        description: 'Campo de teste para CNPJ'
+      }
+    ];
+
+    // Valor atual do telefone no mapeamento individual
+    const currentSelection = individualMapping.telefone || 'phone';
+
+    console.log(`📞 Retornando ${options.length} opções para Telefone`);
+    console.log(`🎯 Campo selecionado para Telefone: ${currentSelection}`);
+
+    return res.json({
+      response: {
+        options: options,
+        selectedOption: currentSelection,
+        placeholder: 'Escolha onde salvar o telefone do CNPJ'
+      }
+    });
+    
+  } catch (error) {
+    console.error('❌ Erro no dropdown do Telefone:', error);
+    
+    return res.json({
+      response: {
+        options: [
+          { 
+            label: '📞 Telefone (phone)', 
+            value: 'phone',
+            description: 'Campo padrão para telefone'
+          }
+        ],
+        selectedOption: 'phone',
+        placeholder: 'Escolha onde salvar o telefone'
+      }
+    });
+  }
+});
+
+// ⚡ ENDPOINT ESPECÍFICO PARA TELEFONE - UPDATE
+app.post('/api/telefone-mapping-save', (req, res) => {
+  const newSelection = req.body.selectedOption || 'phone';
+  const previousSelection = individualMapping.telefone || 'phone';
+  
+  console.log('📞 Atualizando mapeamento do Telefone:');
+  console.log(`   Anterior: ${previousSelection}`);
+  console.log(`   Novo: ${newSelection}`);
+
+  // Salvar no mapeamento individual
+  individualMapping.telefone = newSelection;
+
+  let message = '';
+  
+  if (newSelection === 'phone') {
+    message = '✅ Telefone será salvo no campo padrão "phone" do HubSpot';
+  } else if (newSelection === 'nenhum') {
+    message = '⚠️ Telefone não será mapeado (irá para campo backup)';
+  } else {
+    message = `✅ Telefone será salvo no campo: ${newSelection}`;
+  }
+
+  console.log(`💬 Mensagem: ${message}`);
+  console.log(`💾 Telefone mapeado para: ${individualMapping.telefone}`);
+
+  res.json({
+    response: {
+      actionType: 'DROPDOWN_UPDATE',
+      selectedOption: newSelection,
+      message: message,
+      configuracao: {
+        campoTelefone: newSelection,
+        mapeamentoCompleto: individualMapping
+      }
+    }
+  });
+});
+
 // ⚡ Individual mapping fetch - VERSÃO CORRIGIDA SEM BUSCAR API
 app.post('/api/individual-mapping-fetch', async (req, res) => {
   console.log('🗺️ Buscando configuração de mapeamento individual...');
