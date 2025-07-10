@@ -1512,41 +1512,22 @@ app.post('/api/accounts-fetch', (req, res) => {
 app.post('/api/dropdown-fetch', async (req, res) => {
   console.log('🔍 HubSpot solicitando opções do dropdown...');
   console.log('📥 Request body:', JSON.stringify(req.body, null, 2));
+  console.log('🔑 Token disponível:', HUBSPOT_ACCESS_TOKEN ? 'SIM' : 'NÃO');
   
-  try {
-    let fieldOptions = [];
-    
-    if (HUBSPOT_ACCESS_TOKEN) {
-      try {
-        const fields = await fetchCompanyTextFields();
-        fieldOptions = fields.map(field => ({
-          text: field.text,
-          value: field.value,
-          description: field.description || `Campo: ${field.value}`
-        }));
-        console.log(`✅ ${fieldOptions.length} campos obtidos do HubSpot`);
-      } catch (error) {
-        console.log('⚠️ Erro ao buscar campos, usando padrões:', error.message);
-        fieldOptions = [
-          { text: '📝 Nome da empresa (name)', value: 'name', description: 'Campo padrão do HubSpot' },
-          { text: '📝 Descrição (description)', value: 'description', description: 'Campo padrão do HubSpot' },
-          { text: '📞 Telefone (phone)', value: 'phone', description: 'Campo padrão do HubSpot' },
-          { text: '🏙️ Cidade (city)', value: 'city', description: 'Campo padrão do HubSpot' },
-          { text: '🌎 Estado (state)', value: 'state', description: 'Campo padrão do HubSpot' },
-          { text: '📋 Campo teste CNPJ (teste_cnpj)', value: 'teste_cnpj', description: 'Campo de teste para CNPJ' }
-        ];
-      }
-    } else {
-      console.log('⚠️ Token não disponível, usando campos padrão');
-      fieldOptions = [
-        { text: '📝 Nome da empresa (name)', value: 'name', description: 'Campo padrão do HubSpot' },
-        { text: '📝 Descrição (description)', value: 'description', description: 'Campo padrão do HubSpot' },
-        { text: '📞 Telefone (phone)', value: 'phone', description: 'Campo padrão do HubSpot' },
-        { text: '🏙️ Cidade (city)', value: 'city', description: 'Campo padrão do HubSpot' },
-        { text: '🌎 Estado (state)', value: 'state', description: 'Campo padrão do HubSpot' },
-        { text: '📋 Campo teste CNPJ (teste_cnpj)', value: 'teste_cnpj', description: 'Campo de teste para CNPJ' }
-      ];
-    }
+    // ⚡ SEMPRE USAR CAMPOS PADRÃO PARA EVITAR ERRO DE AUTENTICAÇÃO
+    console.log('📋 Usando campos padrão para interface estável');
+    const fieldOptions = [
+      { text: '📝 Nome da empresa (name)', value: 'name', description: 'Campo padrão do HubSpot' },
+      { text: '📝 Descrição (description)', value: 'description', description: 'Campo padrão do HubSpot' },
+      { text: '📞 Telefone (phone)', value: 'phone', description: 'Campo padrão do HubSpot' },
+      { text: '🏙️ Cidade (city)', value: 'city', description: 'Campo padrão do HubSpot' },
+      { text: '🌎 Estado (state)', value: 'state', description: 'Campo padrão do HubSpot' },
+      { text: '🌐 Website (website)', value: 'website', description: 'Campo padrão do HubSpot' },
+      { text: '📧 Email (email)', value: 'email', description: 'Campo padrão do HubSpot' },
+      { text: '🏭 Indústria (industry)', value: 'industry', description: 'Campo padrão do HubSpot' },
+      { text: '📮 CEP (zip)', value: 'zip', description: 'Campo padrão do HubSpot' },
+      { text: '📋 Campo teste CNPJ (teste_cnpj)', value: 'teste_cnpj', description: 'Campo de teste para CNPJ' }
+    ];
 
     const options = [
       { 
@@ -1631,48 +1612,43 @@ app.post('/api/dropdown-update', (req, res) => {
 // ⚡ Endpoint para buscar mapeamento individual
 app.post('/api/individual-mapping-fetch', async (req, res) => {
   console.log('🗺️ Buscando configuração de mapeamento individual...');
+  console.log('🔑 Token disponível:', HUBSPOT_ACCESS_TOKEN ? 'SIM' : 'NÃO');
+  console.log('🔑 Token preview:', HUBSPOT_ACCESS_TOKEN ? HUBSPOT_ACCESS_TOKEN.substring(0, 20) + '...' : 'NENHUM');
   
-  try {
-    let fieldOptions = [];
-    
-    if (HUBSPOT_ACCESS_TOKEN) {
-      try {
-        const fields = await fetchCompanyTextFields();
-        fieldOptions = fields.map(field => ({
-          text: field.text,
-          value: field.value,
-          description: field.description || `Campo: ${field.value}`
-        }));
-        console.log(`✅ ${fieldOptions.length} campos obtidos do HubSpot para mapeamento individual`);
-      } catch (error) {
-        console.log('⚠️ Erro ao buscar campos, usando padrões:', error.message);
-        fieldOptions = [
-          { text: '📝 Nome da empresa (name)', value: 'name', description: 'Campo padrão do HubSpot' },
-          { text: '📝 Descrição (description)', value: 'description', description: 'Campo padrão do HubSpot' },
-          { text: '📞 Telefone (phone)', value: 'phone', description: 'Campo padrão do HubSpot' },
-          { text: '🏙️ Cidade (city)', value: 'city', description: 'Campo padrão do HubSpot' },
-          { text: '🌎 Estado (state)', value: 'state', description: 'Campo padrão do HubSpot' },
-          { text: '📋 Campo teste CNPJ (teste_cnpj)', value: 'teste_cnpj', description: 'Campo de teste para CNPJ' }
-        ];
-      }
-    } else {
-      console.log('⚠️ Token não disponível, usando campos padrão');
-      fieldOptions = [
-        { text: '📝 Nome da empresa (name)', value: 'name', description: 'Campo padrão do HubSpot' },
-        { text: '📝 Descrição (description)', value: 'description', description: 'Campo padrão do HubSpot' },
-        { text: '📞 Telefone (phone)', value: 'phone', description: 'Campo padrão do HubSpot' },
-        { text: '🏙️ Cidade (city)', value: 'city', description: 'Campo padrão do HubSpot' },
-        { text: '🌎 Estado (state)', value: 'state', description: 'Campo padrão do HubSpot' },
-        { text: '📋 Campo teste CNPJ (teste_cnpj)', value: 'teste_cnpj', description: 'Campo de teste para CNPJ' }
-      ];
-    }
+    // ⚡ SEMPRE USAR CAMPOS PADRÃO PARA EVITAR ERRO DE AUTENTICAÇÃO
+    console.log('📋 Usando campos padrão para evitar erro de autenticação na interface');
+    const fieldOptions = [
+      { text: '📝 Nome da empresa (name)', value: 'name', description: 'Campo padrão do HubSpot' },
+      { text: '📝 Descrição (description)', value: 'description', description: 'Campo padrão do HubSpot' },
+      { text: '📞 Telefone (phone)', value: 'phone', description: 'Campo padrão do HubSpot' },
+      { text: '🏙️ Cidade (city)', value: 'city', description: 'Campo padrão do HubSpot' },
+      { text: '🌎 Estado (state)', value: 'state', description: 'Campo padrão do HubSpot' },
+      { text: '🌐 Website (website)', value: 'website', description: 'Campo padrão do HubSpot' },
+      { text: '📧 Email (email)', value: 'email', description: 'Campo padrão do HubSpot' },
+      { text: '🏭 Indústria (industry)', value: 'industry', description: 'Campo padrão do HubSpot' },
+      { text: '📮 CEP (zip)', value: 'zip', description: 'Campo padrão do HubSpot' },
+      { text: '📋 Campo teste CNPJ (teste_cnpj)', value: 'teste_cnpj', description: 'Campo de teste para CNPJ' }
+    ];
 
     const allFieldOptions = [
       { text: '🚫 Não mapear este campo', value: 'nenhum', description: 'Este campo não será salvo' },
       ...fieldOptions
     ];
-    
-    const suggestions = getSuggestedMapping(fieldOptions);
+    // ⚡ SUGESTÕES FIXAS PARA EVITAR PROBLEMAS
+    const suggestions = {
+      telefone: 'phone',
+      razao_social: 'name',
+      nome_fantasia: 'description',
+      cidade: 'city',
+      estado: 'state',
+      atividade: 'industry',
+      cep: 'zip',
+      email: 'email',
+      endereco: 'nenhum',
+      situacao: 'nenhum',
+      porte: 'nenhum',
+      capital_social: 'nenhum'
+    };
     
     const fieldsConfig = {};
     Object.keys(cnpjFieldsDefinition).forEach(cnpjField => {
@@ -1789,40 +1765,22 @@ app.post('/api/individual-mapping-save', (req, res) => {
 app.post('/api/ui-extensions-fetch', async (req, res) => {
   console.log('🎨 HubSpot solicitando interface de configurações...');
   console.log('📥 Request body:', JSON.stringify(req.body, null, 2));
+  console.log('🔑 Token disponível:', HUBSPOT_ACCESS_TOKEN ? 'SIM' : 'NÃO');
   
-  try {
-    let fieldOptions = [];
-    
-    if (HUBSPOT_ACCESS_TOKEN) {
-      try {
-        const fields = await fetchCompanyTextFields();
-        fieldOptions = fields.map(field => ({
-          label: field.text,
-          value: field.value
-        }));
-        console.log(`✅ ${fieldOptions.length} campos obtidos do HubSpot para interface`);
-      } catch (error) {
-        console.log('⚠️ Erro ao buscar campos, usando padrões:', error.message);
-        fieldOptions = [
-          { label: '📝 Nome da empresa', value: 'name' },
-          { label: '📝 Descrição', value: 'description' },
-          { label: '📞 Telefone', value: 'phone' },
-          { label: '🏙️ Cidade', value: 'city' },
-          { label: '🌎 Estado', value: 'state' },
-          { label: '📋 Campo teste CNPJ', value: 'teste_cnpj' }
-        ];
-      }
-    } else {
-      console.log('⚠️ Token não disponível, usando campos padrão');
-      fieldOptions = [
-        { label: '📝 Nome da empresa', value: 'name' },
-        { label: '📝 Descrição', value: 'description' },
-        { label: '📞 Telefone', value: 'phone' },
-        { label: '🏙️ Cidade', value: 'city' },
-        { label: '🌎 Estado', value: 'state' },
-        { label: '📋 Campo teste CNPJ', value: 'teste_cnpj' }
-      ];
-    }
+    // ⚡ SEMPRE USAR CAMPOS PADRÃO PARA INTERFACE ESTÁVEL
+    console.log('📋 Usando campos padrão para interface estável');
+    const fieldOptions = [
+      { label: '📝 Nome da empresa', value: 'name' },
+      { label: '📝 Descrição', value: 'description' },
+      { label: '📞 Telefone', value: 'phone' },
+      { label: '🏙️ Cidade', value: 'city' },
+      { label: '🌎 Estado', value: 'state' },
+      { label: '🌐 Website', value: 'website' },
+      { label: '📧 Email', value: 'email' },
+      { label: '🏭 Indústria', value: 'industry' },
+      { label: '📮 CEP', value: 'zip' },
+      { label: '📋 Campo teste CNPJ', value: 'teste_cnpj' }
+    ];
 
     const allOptions = [
       { label: '🚫 Não mapear', value: 'nenhum' },
