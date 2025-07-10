@@ -1366,15 +1366,13 @@ app.post('/api/accounts-fetch', (req, res) => {
 // ⚡ ENDPOINTS COM PERSISTÊNCIA SIMPLES - APENAS ESTES FORAM ADICIONADOS
 
 // ⚡ Endpoint para buscar options do dropdown (COM PERSISTÊNCIA)
+// ⚡ Endpoint para buscar options do dropdown (VERSÃO SIMPLES SEM TOKEN)
 app.post('/api/dropdown-fetch', async (req, res) => {
   console.log('🔍 HubSpot solicitando opções do dropdown...');
   console.log('📥 Request body:', JSON.stringify(req.body, null, 2));
   
   try {
-    // ⚡ Buscar campos atualizados
-    availableFields = await fetchCompanyTextFields();
-
-    // ⚡ Opções do dropdown
+    // ⚡ OPÇÕES FIXAS (SEM BUSCAR DO HUBSPOT)
     const options = [
       { 
         text: '🚫 Não mapear - Apenas validar CNPJ', 
@@ -1386,39 +1384,59 @@ app.post('/api/dropdown-fetch', async (req, res) => {
         value: 'teste_cnpj',
         description: 'Salva todos os dados do CNPJ formatados em texto no campo teste_cnpj'
       },
-      ...availableFields.map(field => ({
-        text: `📝 ${field.text}`,
-        value: field.value,
-        description: `Salvar dados formatados em: ${field.value} (${field.type})`
-      }))
+      { 
+        text: '📝 Nome da empresa (name)', 
+        value: 'name',
+        description: 'Campo padrão do HubSpot para nome da empresa'
+      },
+      { 
+        text: '📝 Descrição (description)', 
+        value: 'description',
+        description: 'Campo padrão do HubSpot para descrição'
+      },
+      { 
+        text: '📞 Telefone (phone)', 
+        value: 'phone',
+        description: 'Campo padrão do HubSpot para telefone'
+      },
+      { 
+        text: '🏙️ Cidade (city)', 
+        value: 'city',
+        description: 'Campo padrão do HubSpot para cidade'
+      },
+      { 
+        text: '🌎 Estado (state)', 
+        value: 'state',
+        description: 'Campo padrão do HubSpot para estado'
+      },
+      { 
+        text: '🌐 Website (website)', 
+        value: 'website',
+        description: 'Campo padrão do HubSpot para website'
+      }
     ];
 
     // ⚡ USAR ESCOLHA SALVA DO USUÁRIO OU PADRÃO
     const currentSelection = savedUserChoice || selectedDestinationField;
 
-    console.log(`📋 Retornando ${options.length} opções para o dropdown`);
+    console.log(`📋 Retornando ${options.length} opções para o dropdown (SEM TOKEN)`);
     console.log(`🎯 Campo selecionado: ${currentSelection}`);
     console.log(`💾 Escolha salva: ${savedUserChoice}`);
 
     return res.json({
       response: {
         options: options,
-        selectedOption: currentSelection, // ⚡ PERSISTÊNCIA AQUI
+        selectedOption: currentSelection,
         placeholder: 'Escolha onde salvar os dados do CNPJ'
       }
     });
     
   } catch (error) {
-    console.error('❌ Erro ao buscar opções do dropdown:', error);
+    console.error('❌ Erro no dropdown:', error);
     
     return res.json({
       response: {
         options: [
-          { 
-            text: '🚫 Não mapear - Apenas validar CNPJ', 
-            value: 'nenhum',
-            description: 'Apenas valida o CNPJ'
-          },
           { 
             text: '📋 Campo padrão (teste_cnpj)', 
             value: 'teste_cnpj',
@@ -1478,28 +1496,38 @@ app.post('/api/dropdown-update', (req, res) => {
 // ⚡ NOVOS ENDPOINTS PARA MAPEAMENTO INDIVIDUAL
 
 // ⚡ Endpoint para buscar mapeamento individual
+// ⚡ Endpoint para buscar mapeamento individual (VERSÃO SIMPLES SEM TOKEN)
 app.post('/api/individual-mapping-fetch', async (req, res) => {
   console.log('🗺️ Buscando configuração de mapeamento individual...');
   
   try {
-    // Buscar campos disponíveis do HubSpot
-    availableFields = await fetchCompanyTextFields();
-    
-    // Gerar sugestões automáticas
-    const suggestions = getSuggestedMapping(availableFields);
-    
-    // Preparar opções para cada campo
-    const fieldOptions = availableFields.map(field => ({
-      text: field.text,
-      value: field.value,
-      description: `${field.type} - ${field.description}`
-    }));
-    
-    // Adicionar opção "não mapear"
-    const optionsWithNone = [
+    // ⚡ CAMPOS FIXOS (SEM BUSCAR DO HUBSPOT)
+    const fieldOptions = [
       { text: '🚫 Não mapear este campo', value: 'nenhum', description: 'Este campo não será salvo' },
-      ...fieldOptions
+      { text: '📝 Nome da empresa (name)', value: 'name', description: 'Campo padrão do HubSpot' },
+      { text: '📝 Descrição (description)', value: 'description', description: 'Campo padrão do HubSpot' },
+      { text: '📞 Telefone (phone)', value: 'phone', description: 'Campo padrão do HubSpot' },
+      { text: '🏙️ Cidade (city)', value: 'city', description: 'Campo padrão do HubSpot' },
+      { text: '🌎 Estado (state)', value: 'state', description: 'Campo padrão do HubSpot' },
+      { text: '🌐 Website (website)', value: 'website', description: 'Campo padrão do HubSpot' },
+      { text: '📋 Campo teste CNPJ (teste_cnpj)', value: 'teste_cnpj', description: 'Campo de teste para CNPJ' }
     ];
+    
+    // ⚡ SUGESTÕES FIXAS (SEM TOKEN)
+    const suggestions = {
+      telefone: 'phone',
+      razao_social: 'name',
+      nome_fantasia: 'description',
+      cidade: 'city',
+      estado: 'state',
+      atividade: 'nenhum',
+      cep: 'nenhum',
+      email: 'nenhum',
+      endereco: 'nenhum',
+      situacao: 'nenhum',
+      porte: 'nenhum',
+      capital_social: 'nenhum'
+    };
     
     // Preparar resposta com todos os campos
     const fieldsConfig = {};
@@ -1509,13 +1537,13 @@ app.post('/api/individual-mapping-fetch', async (req, res) => {
         label: fieldDef.label,
         example: fieldDef.example,
         description: fieldDef.description,
-        options: optionsWithNone,
+        options: fieldOptions,
         currentValue: individualMapping[cnpjField] || suggestions[cnpjField] || 'nenhum',
         suggested: suggestions[cnpjField] || null
       };
     });
     
-    console.log(`✅ Retornando configuração para ${Object.keys(fieldsConfig).length} campos`);
+    console.log(`✅ Retornando configuração para ${Object.keys(fieldsConfig).length} campos (SEM TOKEN)`);
     console.log(`🎯 Sugestões geradas: ${Object.keys(suggestions).length}`);
     
     return res.json({
@@ -1524,15 +1552,11 @@ app.post('/api/individual-mapping-fetch', async (req, res) => {
         backupField: {
           label: '📦 Campo para dados não mapeados',
           currentValue: savedUserChoice || selectedDestinationField,
-          options: [
-            { text: '🚫 Não salvar dados não mapeados', value: 'nenhum' },
-            { text: '📋 Campo padrão (teste_cnpj)', value: 'teste_cnpj' },
-            ...fieldOptions
-          ]
+          options: fieldOptions
         },
         stats: {
           totalFields: Object.keys(fieldsConfig).length,
-          availableHubSpotFields: availableFields.length,
+          availableHubSpotFields: fieldOptions.length,
           suggestionsGenerated: Object.keys(suggestions).length
         }
       }
