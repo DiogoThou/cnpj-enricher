@@ -1724,43 +1724,12 @@ const PORT = process.env.PORT || 3000;
 // ===== ADICIONAR ESTES ENDPOINTS ANTES DO app.listen =====
 
 // ⚡ INTERFACE PRINCIPAL DO HUBSPOT - TELA DE CONFIGURAÇÕES CORRIGIDA
+// ⚡ INTERFACE PRINCIPAL DO HUBSPOT - VERSÃO SIMPLIFICADA E FUNCIONAL
 app.post('/api/ui-extensions-fetch', async (req, res) => {
   console.log('🎨 HubSpot solicitando interface de configurações...');
   
   try {
-    // Buscar campos disponíveis do HubSpot
-    availableFields = await fetchCompanyTextFields();
-    
-    // Gerar sugestões automáticas
-    const suggestions = getSuggestedMapping(availableFields);
-    
-    // Preparar opções para dropdowns com formato CORRETO
-    const fieldOptions = [
-      { 
-        label: '🚫 Não mapear', 
-        value: 'nenhum', 
-        description: 'Este campo não será salvo' 
-      },
-      { 
-        label: '📋 Campo backup (teste_cnpj)', 
-        value: 'teste_cnpj', 
-        description: 'Salvar no campo de backup' 
-      },
-      ...availableFields.map(field => ({
-        label: `📝 ${field.text}`,
-        value: field.value,
-        description: `Tipo: ${field.type}`
-      }))
-    ];
-
-    // Verificar se há mapeamento individual ativo
-    const hasIndividualMapping = Object.values(individualMapping).some(field => field && field !== 'nenhum');
-
-    console.log(`📊 Campos disponíveis: ${availableFields.length}`);
-    console.log(`🎯 Modo atual: ${hasIndividualMapping ? 'individual' : 'single'}`);
-    console.log(`🔧 Opções geradas: ${fieldOptions.length}`);
-
-    // ⚡ ESTRUTURA CORRIGIDA PARA HUBSPOT
+    // ⚡ ESTRUTURA SUPER SIMPLES PARA TESTAR
     const response = {
       results: [
         {
@@ -1768,21 +1737,32 @@ app.post('/api/ui-extensions-fetch', async (req, res) => {
           title: '🗺️ Configuração CNPJ Enricher',
           properties: [
             {
-              name: 'mapping_mode',
-              label: 'Modo de Mapeamento',
+              name: 'single_field',
+              label: '📂 Campo de destino',
               dataType: 'ENUMERATION',
               fieldType: 'select',
-              value: hasIndividualMapping ? 'individual' : 'single',
+              value: savedUserChoice || selectedDestinationField || 'teste_cnpj',
+              description: 'Escolha onde salvar os dados do CNPJ',
               options: [
                 { 
-                  label: 'Campo único', 
-                  value: 'single',
-                  description: 'Salvar todos os dados formatados em um campo só'
+                  label: '🚫 Não mapear', 
+                  value: 'nenhum'
                 },
                 { 
-                  label: 'Mapeamento individual', 
-                  value: 'individual',
-                  description: 'Mapear cada dado para um campo específico'
+                  label: '📋 Campo teste CNPJ', 
+                  value: 'teste_cnpj'
+                },
+                { 
+                  label: '📝 Nome da empresa', 
+                  value: 'name'
+                },
+                { 
+                  label: '📝 Descrição', 
+                  value: 'description'
+                },
+                { 
+                  label: '📞 Telefone', 
+                  value: 'phone'
                 }
               ]
             }
@@ -1791,75 +1771,29 @@ app.post('/api/ui-extensions-fetch', async (req, res) => {
       ]
     };
 
-    // ⚡ ADICIONAR CAMPOS INDIVIDUAIS SE MODO INDIVIDUAL ATIVO
-    if (hasIndividualMapping) {
-      // Adicionar campos individuais
-      Object.keys(cnpjFieldsDefinition).forEach(cnpjField => {
-        const fieldDef = cnpjFieldsDefinition[cnpjField];
-        const currentValue = individualMapping[cnpjField] || suggestions[cnpjField] || 'nenhum';
-        
-        response.results[0].properties.push({
-          name: `field_${cnpjField}`,
-          label: fieldDef.label,
-          dataType: 'ENUMERATION',
-          fieldType: 'select',
-          value: currentValue,
-          description: `${fieldDef.description} | Exemplo: ${fieldDef.example}`,
-          options: fieldOptions
-        });
-      });
-
-      // Campo backup
-      response.results[0].properties.push({
-        name: 'backup_field',
-        label: '📦 Campo para dados não mapeados',
-        dataType: 'ENUMERATION',
-        fieldType: 'select',
-        value: savedUserChoice || selectedDestinationField,
-        description: 'Onde salvar dados que não foram mapeados individualmente',
-        options: fieldOptions
-      });
-    } else {
-      // ⚡ MODO CAMPO ÚNICO
-      response.results[0].properties.push({
-        name: 'single_field',
-        label: '📂 Campo de destino',
-        dataType: 'ENUMERATION',
-        fieldType: 'select',
-        value: savedUserChoice || selectedDestinationField,
-        description: 'Escolha onde salvar todos os dados formatados do CNPJ',
-        options: fieldOptions
-      });
-    }
-
-    console.log(`✅ Interface gerada com ${response.results[0].properties.length} campos`);
-    console.log('📋 Primeira propriedade:', JSON.stringify(response.results[0].properties[0], null, 2));
+    console.log('✅ Interface simplificada gerada');
+    console.log('📋 Response:', JSON.stringify(response, null, 2));
     
     return res.json(response);
 
   } catch (error) {
     console.error('❌ Erro ao gerar interface:', error);
     
-    // ⚡ FALLBACK SIMPLES EM CASO DE ERRO
+    // ⚡ FALLBACK AINDA MAIS SIMPLES
     return res.json({
       results: [
         {
-          objectId: req.body.objectId || 'default',
-          title: '❌ Erro ao carregar configurações',
+          objectId: 'default',
+          title: '🗺️ CNPJ Enricher',
           properties: [
             {
-              name: 'fallback_field',
-              label: '📂 Campo de backup',
+              name: 'simple_field',
+              label: 'Campo de destino',
               dataType: 'ENUMERATION',
               fieldType: 'select',
               value: 'teste_cnpj',
-              description: 'Campo padrão em caso de erro',
               options: [
-                { 
-                  label: '📋 Campo padrão (teste_cnpj)', 
-                  value: 'teste_cnpj',
-                  description: 'Campo de backup'
-                }
+                { label: 'Campo teste CNPJ', value: 'teste_cnpj' }
               ]
             }
           ]
@@ -1868,6 +1802,8 @@ app.post('/api/ui-extensions-fetch', async (req, res) => {
     });
   }
 });
+
+  
 
 // ⚡ ENDPOINT CORRIGIDO PARA SALVAR CONFIGURAÇÕES DA INTERFACE
 app.post('/api/ui-extensions-save', (req, res) => {
