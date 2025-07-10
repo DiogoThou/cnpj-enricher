@@ -645,7 +645,10 @@ app.post('/enrich', async (req, res) => {
     
     const emailCnpj = cnpjData.estabelecimento?.email || '';
     
-    const enderecoCompleto = cnpjData.estabelecimento?.logradouro ? 
+    const
+  }
+}
+) enderecoCompleto = cnpjData.estabelecimento?.logradouro ? 
       `${cnpjData.estabelecimento.tipo_logradouro} ${cnpjData.estabelecimento.logradouro}, ${cnpjData.estabelecimento.numero}` : '';
     
     const cidade = cnpjData.estabelecimento?.cidade?.nome || '';
@@ -964,12 +967,12 @@ app.post('/api/dropdown-fetch', async (req, res) => {
     // ⚡ FORMATO CORRETO PARA DROPDOWNS DO HUBSPOT
     const options = [
       { 
-        text: '🚫 Não mapear - Apenas validar CNPJ', 
+        label: '🚫 Não mapear - Apenas validar CNPJ', 
         value: 'nenhum',
         description: 'Apenas valida o CNPJ sem salvar dados adicionais'
       },
       ...HUBSPOT_STANDARD_FIELDS.map(field => ({
-        text: field.text,
+          label: field.text,
         value: field.value,
         description: field.description
       }))
@@ -995,7 +998,7 @@ app.post('/api/dropdown-fetch', async (req, res) => {
       response: {
         options: [
           { 
-            text: '📋 Campo padrão (teste_cnpj)', 
+            label: '📋 Campo padrão (teste_cnpj)', 
             value: 'teste_cnpj',
             description: 'Campo padrão para dados do CNPJ'
           }
@@ -1052,12 +1055,12 @@ app.post('/api/individual-mapping-fetch', async (req, res) => {
     // ⚡ FORMATO CORRETO PARA DROPDOWNS DO HUBSPOT
     const allFieldOptions = [
       { 
-        text: '🚫 Não mapear este campo', 
+        label: '🚫 Não mapear este campo', 
         value: 'nenhum', 
         description: 'Este campo não será salvo' 
       },
-      ...HUBSPOT_STANDARD_FIELDS.map(field => ({
-        text: field.text,
+          label: field.text,
+        label: field.text,
         value: field.value,
         description: field.description
       }))
@@ -1087,7 +1090,7 @@ app.post('/api/individual-mapping-fetch', async (req, res) => {
           label: '📦 Campo para dados não mapeados',
           currentValue: savedUserChoice || selectedDestinationField,
           options: HUBSPOT_STANDARD_FIELDS.map(field => ({
-            text: field.text,
+            label: field.text,
             value: field.value,
             description: field.description
           }))
@@ -1176,9 +1179,9 @@ app.post('/api/ui-extensions-fetch', async (req, res) => {
   
   try {
     const allOptions = [
-      { text: '🚫 Não mapear', value: 'nenhum' },
+      { label: '🚫 Não mapear', value: 'nenhum' },
       ...HUBSPOT_STANDARD_FIELDS.map(field => ({
-        text: field.text.replace(/📝|📞|🏙️|🌎|🌐|📧|🏭|📮|📋/g, '').trim(),
+        label: field.text.replace(/📝|📞|🏙️|🌎|🌐|📧|🏭|📮|📋/g, '').trim(),
         value: field.value
       }))
     ];
@@ -1196,8 +1199,8 @@ app.post('/api/ui-extensions-fetch', async (req, res) => {
         value: 'individual',
         description: 'Escolha como mapear os dados do CNPJ',
         options: [
-          { text: '📋 Campo único (todos os dados juntos)', value: 'single' },
-          { text: '🗺️ Mapeamento individual (campos separados)', value: 'individual' }
+          { label: '📋 Campo único (todos os dados juntos)', value: 'single' },
+          { label: '🗺️ Mapeamento individual (campos separados)', value: 'individual' }
         ]
       });
 
@@ -1222,7 +1225,7 @@ app.post('/api/ui-extensions-fetch', async (req, res) => {
         value: savedUserChoice || selectedDestinationField,
         description: 'Campo onde salvar dados que não foram mapeados individualmente',
         options: HUBSPOT_STANDARD_FIELDS.map(field => ({
-          text: field.text.replace(/📝|📞|🏙️|🌎|🌐|📧|🏭|📮|📋/g, '').trim(),
+          label: field.text.replace(/📝|📞|🏙️|🌎|🌐|📧|🏭|📮|📋/g, '').trim(),
           value: field.value
         }))
       });
@@ -1232,30 +1235,23 @@ app.post('/api/ui-extensions-fetch', async (req, res) => {
         name: 'mapping_mode',
         label: '🗺️ Modo de Mapeamento',
         dataType: 'ENUMERATION',
-        fieldType: 'select',
-        value: 'single',
-        description: 'Escolha como mapear os dados do CNPJ',
-        options: [
-          { text: '📋 Campo único (todos os dados juntos)', value: 'single' },
-          { text: '🗺️ Mapeamento individual (campos separados)', value: 'individual' }
+          { label: '📝 Nome da empresa (name)', value: 'name', description: 'Campo padrão do HubSpot' },
+          { label: '📝 Descrição (description)', value: 'description', description: 'Campo padrão do HubSpot' },
+          { label: '📞 Telefone (phone)', value: 'phone', description: 'Campo padrão do HubSpot' },
+          { label: '🏙️ Cidade (city)', value: 'city', description: 'Campo padrão do HubSpot' },
+          { label: '🌎 Estado (state)', value: 'state', description: 'Campo padrão do HubSpot' },
+          { label: '📋 Campo teste CNPJ (teste_cnpj)', value: 'teste_cnpj', description: 'Campo de teste para CNPJ' }
         ]
       });
 
       properties.push({
         name: 'single_field',
-        label: '📂 Campo de destino',
-        dataType: 'ENUMERATION',
-        fieldType: 'select',
-        value: savedUserChoice || selectedDestinationField || 'teste_cnpj',
-        description: 'Escolha onde salvar todos os dados do CNPJ formatados',
-        options: [
-          { text: '📝 Nome da empresa (name)', value: 'name', description: 'Campo padrão do HubSpot' },
-          { text: '📝 Descrição (description)', value: 'description', description: 'Campo padrão do HubSpot' },
-          { text: '📞 Telefone (phone)', value: 'phone', description: 'Campo padrão do HubSpot' },
-          { text: '🏙️ Cidade (city)', value: 'city', description: 'Campo padrão do HubSpot' },
-          { text: '🌎 Estado (state)', value: 'state', description: 'Campo padrão do HubSpot' },
-          { text: '📋 Campo teste CNPJ (teste_cnpj)', value: 'teste_cnpj', description: 'Campo de teste para CNPJ' }
-        ]
+        { label: '📝 Nome da empresa (name)', value: 'name', description: 'Campo padrão do HubSpot' },
+        { label: '📝 Descrição (description)', value: 'description', description: 'Campo padrão do HubSpot' },
+        { label: '📞 Telefone (phone)', value: 'phone', description: 'Campo padrão do HubSpot' },
+        { label: '🏙️ Cidade (city)', value: 'city', description: 'Campo padrão do HubSpot' },
+        { label: '🌎 Estado (state)', value: 'state', description: 'Campo padrão do HubSpot' },
+        { label: '📋 Campo teste CNPJ (teste_cnpj)', value: 'teste_cnpj', description: 'Campo de teste para CNPJ' }
       });
     }
 
@@ -1291,7 +1287,7 @@ app.post('/api/ui-extensions-fetch', async (req, res) => {
               fieldType: 'select',
               value: 'teste_cnpj',
               options: [
-                { text: 'Campo teste CNPJ', value: 'teste_cnpj' }
+                { label: 'Campo teste CNPJ', value: 'teste_cnpj' }
               ]
             }
           ]
@@ -1475,7 +1471,7 @@ app.get('/api/mapping-status', (req, res) => {
     mappingMode: hasIndividualMapping ? 'individual' : 'single_field',
     configuration: {
       individualMapping: {
-        active: hasIndividualMapping,
+        label: '🚫 Não mapear - Apenas validar CNPJ', 
         mappedFields: mappedFields,
         details: individualMapping
       },
@@ -1492,7 +1488,7 @@ app.get('/api/sync-cnpj', async (req, res) => {
   try {
     await syncCNPJs();
     res.json({ status: 'success', message: 'Sync concluído com sucesso' });
-  } catch (error) {
+            label: '📋 Campo padrão (teste_cnpj)', 
     console.error('❌ Erro no sync:', error.message);
     res.status(500).json({ error: 'Erro na sincronização' });
   }
