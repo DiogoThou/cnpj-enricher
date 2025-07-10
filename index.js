@@ -2155,4 +2155,59 @@ app.post('/api/switch-mapping-mode', (req, res) => {
 
 console.log('🎨 Interface HubSpot carregada com sucesso!');
 
+
+
+
+
+console.log('🎨 Interface HubSpot carregada com sucesso!');
+
+// ⚡ ENDPOINT PARA FORÇAR REFRESH DO TOKEN - ADICIONAR AQUI
+app.post('/api/force-refresh-token', async (req, res) => {
+  console.log('🔄 Forçando refresh do token...');
+  
+  if (!HUBSPOT_REFRESH_TOKEN) {
+    return res.status(400).json({ 
+      error: 'Refresh token não configurado',
+      needsOAuth: true
+    });
+  }
+
+  try {
+    const response = await axios.post(
+      'https://api.hubapi.com/oauth/v1/token',
+      new URLSearchParams({
+        grant_type: 'refresh_token',
+        client_id: CLIENT_ID,
+        client_secret: CLIENT_SECRET,
+        refresh_token: HUBSPOT_REFRESH_TOKEN
+      }),
+      {
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
+      }
+    );
+
+    const { access_token, refresh_token, expires_in } = response.data;
+
+    // ⚡ ATUALIZAR O TOKEN GLOBALMENTE
+    HUBSPOT_ACCESS_TOKEN = access_token;
+
+    console.log('✅ Token atualizado com sucesso!');
+    console.log('⏰ Novo token expira em:', expires_in, 'segundos');
+
+    res.json({
+      success: true,
+      message: 'Token atualizado com sucesso!',
+      tokenPreview: access_token.substring(0, 20) + '...',
+      expiresIn: expires_in
+    });
+
+  } catch (error) {
+    console.error('❌ Erro ao fazer refresh:', error.response?.data);
+    res.status(500).json({
+      error: 'Erro ao atualizar token',
+      details: error.response?.data
+    });
+  }
+});
+
 app.listen(PORT, () => console.log(`🚀 CNPJ- Enricher rodando na porta ${PORT}`));
