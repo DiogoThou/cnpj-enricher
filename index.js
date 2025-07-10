@@ -516,22 +516,114 @@ app.get('/oauth/callback', async (req, res) => {
     
     res.status(500).send(errorHtml);
   }
-});
-      <h2>✅ Token gerado com sucesso!</h2>
-      <p><strong>Access Token:</strong> ${access_token.substring(0, 20)}...</p>
-      <p><strong>Expira em:</strong> ${expires_in} segundos</p>
-      <p><strong>Status:</strong> Pronto para usar!</p>
-      <hr>
-      <p><a href="/account">Verificar Status</a></p>
-      <p><strong>Próximos passos:</strong></p>
-      <ol>
-        <li><strong>Criar empresa teste:</strong><br>
-        <code>POST /create-test-company</code></li>
-        <li><strong>Enriquecer com ID real:</strong><br>
-        <code>POST /enrich<br>{"companyId": "[ID_REAL_RETORNADO]"}</code></li>
-      </ol>
-      <p><em>⚠️ Substitua [ID_REAL_RETORNADO] pelo ID da empresa criada</em></p>
-    `);
+    const successHtml = `
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Token OAuth Gerado</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            max-width: 600px;
+            margin: 50px auto;
+            padding: 20px;
+            background: #f8f9fa;
+            color: #333;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .success {
+            color: #28a745;
+            border-left: 4px solid #28a745;
+            padding-left: 15px;
+            margin-bottom: 20px;
+        }
+        .info {
+            background: #e9ecef;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 15px 0;
+        }
+        .btn {
+            display: inline-block;
+            padding: 10px 20px;
+            background: #007bff;
+            color: white;
+            text-decoration: none;
+            border-radius: 5px;
+            margin: 10px 5px;
+        }
+        code {
+            background: #f8f9fa;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-family: 'Monaco', 'Consolas', monospace;
+        }
+        ol {
+            line-height: 1.6;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="success">
+            <h2>✅ Token OAuth gerado com sucesso!</h2>
+        </div>
+        
+        <div class="info">
+            <p><strong>Access Token:</strong> ${access_token.substring(0, 20)}...</p>
+            <p><strong>Expira em:</strong> ${expires_in} segundos (${Math.floor(expires_in / 3600)} horas)</p>
+            <p><strong>Status:</strong> Conectado ao HubSpot ✅</p>
+        </div>
+        
+        <h3>🚀 Próximos passos:</h3>
+        <ol>
+            <li><strong>Criar empresa teste:</strong><br>
+            <code>POST /create-test-company</code></li>
+            <li><strong>Enriquecer com dados do CNPJ:</strong><br>
+            <code>POST /enrich</code> com <code>{"companyId": "[ID_RETORNADO]"}</code></li>
+            <li><strong>Verificar resultado:</strong><br>
+            Confira o campo <code>teste_cnpj</code> na empresa</li>
+        </ol>
+        
+        <div style="margin-top: 30px;">
+            <a href="/account" class="btn">📊 Verificar Status</a>
+            <a href="/settings" class="btn">⚙️ Configurações</a>
+        </div>
+        
+        <div class="info" style="margin-top: 20px;">
+            <p><strong>💡 Dica:</strong> Este token será usado automaticamente nas próximas requisições.</p>
+            <p><strong>⚠️ Importante:</strong> O token expira em ${Math.floor(expires_in / 3600)} horas.</p>
+        </div>
+        
+        <script>
+            // Auto-close popup se estiver em uma
+            if (window.opener) {
+                setTimeout(() => {
+                    window.close();
+                }, 3000);
+            }
+            
+            // Notificar janela pai se existir
+            if (window.parent && window.parent !== window) {
+                window.parent.postMessage({
+                    type: 'oauth_success',
+                    token: '${access_token.substring(0, 20)}...',
+                    expiresIn: ${expires_in}
+                }, '*');
+            }
+        </script>
+    </div>
+</body>
+</html>`;
+
+    res.send(successHtml);
   } catch (error) {
     console.error('❌ Erro detalhado ao trocar code pelo token:');
     console.error('📊 Status:', error.response?.status);
@@ -539,13 +631,88 @@ app.get('/oauth/callback', async (req, res) => {
     console.error('🔗 URL:', error.config?.url);
     console.error('📡 Payload:', error.config?.data);
     
-    res.status(500).send(`
-      <h2>❌ Erro ao gerar token</h2>
-      <p><strong>Status:</strong> ${error.response?.status}</p>
-      <p><strong>Erro:</strong> ${JSON.stringify(error.response?.data)}</p>
-      <p><strong>CLIENT_ID:</strong> ${CLIENT_ID}</p>
-      <p><strong>REDIRECT_URI:</strong> ${REDIRECT_URI}</p>
-    `);
+    const errorHtml = `
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Erro OAuth</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            max-width: 600px;
+            margin: 50px auto;
+            padding: 20px;
+            background: #f8f9fa;
+            color: #333;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .error {
+            color: #dc3545;
+            border-left: 4px solid #dc3545;
+            padding-left: 15px;
+            margin-bottom: 20px;
+        }
+        .debug {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 15px 0;
+            font-family: monospace;
+            font-size: 12px;
+        }
+        .btn {
+            display: inline-block;
+            padding: 10px 20px;
+            background: #007bff;
+            color: white;
+            text-decoration: none;
+            border-radius: 5px;
+            margin: 10px 5px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="error">
+            <h2>❌ Erro ao gerar token OAuth</h2>
+        </div>
+        
+        <p><strong>Status HTTP:</strong> ${error.response?.status || 'Desconhecido'}</p>
+        <p><strong>Mensagem:</strong> ${error.message}</p>
+        
+        <div class="debug">
+            <h4>🔍 Informações de Debug:</h4>
+            <p><strong>CLIENT_ID:</strong> ${CLIENT_ID || 'Não configurado'}</p>
+            <p><strong>REDIRECT_URI:</strong> ${REDIRECT_URI || 'Não configurado'}</p>
+            <p><strong>CLIENT_SECRET:</strong> ${CLIENT_SECRET ? 'Configurado' : 'Não configurado'}</p>
+            <p><strong>Erro da API:</strong></p>
+            <pre>${JSON.stringify(error.response?.data, null, 2)}</pre>
+        </div>
+        
+        <h3>🔧 Possíveis soluções:</h3>
+        <ul>
+            <li>Verifique se as variáveis de ambiente estão corretas no Vercel</li>
+            <li>Confirme se o REDIRECT_URI está registrado no HubSpot</li>
+            <li>Verifique se o CLIENT_ID e CLIENT_SECRET estão corretos</li>
+            <li>Tente gerar um novo Private App no HubSpot</li>
+        </ul>
+        
+        <div style="margin-top: 30px;">
+            <a href="/test-token" class="btn">🧪 Testar Token</a>
+            <a href="/account" class="btn">📊 Status</a>
+        </div>
+    </div>
+</body>
+</html>`;
+
+    res.status(500).send(errorHtml);
   }
 });
 
