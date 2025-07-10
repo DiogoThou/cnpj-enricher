@@ -361,6 +361,20 @@ app.get('/oauth/callback', async (req, res) => {
   console.log('🔗 REDIRECT_URI:', REDIRECT_URI);
 
   try {
+    // ⚡ VALIDAR VARIÁVEIS DE AMBIENTE ANTES DE USAR
+    if (!CLIENT_ID || !CLIENT_SECRET || !REDIRECT_URI) {
+      console.error('❌ Variáveis de ambiente não configuradas');
+      return res.status(500).send(`
+        <h2>❌ Erro de Configuração</h2>
+        <p><strong>CLIENT_ID:</strong> ${CLIENT_ID ? 'Configurado' : 'NÃO CONFIGURADO'}</p>
+        <p><strong>CLIENT_SECRET:</strong> ${CLIENT_SECRET ? 'Configurado' : 'NÃO CONFIGURADO'}</p>
+        <p><strong>REDIRECT_URI:</strong> ${REDIRECT_URI ? 'Configurado' : 'NÃO CONFIGURADO'}</p>
+        <p>Configure as variáveis de ambiente no Vercel</p>
+      `);
+    }
+
+    console.log('📡 Fazendo requisição para trocar code por token...');
+    
     const response = await axios.post(
       'https://api.hubapi.com/oauth/v1/token',
       new URLSearchParams({
@@ -371,7 +385,11 @@ app.get('/oauth/callback', async (req, res) => {
         code: code
       }),
       {
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
+        headers: { 
+          'Content-Type': 'application/x-www-form-urlencoded',
+          'User-Agent': 'CNPJ-Enricher/1.0'
+        },
+        timeout: 10000 // ⚡ TIMEOUT DE 10 SEGUNDOS
       }
     );
 
@@ -384,7 +402,121 @@ app.get('/oauth/callback', async (req, res) => {
     console.log('🔁 Refresh Token:', refresh_token);
     console.log('⏰ Expira em (segundos):', expires_in);
 
-    res.send(`
+    // ⚡ RESPOSTA HTML MELHORADA
+    const htmlResponse = `
+    <!DOCTYPE html>
+    <html lang="pt-BR">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>OAuth Sucesso - CNPJ Enricher</title>
+        <style>
+            body { font-family: Arial, sans-serif; max-width: 600px; margin: 50px auto; padding: 20px; }
+            .success { background: #d4edda; border: 1px solid #c3e6cb; padding: 15px; border-radius: 5px; }
+            .info { background: #d1ecf1; border: 1px solid #bee5eb; padding: 15px; border-radius: 5px; margin: 15px 0; }
+            code { background: #f8f9fa; padding: 2px 5px; border-radius: 3px; }
+            .btn { background: #007bff; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; display: inline-block; margin: 5px; }
+        </style>
+    </head>
+    <body>
+        <div class="success">
+            <h2>✅ Token OAuth gerado com sucesso!</h2>
+            <p><strong>Access Token:</strong> ${access_token.substring(0, 20)}...</p>
+            <p><strong>Expira em:</strong> ${Math.floor(expires_in / 3600)} horas</p>
+            <p><strong>Status:</strong> Pronto para usar!</p>
+        </div>
+        
+        <div class="info">
+            <h3>🚀 Próximos passos:</h3>
+            <ol>
+                <li><strong>Testar conexão:</strong><br>
+                <a href="/test-token" class="btn">Testar Token</a></li>
+                <li><strong>Criar empresa teste:</strong><br>
+                <code>POST /create-test-company</code></li>
+                <li><strong>Enriquecer empresa:</strong><br>
+                <code>POST /enrich</code> com {"companyId": "ID_DA_EMPRESA"}</li>
+            </ol>
+        </div>
+        
+        <div style="margin-top: 20px;">
+            <a href="/account" class="btn">Verificar Status</a>
+            <a href="/settings" class="btn">Configurações</a>
+        </div>
+        
+        <script>
+            // ⚡ AUTO-REFRESH PARA FECHAR POPUP
+            if (window.opener) {
+                setTimeout(() => {
+                    window.opener.postMessage({type: 'oauth_success', token: '${access_token.substring(0, 20)}...'}, '*');
+                    window.close();
+                }, 3000);
+            }
+        </script>
+    </body>
+    </html>
+    `;
+    
+    res.send(htmlResponse);
+    
+  } catch (error) {
+    console.error('❌ Erro detalhado no OAuth callback:');
+    console.error('📋 Mensagem:', error.message);
+    console.error('📊 Status:', error.response?.status);
+    console.error('📄 Data:', error.response?.data);
+    console.error('🔗 URL tentada:', error.config?.url);
+    console.error('📡 Payload enviado:', error.config?.data);
+    
+    // ⚡ RESPOSTA DE ERRO MELHORADA
+    const errorHtml = `
+    <!DOCTYPE html>
+    <html lang="pt-BR">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Erro OAuth - CNPJ Enricher</title>
+        <style>
+            body { font-family: Arial, sans-serif; max-width: 600px; margin: 50px auto; padding: 20px; }
+            .error { background: #f8d7da; border: 1px solid #f5c6cb; padding: 15px; border-radius: 5px; }
+            .debug { background: #f8f9fa; border: 1px solid #dee2e6; padding: 15px; border-radius: 5px; margin: 15px 0; }
+            code { background: #e9ecef; padding: 2px 5px; border-radius: 3px; }
+            .btn { background: #dc3545; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; display: inline-block; margin: 5px; }
+        </style>
+    </head>
+    <body>
+        <div class="error">
+            <h2>❌ Erro na autenticação OAuth</h2>
+            <p><strong>Status:</strong> ${error.response?.status || 'Desconhecido'}</p>
+            <p><strong>Erro:</strong> ${error.message}</p>
+        </div>
+        
+        <div class="debug">
+            <h3>🔍 Informações de Debug:</h3>
+            <p><strong>CLIENT_ID:</strong> ${CLIENT_ID}</p>
+            <p><strong>REDIRECT_URI:</strong> ${REDIRECT_URI}</p>
+            <p><strong>Code recebido:</strong> ${code}</p>
+            ${error.response?.data ? `<p><strong>Detalhes:</strong> <code>${JSON.stringify(error.response.data)}</code></p>` : ''}
+        </div>
+        
+        <div>
+            <h3>💡 Possíveis soluções:</h3>
+            <ul>
+                <li>Verificar se CLIENT_ID e CLIENT_SECRET estão corretos no Vercel</li>
+                <li>Verificar se REDIRECT_URI está configurado no HubSpot App</li>
+                <li>Tentar o OAuth novamente</li>
+                <li>Verificar se o app tem as permissões corretas</li>
+            </ul>
+        </div>
+        
+        <div style="margin-top: 20px;">
+            <a href="/account" class="btn">Voltar ao Status</a>
+        </div>
+    </body>
+    </html>
+    `;
+    
+    res.status(500).send(errorHtml);
+  }
+});
       <h2>✅ Token gerado com sucesso!</h2>
       <p><strong>Access Token:</strong> ${access_token.substring(0, 20)}...</p>
       <p><strong>Expira em:</strong> ${expires_in} segundos</p>
@@ -458,13 +590,13 @@ app.get('/test-token', async (req, res) => {
       status: 'error',
       message: 'Token não configurado',
       needsAuth: true,
-      authUrl: `https://app.hubspot.com/oauth/authorize?client_id=${CLIENT_ID}&scope=crm.objects.companies.read%20crm.objects.companies.write&redirect_uri=${REDIRECT_URI}`
+      authUrl: \`https://app.hubspot.com/oauth/authorize?client_id=${CLIENT_ID}&scope=crm.objects.companies.read%20crm.objects.companies.write&redirect_uri=${REDIRECT_URI}`
     });
   }
 
   try {
     const response = await axios.get('https://api.hubapi.com/crm/v3/objects/companies?limit=1', {
-      headers: { Authorization: `Bearer ${HUBSPOT_ACCESS_TOKEN}` }
+      headers: { Authorization: \`Bearer ${HUBSPOT_ACCESS_TOKEN}` }
     });
     
     res.json({
@@ -494,7 +626,12 @@ app.get('/settings', (req, res) => {
   // Retornar a página HTML de configurações
   res.send(`
 <div class="field-mapping">
-  <label for="company_name_field">Nome da empresa →</label>
+  <label for="company_name_field"
+    }
+    )
+  }
+}
+)>Nome da empresa →</label>
   <input id="company_name_field" placeholder="Ex: nome_fantasia" />
 </div>
 <button onclick="saveMapping()">Salvar mapeamento</button>
@@ -580,10 +717,10 @@ app.get('/debug-company/:companyId', async (req, res) => {
     console.log('🔍 Buscando todas as propriedades da empresa:', companyId);
     
     const hubspotCompany = await axios.get(
-      `https://api.hubapi.com/crm/v3/objects/companies/${companyId}`,
+      \`https://api.hubapi.com/crm/v3/objects/companies/${companyId}`,
       {
         headers: { 
-          Authorization: `Bearer ${HUBSPOT_ACCESS_TOKEN}`,
+          Authorization: \`Bearer ${HUBSPOT_ACCESS_TOKEN}`,
           'Content-Type': 'application/json'
         }
       }
@@ -593,7 +730,7 @@ app.get('/debug-company/:companyId', async (req, res) => {
     
     console.log('📋 TODAS as propriedades encontradas:');
     Object.keys(properties).forEach(key => {
-      console.log(`   ${key}: ${properties[key]}`);
+      console.log(\`   ${key}: ${properties[key]}`);
     });
 
     // Procurar campos que podem ser CNPJ
@@ -647,14 +784,14 @@ async function fetchCompanyTextFields() {
       'https://api.hubapi.com/crm/v3/properties/companies',
       {
         headers: {
-          Authorization: `Bearer ${HUBSPOT_ACCESS_TOKEN}`,
+          Authorization: \`Bearer ${HUBSPOT_ACCESS_TOKEN}`,
           'Content-Type': 'application/json'
         },
         timeout: 5000 // ⚡ TIMEOUT DE 5 SEGUNDOS
       }
     );
 
-    console.log(`📊 Total de campos encontrados: ${response.data.results.length}`);
+    console.log(\`📊 Total de campos encontrados: ${response.data.results.length}`);
 
     // ⚡ FILTRO EXPANDIDO
     const textFields = response.data.results.filter(field => {
@@ -674,14 +811,14 @@ async function fetchCompanyTextFields() {
       return isTextType && isEditable && isVisible && isNotSystemField;
     });
 
-    console.log(`✅ Campos de texto filtrados: ${textFields.length}`);
+    console.log(\`✅ Campos de texto filtrados: ${textFields.length}`);
     
     const mappedFields = textFields.map(field => ({
-      text: `${field.label || field.name} (${field.name})`,
+      text: \`${field.label || field.name} (${field.name})`,
       value: field.name,
       fieldType: field.fieldType,
       type: field.type,
-      description: field.description || `Campo: ${field.name}`
+      description: field.description || \`Campo: ${field.name}`
     }));
 
     return mappedFields;
@@ -720,7 +857,7 @@ app.post('/enrich', async (req, res) => {
     return res.status(500).json({ 
       error: 'Token do HubSpot não configurado',
       details: 'Execute OAuth primeiro',
-      authUrl: `https://app.hubspot.com/oauth/authorize?client_id=${CLIENT_ID}&scope=crm.objects.companies.read%20crm.objects.companies.write&redirect_uri=${REDIRECT_URI}`
+      authUrl: \`https://app.hubspot.com/oauth/authorize?client_id=${CLIENT_ID}&scope=crm.objects.companies.read%20crm.objects.companies.write&redirect_uri=${REDIRECT_URI}`
     });
   }
 
@@ -729,10 +866,10 @@ app.post('/enrich', async (req, res) => {
     
     // ⚡ Buscar empresa no HubSpot solicitando EXPLICITAMENTE o campo CNPJ
     const hubspotCompany = await axios.get(
-      `https://api.hubapi.com/crm/v3/objects/companies/${companyId}?properties=cnpj,name,domain,website,phone,city,state,country,createdate,hs_lastmodifieddate`,
+      \`https://api.hubapi.com/crm/v3/objects/companies/${companyId}?properties=cnpj,name,domain,website,phone,city,state,country,createdate,hs_lastmodifieddate`,
       {
         headers: { 
-          Authorization: `Bearer ${HUBSPOT_ACCESS_TOKEN}`,
+          Authorization: \`Bearer ${HUBSPOT_ACCESS_TOKEN}`,
           'Content-Type': 'application/json'
         }
       }
@@ -746,7 +883,7 @@ app.post('/enrich', async (req, res) => {
     
     console.log('🔍 TODAS as propriedades disponíveis:');
     Object.keys(properties).forEach(key => {
-      console.log(`${key}: "${properties[key]}"`);
+      console.log(\`${key}: "${properties[key]}"`);
     });
     
     // Procurar campos que podem conter CNPJ
@@ -779,7 +916,7 @@ app.post('/enrich', async (req, res) => {
         if (value && typeof value === 'string') {
           const cleaned = cleanCNPJ(value);
           if (cleaned.length === 14) {
-            console.log(`🎯 CNPJ encontrado no campo "${key}": ${value} -> ${cleaned}`);
+            console.log(\`🎯 CNPJ encontrado no campo "${key}": ${value} -> ${cleaned}`);
             cnpjRaw = value;
             break;
           }
@@ -804,11 +941,11 @@ app.post('/enrich', async (req, res) => {
       let sugestoes = [];
       if (!cnpjRaw) {
         sugestoes.push('Campo CNPJ não encontrado na empresa');
-        sugestoes.push(`Use: POST /add-cnpj/${companyId} com {"cnpj": "14665903000104"}`);
+        sugestoes.push(\`Use: POST /add-cnpj/${companyId} com {"cnpj": "14665903000104"}`);
       } else if (cnpjLimpo.length === 0) {
         sugestoes.push('Campo CNPJ existe mas está vazio');
       } else if (cnpjLimpo.length !== 14) {
-        sugestoes.push(`CNPJ tem ${cnpjLimpo.length} dígitos, precisa ter 14`);
+        sugestoes.push(\`CNPJ tem ${cnpjLimpo.length} dígitos, precisa ter 14`);
         sugestoes.push('Formatos aceitos: 14665903000104 ou 14.665.903/0001-04');
       }
       
@@ -821,14 +958,14 @@ app.post('/enrich', async (req, res) => {
         todasPropriedades: Object.keys(properties),
         camposPossiveisCNPJ: cnpjPossibleKeys,
         sugestoes: sugestoes,
-        debug: `Valor original: "${cnpjRaw}" | Tipo: ${typeof cnpjRaw} | Limpo: "${cnpjLimpo}"`
+        debug: \`Valor original: "${cnpjRaw}" | Tipo: ${typeof cnpjRaw} | Limpo: "${cnpjLimpo}"`
       });
     }
 
     console.log('📡 Buscando dados do CNPJ na API externa...');
     
     // Buscar dados do CNPJ
-    const cnpjDataResponse = await axios.get(`https://publica.cnpj.ws/cnpj/${cnpjLimpo}`, {
+    const cnpjDataResponse = await axios.get(\`https://publica.cnpj.ws/cnpj/${cnpjLimpo}`, {
       timeout: 10000, // 10 segundos de timeout
       headers: {
         'User-Agent': 'CNPJ-Enricher/1.0'
@@ -842,7 +979,7 @@ app.post('/enrich', async (req, res) => {
     console.log('📋 Dados do CNPJ:', JSON.stringify(cnpjData, null, 2));
 
     const extract = (label, value) => {
-      console.log(`🧩 ${label}:`, value || '[vazio]');
+      console.log(\`🧩 ${label}:`, value || '[vazio]');
       return value || '';
     };
 
@@ -861,7 +998,7 @@ app.post('/enrich', async (req, res) => {
     const emailCnpj = extract('Email', cnpjData.estabelecimento?.email);
     
     const enderecoCompleto = cnpjData.estabelecimento?.logradouro ? 
-      `${cnpjData.estabelecimento.tipo_logradouro} ${cnpjData.estabelecimento.logradouro}, ${cnpjData.estabelecimento.numero}` : '';
+      \`${cnpjData.estabelecimento.tipo_logradouro} ${cnpjData.estabelecimento.logradouro}, ${cnpjData.estabelecimento.numero}` : '';
     extract('Endereço', enderecoCompleto);
     
     const cidade = extract('Cidade', cnpjData.estabelecimento?.cidade?.nome);
@@ -876,11 +1013,11 @@ app.post('/enrich', async (req, res) => {
     console.log('📡 Atualizando empresa no HubSpot...');
     
     await axios.patch(
-      `https://api.hubapi.com/crm/v3/objects/companies/${companyId}`,
+      \`https://api.hubapi.com/crm/v3/objects/companies/${companyId}`,
       updatePayload,
       {
         headers: {
-          Authorization: `Bearer ${HUBSPOT_ACCESS_TOKEN}`,
+          Authorization: \`Bearer ${HUBSPOT_ACCESS_TOKEN}`,
           'Content-Type': 'application/json'
         }
       }
@@ -890,7 +1027,7 @@ app.post('/enrich', async (req, res) => {
     const hasIndividualMapping = Object.values(individualMapping).some(field => field && field !== 'nenhum');
     const campoUsado = hasIndividualMapping ? 'mapeamento individual' : (savedUserChoice || selectedDestinationField);
     
-    console.log(`✅ Empresa atualizada com sucesso! Modo usado: ${campoUsado}`);
+    console.log(\`✅ Empresa atualizada com sucesso! Modo usado: ${campoUsado}`);
     
     // ⚡ Dados resumidos da empresa para o log e resposta
     const dadosEmpresa = {
@@ -905,24 +1042,24 @@ app.post('/enrich', async (req, res) => {
       telefone: telefoneFormatado
     };
     
-    console.log(`🎉 SUCESSO COMPLETO - Dados da empresa processados com: ${campoUsado}`);
+    console.log(\`🎉 SUCESSO COMPLETO - Dados da empresa processados com: ${campoUsado}`);
     console.log('🏢 Razão Social:', dadosEmpresa.razaoSocial);
     console.log('✨ Nome Fantasia:', dadosEmpresa.nomeFantasia);
     console.log('📊 Situação:', dadosEmpresa.situacao);
-    console.log('📍 Local:', `${dadosEmpresa.cidade}/${dadosEmpresa.estado}`);
+    console.log('📍 Local:', \`${dadosEmpresa.cidade}/${dadosEmpresa.estado}`);
     console.log('💼 Porte:', dadosEmpresa.porte);
     console.log('📧 Email:', dadosEmpresa.email);
     console.log('📞 Telefone:', dadosEmpresa.telefone);
 
     res.json({ 
       success: true,
-      message: `🎉 Empresa enriquecida com sucesso! Modo: ${campoUsado}`,
+      message: \`🎉 Empresa enriquecida com sucesso! Modo: ${campoUsado}`,
       cnpj: cnpjLimpo,
       empresa: {
         razaoSocial: dadosEmpresa.razaoSocial,
         nomeFantasia: dadosEmpresa.nomeFantasia,
         situacao: dadosEmpresa.situacao,
-        localizacao: `${dadosEmpresa.cidade}/${dadosEmpresa.estado}`,
+        localizacao: \`${dadosEmpresa.cidade}/${dadosEmpresa.estado}`,
         porte: dadosEmpresa.porte,
         contato: {
           email: dadosEmpresa.email,
@@ -939,7 +1076,7 @@ app.post('/enrich', async (req, res) => {
         'Verifique os campos mapeados individualmente na empresa',
         'Dados não mapeados estão no campo backup'
       ] : [
-        `Verifique o campo ${campoUsado} na empresa no HubSpot`,
+        \`Verifique o campo ${campoUsado} na empresa no HubSpot`,
         'Todos os dados estão formatados e legíveis'
       ]
     });
@@ -957,7 +1094,7 @@ app.post('/enrich', async (req, res) => {
       return res.status(401).json({ 
         error: 'Token do HubSpot inválido ou expirado',
         details: 'Execute OAuth novamente',
-        authUrl: `https://app.hubspot.com/oauth/authorize?client_id=${CLIENT_ID}&scope=crm.objects.companies.read%20crm.objects.companies.write&redirect_uri=${REDIRECT_URI}`
+        authUrl: \`https://app.hubspot.com/oauth/authorize?client_id=${CLIENT_ID}&scope=crm.objects.companies.read%20crm.objects.companies.write&redirect_uri=${REDIRECT_URI}`
       });
     }
     
@@ -1059,7 +1196,7 @@ app.post('/create-test-field', async (req, res) => {
       },
       {
         headers: {
-          Authorization: `Bearer ${HUBSPOT_ACCESS_TOKEN}`,
+          Authorization: \`Bearer ${HUBSPOT_ACCESS_TOKEN}`,
           'Content-Type': 'application/json'
         }
       }
@@ -1119,7 +1256,7 @@ app.post('/create-cnpj-properties', async (req, res) => {
       },
       {
         headers: {
-          Authorization: `Bearer ${HUBSPOT_ACCESS_TOKEN}`,
+          Authorization: \`Bearer ${HUBSPOT_ACCESS_TOKEN}`,
           'Content-Type': 'application/json'
         }
       }
@@ -1172,7 +1309,7 @@ app.get('/test-cnpj/:cnpj', async (req, res) => {
   try {
     console.log('🧪 Testando API CNPJ para:', cleanedCNPJ);
     
-    const response = await axios.get(`https://publica.cnpj.ws/cnpj/${cleanedCNPJ}`, {
+    const response = await axios.get(\`https://publica.cnpj.ws/cnpj/${cleanedCNPJ}`, {
       timeout: 10000,
       headers: { 'User-Agent': 'CNPJ-Enricher/1.0' }
     });
@@ -1226,7 +1363,7 @@ app.post('/add-cnpj/:companyId', async (req, res) => {
     console.log('📝 Adicionando CNPJ à empresa:', companyId);
     
     const response = await axios.patch(
-      `https://api.hubapi.com/crm/v3/objects/companies/${companyId}`,
+      \`https://api.hubapi.com/crm/v3/objects/companies/${companyId}`,
       {
         properties: {
           cnpj: cnpj
@@ -1234,7 +1371,7 @@ app.post('/add-cnpj/:companyId', async (req, res) => {
       },
       {
         headers: {
-          Authorization: `Bearer ${HUBSPOT_ACCESS_TOKEN}`,
+          Authorization: \`Bearer ${HUBSPOT_ACCESS_TOKEN}`,
           'Content-Type': 'application/json'
         }
       }
@@ -1247,7 +1384,7 @@ app.post('/add-cnpj/:companyId', async (req, res) => {
       companyId: companyId,
       cnpjAdicionado: cnpj,
       message: 'CNPJ adicionado à empresa com sucesso',
-      testeEnrichUrl: `POST /enrich com {"companyId": "${companyId}"}`
+      testeEnrichUrl: \`POST /enrich com {"companyId": "${companyId}"}`
     });
   } catch (error) {
     console.error('❌ Erro ao adicionar CNPJ:', error.response?.data);
