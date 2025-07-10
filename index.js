@@ -961,14 +961,15 @@ app.post('/api/dropdown-fetch', async (req, res) => {
   console.log('🔍 HubSpot solicitando opções do dropdown...');
   
   try {
+    // ⚡ FORMATO CORRETO PARA DROPDOWNS DO HUBSPOT
     const options = [
       { 
-        text: '🚫 Não mapear - Apenas validar CNPJ', 
+        label: '🚫 Não mapear - Apenas validar CNPJ', 
         value: 'nenhum',
         description: 'Apenas valida o CNPJ sem salvar dados adicionais'
       },
       ...HUBSPOT_STANDARD_FIELDS.map(field => ({
-        text: field.text,
+        label: field.text,
         value: field.value,
         description: field.description
       }))
@@ -994,7 +995,7 @@ app.post('/api/dropdown-fetch', async (req, res) => {
       response: {
         options: [
           { 
-            text: '📋 Campo padrão (teste_cnpj)', 
+            label: '📋 Campo padrão (teste_cnpj)', 
             value: 'teste_cnpj',
             description: 'Campo padrão para dados do CNPJ'
           }
@@ -1048,10 +1049,15 @@ app.post('/api/individual-mapping-fetch', async (req, res) => {
   console.log('🗺️ Buscando configuração de mapeamento individual...');
   
   try {
+    // ⚡ FORMATO CORRETO PARA DROPDOWNS DO HUBSPOT
     const allFieldOptions = [
-      { text: '🚫 Não mapear este campo', value: 'nenhum', description: 'Este campo não será salvo' },
+      { 
+        label: '🚫 Não mapear este campo', 
+        value: 'nenhum', 
+        description: 'Este campo não será salvo' 
+      },
       ...HUBSPOT_STANDARD_FIELDS.map(field => ({
-        text: field.text,
+        label: field.text,
         value: field.value,
         description: field.description
       }))
@@ -1080,7 +1086,11 @@ app.post('/api/individual-mapping-fetch', async (req, res) => {
         backupField: {
           label: '📦 Campo para dados não mapeados',
           currentValue: savedUserChoice || selectedDestinationField,
-          options: HUBSPOT_STANDARD_FIELDS
+          options: HUBSPOT_STANDARD_FIELDS.map(field => ({
+            label: field.text,
+            value: field.value,
+            description: field.description
+          }))
         },
         stats: {
           totalFields: Object.keys(fieldsConfig).length,
