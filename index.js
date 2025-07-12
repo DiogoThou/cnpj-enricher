@@ -481,7 +481,7 @@ app.post('/api/crmhub-toggle-fetch', (req, res) => {
   }
 });
 
-// CRMHub Toggle Update - Liga/desliga CRMHub
+// ⚡ CRMHub Toggle Update - VERSÃO CORRIGIDA COM AUTENTICAÇÃO
 app.post('/api/crmhub-toggle-update', async (req, res) => {
   console.log('🔄 CRMHub Toggle Update chamado');
   console.log('📥 Request body:', JSON.stringify(req.body, null, 2));
@@ -492,7 +492,48 @@ app.post('/api/crmhub-toggle-update', async (req, res) => {
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
   
+  // ⚡ VERIFICAR TOKEN - MESMA LÓGICA DO /enrich
+  if (!HUBSPOT_ACCESS_TOKEN) {
+    console.error('❌ HUBSPOT_ACCESS_TOKEN não configurado');
+    return res.json({
+      response: {
+        actionType: 'TOGGLE_UPDATE',
+        toggleEnabled: false,
+        message: '❌ Token do HubSpot não configurado - Execute OAuth primeiro',
+        error: 'Token não encontrado',
+        authUrl: `https://app.hubspot.com/oauth/authorize?client_id=${CLIENT_ID}&scope=crm.objects.companies.read%20crm.objects.companies.write&redirect_uri=${REDIRECT_URI}`
+      }
+    });
+  }
+  
   try {
+    // ⚡ TESTAR TOKEN ANTES DE CONTINUAR
+    console.log('🔐 Testando token do HubSpot...');
+    console.log('🔑 Token preview:', HUBSPOT_ACCESS_TOKEN ? HUBSPOT_ACCESS_TOKEN.substring(0, 20) + '...' : 'UNDEFINED');
+    
+    try {
+      const tokenTest = await axios.get('https://api.hubapi.com/crm/v3/objects/companies?limit=1', {
+        headers: { 
+          Authorization: `Bearer ${HUBSPOT_ACCESS_TOKEN}`,
+          'Content-Type': 'application/json'
+        },
+        timeout: 5000
+      });
+      console.log('✅ Token válido - continuando...');
+    } catch (tokenError) {
+      console.error('❌ Token inválido:', tokenError.response?.status);
+      return res.json({
+        response: {
+          actionType: 'TOGGLE_UPDATE',
+          toggleEnabled: false,
+          message: '❌ Token do HubSpot inválido ou expirado - Execute OAuth novamente',
+          error: 'Token inválido',
+          tokenStatus: tokenError.response?.status,
+          authUrl: `https://app.hubspot.com/oauth/authorize?client_id=${CLIENT_ID}&scope=crm.objects.companies.read%20crm.objects.companies.write&redirect_uri=${REDIRECT_URI}`
+        }
+      });
+    }
+    
     // O HubSpot envia o novo status do toggle
     const newToggleState = req.body.toggleEnabled || req.body.enabled || req.body.value || false;
     const previousState = crmhubToggleEnabled;
@@ -524,7 +565,8 @@ app.post('/api/crmhub-toggle-update', async (req, res) => {
             fieldsCreated: createResults.created.length,
             fieldsExisting: createResults.existing.length,
             totalFields: CRMHUB_FIELDS.length,
-            details: createResults
+            details: createResults,
+            tokenValid: true
           };
         } else {
           message = `✅ CRMHub ATIVADO! Todos os ${fieldsStatus.existing.length} campos já existem`;
@@ -532,14 +574,19 @@ app.post('/api/crmhub-toggle-update', async (req, res) => {
           additionalData = {
             fieldsCreated: 0,
             fieldsExisting: fieldsStatus.existing.length,
-            totalFields: CRMHUB_FIELDS.length
+            totalFields: CRMHUB_FIELDS.length,
+            tokenValid: true
           };
         }
         
       } catch (error) {
         console.error('❌ Erro ao ativar CRMHub:', error);
         message = `⚠️ CRMHub ativado, mas com erro nos campos: ${error.message}`;
-        additionalData = { error: error.message };
+        additionalData = { 
+          error: error.message,
+          tokenValid: true,
+          errorType: 'field_creation_error'
+        };
       }
       
     } else {
@@ -550,7 +597,8 @@ app.post('/api/crmhub-toggle-update', async (req, res) => {
       additionalData = {
         previousMode: 'crmhub',
         newMode: 'standard',
-        note: 'Campos CRMHub permanecem no HubSpot mas não serão mais alimentados'
+        note: 'Campos CRMHub permanecem no HubSpot mas não serão mais alimentados',
+        tokenValid: true
       };
     }
     
@@ -564,6 +612,11 @@ app.post('/api/crmhub-toggle-update', async (req, res) => {
         previousState: previousState,
         message: message,
         crmhubData: additionalData,
+        authStatus: {
+          tokenConfigured: true,
+          tokenValid: true,
+          tokenPreview: HUBSPOT_ACCESS_TOKEN.substring(0, 20) + '...'
+        },
         nextSteps: crmhubToggleEnabled ? [
           'Campos CRMHub criados/verificados',
           'Use POST /enrich para enriquecer empresas',
@@ -578,18 +631,197 @@ app.post('/api/crmhub-toggle-update', async (req, res) => {
     
   } catch (error) {
     console.error('❌ Erro no CRMHub toggle update:', error);
+    console.error('📋 Error details:', error.response?.data);
     
     res.json({
       response: {
         actionType: 'TOGGLE_UPDATE',
         toggleEnabled: false,
         message: '❌ Erro ao alterar estado do CRMHub: ' + error.message,
-        error: error.message
+        error: error.message,
+        errorDetails: error.response?.data,
+        authStatus: {
+          tokenConfigured: !!HUBSPOT_ACCESS_TOKEN,
+          tokenValid: false
+        }
       }
     });
   }
 });
 
+// ⚡ CRMHub Toggle Fetch - VERSÃO CORRIGIDA COM AUTENTICAÇÃO
+app.post('/api/crmhub-toggle-fetch', (req, res) => {
+  console.log('🔄 CRMHub Toggle Fetch chamado');
+  console.log('📥 Request body:', JSON.stringify(req.body, null, 2));
+  console.log('📥 Headers:', JSON.stringify(req.headers, null, 2));
+  
+  // Configurar CORS
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  
+  try {
+    console.log(`📊 Status atual do CRMHub: ${crmhubToggleEnabled ? 'ATIVADO' : 'DESATIVADO'}`);
+    console.log(`🔑 Token status: ${HUBSPOT_ACCESS_TOKEN ? 'CONFIGURADO' : 'NÃO CONFIGURADO'}`);
+
+    return res.json({
+      response: {
+        toggleEnabled: crmhubToggleEnabled,
+        status: crmhubToggleEnabled ? 'ativado' : 'desativado',
+        message: crmhubToggleEnabled ? 
+          '✅ CRMHub ATIVO - Dados serão salvos em campos específicos' : 
+          '⚪ CRMHub INATIVO - Sistema padrão ativo',
+        authStatus: {
+          tokenConfigured: !!HUBSPOT_ACCESS_TOKEN,
+          tokenPreview: HUBSPOT_ACCESS_TOKEN ? HUBSPOT_ACCESS_TOKEN.substring(0, 20) + '...' : 'NÃO CONFIGURADO'
+        }
+      }
+    });
+    
+  } catch (error) {
+    console.error('❌ Erro no toggle fetch:', error);
+    
+    return res.json({
+      response: {
+        toggleEnabled: false,
+        status: 'erro',
+        message: '❌ Erro ao verificar status do CRMHub',
+        error: error.message,
+        authStatus: {
+          tokenConfigured: !!HUBSPOT_ACCESS_TOKEN,
+          tokenPreview: 'ERRO'
+        }
+      }
+    });
+  }
+});
+
+// ⚡ ENDPOINT PARA BOTÃO CRMHUB - VERSÃO CORRIGIDA COM AUTENTICAÇÃO
+app.post('/api/crmhub-button-action', async (req, res) => {
+  console.log('🔘 CRMHub Button Action chamado');
+  console.log('📥 Request body:', JSON.stringify(req.body, null, 2));
+  
+  // Configurar CORS
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  
+  // ⚡ VERIFICAR TOKEN - MESMA LÓGICA DO /enrich
+  if (!HUBSPOT_ACCESS_TOKEN) {
+    console.error('❌ HUBSPOT_ACCESS_TOKEN não configurado');
+    return res.json({
+      success: false,
+      message: '❌ Token do HubSpot não configurado - Execute OAuth primeiro',
+      error: 'Token não encontrado',
+      authUrl: `https://app.hubspot.com/oauth/authorize?client_id=${CLIENT_ID}&scope=crm.objects.companies.read%20crm.objects.companies.write&redirect_uri=${REDIRECT_URI}`
+    });
+  }
+  
+  try {
+    // ⚡ TESTAR TOKEN ANTES DE CONTINUAR
+    console.log('🔐 Testando token do HubSpot...');
+    console.log('🔑 Token preview:', HUBSPOT_ACCESS_TOKEN.substring(0, 20) + '...');
+    
+    try {
+      const tokenTest = await axios.get('https://api.hubapi.com/crm/v3/objects/companies?limit=1', {
+        headers: { 
+          Authorization: `Bearer ${HUBSPOT_ACCESS_TOKEN}`,
+          'Content-Type': 'application/json'
+        },
+        timeout: 5000
+      });
+      console.log('✅ Token válido - continuando...');
+    } catch (tokenError) {
+      console.error('❌ Token inválido:', tokenError.response?.status);
+      return res.json({
+        success: false,
+        message: '❌ Token do HubSpot inválido ou expirado - Execute OAuth novamente',
+        error: 'Token inválido',
+        tokenStatus: tokenError.response?.status,
+        authUrl: `https://app.hubspot.com/oauth/authorize?client_id=${CLIENT_ID}&scope=crm.objects.companies.read%20crm.objects.companies.write&redirect_uri=${REDIRECT_URI}`
+      });
+    }
+    
+    // Inverter o estado atual
+    const previousState = crmhubToggleEnabled;
+    crmhubToggleEnabled = !crmhubToggleEnabled;
+    
+    console.log(`🔄 Botão pressionado: ${previousState} → ${crmhubToggleEnabled}`);
+    
+    let message = '';
+    let additionalData = {};
+    
+    if (crmhubToggleEnabled) {
+      // ATIVANDO CRMHUB
+      console.log('🚀 ATIVANDO CRMHub via botão...');
+      
+      try {
+        const fieldsStatus = await checkCRMHubFieldsStatus();
+        
+        if (fieldsStatus.missing.length > 0) {
+          const createResults = await createCRMHubFields();
+          message = `🚀 CRMHub ATIVADO! Campos criados: ${createResults.created.length}`;
+          additionalData = { 
+            fieldsCreated: createResults.created.length,
+            tokenValid: true
+          };
+        } else {
+          message = `✅ CRMHub ATIVADO! Campos já existem: ${fieldsStatus.existing.length}`;
+          additionalData = { 
+            fieldsExisting: fieldsStatus.existing.length,
+            tokenValid: true
+          };
+        }
+        
+      } catch (error) {
+        message = `⚠️ CRMHub ativado com erro: ${error.message}`;
+        additionalData = { 
+          error: error.message,
+          tokenValid: true
+        };
+      }
+      
+    } else {
+      // DESATIVANDO CRMHUB
+      console.log('⚪ DESATIVANDO CRMHub via botão...');
+      message = '⚪ CRMHub DESATIVADO - Sistema padrão ativo';
+      additionalData = { 
+        mode: 'standard',
+        tokenValid: true
+      };
+    }
+    
+    console.log(`💬 Resultado: ${message}`);
+
+    res.json({
+      success: true,
+      actionType: 'BUTTON_CLICKED',
+      crmhubEnabled: crmhubToggleEnabled,
+      previousState: previousState,
+      message: message,
+      data: additionalData,
+      buttonText: crmhubToggleEnabled ? '⚪ Desativar CRMHub' : '🚀 Ativar CRMHub',
+      authStatus: {
+        tokenConfigured: true,
+        tokenValid: true,
+        tokenPreview: HUBSPOT_ACCESS_TOKEN.substring(0, 20) + '...'
+      }
+    });
+    
+  } catch (error) {
+    console.error('❌ Erro no botão CRMHub:', error);
+    
+    res.json({
+      success: false,
+      message: '❌ Erro ao executar ação: ' + error.message,
+      error: error.message,
+      authStatus: {
+        tokenConfigured: !!HUBSPOT_ACCESS_TOKEN,
+        tokenValid: false
+      }
+    });
+  }
+});
 // ⚡ FUNÇÃO PARA USAR CRMHUB OU SISTEMA PADRÃO
 function updateEnrichmentPayloadWithCRMHub(cnpjData, cnpjNumber) {
   if (crmhubToggleEnabled) {
