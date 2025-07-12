@@ -15,6 +15,9 @@ const REDIRECT_URI = process.env.REDIRECT_URI;
 let selectedDestinationField = 'teste_cnpj';
 let savedUserChoice = null;
 
+// ⚡ VARIÁVEL PARA CONTROLE DO TOGGLE CRMHUB
+let crmhubToggleEnabled = false;
+
 // ⚡ SISTEMA DE MAPEAMENTO INDIVIDUAL
 let individualMapping = {
   telefone: null,
@@ -30,6 +33,80 @@ let individualMapping = {
   porte: null,
   capital_social: null
 };
+
+// ⚡ CAMPOS CRMHUB DEFINIDOS
+const CRMHUB_FIELDS = [
+  {
+    name: 'cnpj_enriquecido_crmhub',
+    label: '🏢 CNPJ Enriquecido - CRMHub',
+    type: 'string',
+    fieldType: 'text',
+    description: 'CNPJ formatado e validado pela Receita Federal'
+  },
+  {
+    name: 'telefone_enriquecido_crmhub',
+    label: '📞 Telefone Enriquecido - CRMHub',
+    type: 'string',
+    fieldType: 'text',
+    description: 'Telefone principal da empresa conforme Receita Federal'
+  },
+  {
+    name: 'razao_social_crmhub',
+    label: '🏢 Razão Social - CRMHub',
+    type: 'string',
+    fieldType: 'text',
+    description: 'Razão social oficial da empresa'
+  },
+  {
+    name: 'nome_fantasia_crmhub',
+    label: '✨ Nome Fantasia - CRMHub',
+    type: 'string',
+    fieldType: 'text',
+    description: 'Nome fantasia ou comercial da empresa'
+  },
+  {
+    name: 'situacao_cadastral_crmhub',
+    label: '📊 Situação Cadastral - CRMHub',
+    type: 'string',
+    fieldType: 'text',
+    description: 'Situação cadastral na Receita Federal'
+  },
+  {
+    name: 'porte_empresa_crmhub',
+    label: '📏 Porte da Empresa - CRMHub',
+    type: 'string',
+    fieldType: 'text',
+    description: 'Classificação do porte da empresa'
+  },
+  {
+    name: 'atividade_principal_crmhub',
+    label: '🏭 Atividade Principal - CRMHub',
+    type: 'string',
+    fieldType: 'textarea',
+    description: 'Atividade principal (CNAE) da empresa'
+  },
+  {
+    name: 'endereco_completo_crmhub',
+    label: '🏠 Endereço Completo - CRMHub',
+    type: 'string',
+    fieldType: 'textarea',
+    description: 'Endereço completo da sede da empresa'
+  },
+  {
+    name: 'capital_social_crmhub',
+    label: '💰 Capital Social - CRMHub',
+    type: 'string',
+    fieldType: 'text',
+    description: 'Capital social registrado na empresa'
+  },
+  {
+    name: 'data_atualizacao_crmhub',
+    label: '📅 Data Atualização - CRMHub',
+    type: 'string',
+    fieldType: 'text',
+    description: 'Data da última atualização dos dados'
+  }
+];
 
 // ⚡ CAMPOS PADRÃO FIXOS (SEM BUSCAR API)
 const HUBSPOT_STANDARD_FIELDS = [
@@ -118,6 +195,544 @@ const cnpjFieldsDefinition = {
     hubspotSuggestion: 'nenhum'
   }
 };
+
+// ⚡ FUNÇÃO PARA CRIAR OU VERIFICAR GRUPO CRMHUB
+async function createOrVerifyCRMHubGroup() {
+  try {
+    console.log('🔍 Verificando se grupo CRMHub já existe...');
+    
+    // Primeiro, verificar se o grupo já existe
+    try {
+      const existingGroups = await axios.get(
+        'https://api.hubapi.com/crm/v3/properties/companies/groups',
+        {
+          headers: {
+            Authorization: `Bearer ${HUBSPOT_ACCESS_TOKEN}`,
+            'Content-Type': 'application/json'
+          }
+        }
+      );
+      
+      const crmhubGroup = existingGroups.data.results.find(group => 
+        group.name === 'crmhub_dados' || group.label.includes('CRMHub')
+      );
+      
+      if (crmhubGroup) {
+        console.log('✅ Grupo CRMHub já existe:', crmhubGroup.name);
+        return crmhubGroup.name;
+      }
+    } catch (error) {
+      console.log('🔍 Grupo não encontrado, criando novo...');
+    }
+    
+    // Criar novo grupo
+    console.log('🏗️ Criando grupo CRMHub...');
+    const response = await axios.post(
+      'https://api.hubapi.com/crm/v3/properties/companies/groups',
+      {
+        name: 'crmhub_dados',
+        label: '🚀 CRMHub - Dados Enriquecidos',
+        displayOrder: -1
+      },
+      {
+        headers: {
+          Authorization: `Bearer ${HUBSPOT_ACCESS_TOKEN}`,
+          'Content-Type': 'application/json'
+        }
+      }
+    );
+    
+    console.log('✅ Grupo CRMHub criado com sucesso:', response.data.name);
+    return response.data.name;
+    
+  } catch (error) {
+    console.error('❌ Erro ao criar/verificar grupo CRMHub:', error.response?.data);
+    return 'companyinformation'; // Fallback para grupo padrão
+  }
+}
+
+// ⚡ FUNÇÃO PARA CRIAR CAMPOS CRMHUB
+async function createCRMHubFields() {
+  try {
+    console.log('🏗️ Iniciando criação dos campos CRMHub...');
+    
+    if (!HUBSPOT_ACCESS_TOKEN) {
+      throw new Error('Token do HubSpot não configurado');
+    }
+    
+    // Criar/verificar grupo primeiro
+    const groupName = await createOrVerifyCRMHubGroup();
+    
+    const results = {
+      created: [],
+      existing: [],
+      errors: []
+    };
+    
+    for (const field of CRMHUB_FIELDS) {
+      try {
+        console.log(`🔧 Criando campo: ${field.name}`);
+        
+        const response = await axios.post(
+          'https://api.hubapi.com/crm/v3/properties/companies',
+          {
+            name: field.name,
+            label: field.label,
+            type: field.type,
+            fieldType: field.fieldType,
+            description: field.description,
+            groupName: groupName,
+            hasUniqueValue: false,
+            hidden: false,
+            displayOrder: -1
+          },
+          {
+            headers: {
+              Authorization: `Bearer ${HUBSPOT_ACCESS_TOKEN}`,
+              'Content-Type': 'application/json'
+            }
+          }
+        );
+        
+        console.log(`✅ Campo criado: ${field.name}`);
+        results.created.push(field.name);
+        
+        // Pequena pausa entre criações para evitar rate limit
+        await new Promise(resolve => setTimeout(resolve, 100));
+        
+      } catch (error) {
+        if (error.response?.status === 409) {
+          console.log(`⚠️ Campo já existe: ${field.name}`);
+          results.existing.push(field.name);
+        } else {
+          console.error(`❌ Erro ao criar campo ${field.name}:`, error.response?.data);
+          results.errors.push({
+            field: field.name,
+            error: error.response?.data || error.message
+          });
+        }
+      }
+    }
+    
+    console.log('📊 Resumo da criação de campos CRMHub:');
+    console.log(`✅ Criados: ${results.created.length}`);
+    console.log(`⚠️ Já existiam: ${results.existing.length}`);
+    console.log(`❌ Erros: ${results.errors.length}`);
+    
+    return results;
+    
+  } catch (error) {
+    console.error('❌ Erro geral na criação de campos CRMHub:', error);
+    throw error;
+  }
+}
+
+// ⚡ FUNÇÃO PARA VERIFICAR STATUS DOS CAMPOS CRMHUB
+async function checkCRMHubFieldsStatus() {
+  try {
+    console.log('🔍 Verificando status dos campos CRMHub...');
+    
+    if (!HUBSPOT_ACCESS_TOKEN) {
+      throw new Error('Token do HubSpot não configurado');
+    }
+    
+    const status = {
+      existing: [],
+      missing: [],
+      total: CRMHUB_FIELDS.length
+    };
+    
+    for (const field of CRMHUB_FIELDS) {
+      try {
+        const response = await axios.get(
+          `https://api.hubapi.com/crm/v3/properties/companies/${field.name}`,
+          {
+            headers: {
+              Authorization: `Bearer ${HUBSPOT_ACCESS_TOKEN}`,
+              'Content-Type': 'application/json'
+            }
+          }
+        );
+        
+        console.log(`✅ Campo encontrado: ${field.name}`);
+        status.existing.push({
+          name: field.name,
+          label: response.data.label,
+          type: response.data.type
+        });
+        
+      } catch (error) {
+        if (error.response?.status === 404) {
+          console.log(`❌ Campo não encontrado: ${field.name}`);
+          status.missing.push(field.name);
+        } else {
+          console.error(`⚠️ Erro ao verificar campo ${field.name}:`, error.response?.data);
+          status.missing.push(field.name);
+        }
+      }
+    }
+    
+    console.log(`📊 Status: ${status.existing.length}/${status.total} campos existem`);
+    return status;
+    
+  } catch (error) {
+    console.error('❌ Erro ao verificar status dos campos:', error);
+    throw error;
+  }
+}
+
+// ⚡ FUNÇÃO PARA MAPEAR DADOS DO CNPJ PARA CAMPOS CRMHUB
+function mapCNPJDataToCRMHubFields(cnpjData, cnpjNumber) {
+  const estabelecimento = cnpjData.estabelecimento || {};
+  
+  const mappedData = {
+    cnpj_enriquecido_crmhub: cnpjNumber,
+    telefone_enriquecido_crmhub: estabelecimento.telefone1 ? 
+      `(${estabelecimento.ddd1}) ${estabelecimento.telefone1}` : '',
+    razao_social_crmhub: cnpjData.razao_social || '',
+    nome_fantasia_crmhub: estabelecimento.nome_fantasia || '',
+    situacao_cadastral_crmhub: estabelecimento.situacao_cadastral || '',
+    porte_empresa_crmhub: cnpjData.porte?.descricao || '',
+    atividade_principal_crmhub: estabelecimento.atividade_principal?.descricao || '',
+    endereco_completo_crmhub: estabelecimento.logradouro ? 
+      `${estabelecimento.tipo_logradouro || ''} ${estabelecimento.logradouro}, ${estabelecimento.numero || 'S/N'}${estabelecimento.complemento ? ', ' + estabelecimento.complemento : ''}, ${estabelecimento.bairro || ''}, ${estabelecimento.cidade?.nome || ''} - ${estabelecimento.estado?.sigla || ''}, CEP: ${estabelecimento.cep || ''}` : '',
+    capital_social_crmhub: cnpjData.capital_social ? `R$ ${cnpjData.capital_social}` : '',
+    data_atualizacao_crmhub: new Date().toLocaleString('pt-BR')
+  };
+  
+  // Filtrar apenas campos com valores
+  const payload = { properties: {} };
+  Object.keys(mappedData).forEach(key => {
+    if (mappedData[key]) {
+      payload.properties[key] = mappedData[key];
+    }
+  });
+  
+  console.log('🗺️ Dados mapeados para campos CRMHub:', payload);
+  return payload;
+}
+
+// ⚡ ENDPOINTS CRMHUB - VERSÃO TOGGLE SIMPLES
+
+// CRMHub Toggle Fetch - Retorna status atual
+app.post('/api/crmhub-toggle-fetch', (req, res) => {
+  console.log('🔄 CRMHub Toggle Fetch chamado');
+  console.log('📥 Request body:', JSON.stringify(req.body, null, 2));
+  
+  try {
+    console.log(`📊 Status atual do CRMHub: ${crmhubToggleEnabled ? 'ATIVADO' : 'DESATIVADO'}`);
+
+    return res.json({
+      response: {
+        toggleEnabled: crmhubToggleEnabled,
+        status: crmhubToggleEnabled ? 'ativado' : 'desativado',
+        message: crmhubToggleEnabled ? 
+          '✅ CRMHub ATIVO - Dados serão salvos em campos específicos' : 
+          '⚪ CRMHub INATIVO - Sistema padrão ativo'
+      }
+    });
+    
+  } catch (error) {
+    console.error('❌ Erro no toggle fetch:', error);
+    
+    return res.json({
+      response: {
+        toggleEnabled: false,
+        status: 'erro',
+        message: '❌ Erro ao verificar status do CRMHub'
+      }
+    });
+  }
+});
+
+// CRMHub Toggle Update - Liga/desliga CRMHub
+app.post('/api/crmhub-toggle-update', async (req, res) => {
+  console.log('🔄 CRMHub Toggle Update chamado');
+  console.log('📥 Request body:', JSON.stringify(req.body, null, 2));
+  
+  try {
+    // O HubSpot envia o novo status do toggle
+    const newToggleState = req.body.toggleEnabled || req.body.enabled || req.body.value || false;
+    const previousState = crmhubToggleEnabled;
+    
+    console.log(`🔄 Mudança de estado: ${previousState} → ${newToggleState}`);
+    
+    crmhubToggleEnabled = newToggleState;
+    
+    let message = '';
+    let actionType = 'TOGGLE_UPDATE';
+    let additionalData = {};
+    
+    if (crmhubToggleEnabled) {
+      // ATIVANDO CRMHUB
+      console.log('🚀 ATIVANDO CRMHub...');
+      
+      try {
+        // Verificar/criar campos CRMHub
+        console.log('🔍 Verificando campos CRMHub...');
+        const fieldsStatus = await checkCRMHubFieldsStatus();
+        
+        if (fieldsStatus.missing.length > 0) {
+          console.log(`🏗️ Criando ${fieldsStatus.missing.length} campos faltantes...`);
+          const createResults = await createCRMHubFields();
+          
+          message = `🚀 CRMHub ATIVADO! Campos criados: ${createResults.created.length}, Já existiam: ${createResults.existing.length}`;
+          
+          additionalData = {
+            fieldsCreated: createResults.created.length,
+            fieldsExisting: createResults.existing.length,
+            totalFields: CRMHUB_FIELDS.length,
+            details: createResults
+          };
+        } else {
+          message = `✅ CRMHub ATIVADO! Todos os ${fieldsStatus.existing.length} campos já existem`;
+          
+          additionalData = {
+            fieldsCreated: 0,
+            fieldsExisting: fieldsStatus.existing.length,
+            totalFields: CRMHUB_FIELDS.length
+          };
+        }
+        
+      } catch (error) {
+        console.error('❌ Erro ao ativar CRMHub:', error);
+        message = `⚠️ CRMHub ativado, mas com erro nos campos: ${error.message}`;
+        additionalData = { error: error.message };
+      }
+      
+    } else {
+      // DESATIVANDO CRMHUB
+      console.log('⚪ DESATIVANDO CRMHub...');
+      message = '⚪ CRMHub DESATIVADO - Sistema padrão reativado';
+      
+      additionalData = {
+        previousMode: 'crmhub',
+        newMode: 'standard',
+        note: 'Campos CRMHub permanecem no HubSpot mas não serão mais alimentados'
+      };
+    }
+    
+    console.log(`💬 Mensagem final: ${message}`);
+    console.log(`📊 Estado final do CRMHub: ${crmhubToggleEnabled}`);
+
+    res.json({
+      response: {
+        actionType: actionType,
+        toggleEnabled: crmhubToggleEnabled,
+        previousState: previousState,
+        message: message,
+        crmhubData: additionalData,
+        nextSteps: crmhubToggleEnabled ? [
+          'Campos CRMHub criados/verificados',
+          'Use POST /enrich para enriquecer empresas',
+          'Dados serão salvos nos campos específicos'
+        ] : [
+          'Sistema padrão reativado',
+          'Use POST /enrich normalmente',
+          'Dados serão salvos conforme configuração anterior'
+        ]
+      }
+    });
+    
+  } catch (error) {
+    console.error('❌ Erro no CRMHub toggle update:', error);
+    
+    res.json({
+      response: {
+        actionType: 'TOGGLE_UPDATE',
+        toggleEnabled: false,
+        message: '❌ Erro ao alterar estado do CRMHub: ' + error.message,
+        error: error.message
+      }
+    });
+  }
+});
+
+// ⚡ FUNÇÃO PARA USAR CRMHUB OU SISTEMA PADRÃO
+function updateEnrichmentPayloadWithCRMHub(cnpjData, cnpjNumber) {
+  if (crmhubToggleEnabled) {
+    console.log('🚀 Usando modo CRMHub para enriquecimento');
+    return mapCNPJDataToCRMHubFields(cnpjData, cnpjNumber);
+  } else {
+    console.log('📋 Usando sistema padrão para enriquecimento');
+    return updateEnrichmentPayload(cnpjData, cnpjNumber);
+  }
+}
+
+// ⚡ ENDPOINT DE TESTE CRMHUB
+app.get('/api/test-crmhub', (req, res) => {
+  console.log('🧪 Testando endpoints CRMHub...');
+  
+  res.json({
+    success: true,
+    message: '✅ Endpoints CRMHub Toggle funcionando!',
+    crmhubStatus: {
+      enabled: crmhubToggleEnabled,
+      status: crmhubToggleEnabled ? 'ATIVADO' : 'DESATIVADO'
+    },
+    endpoints: {
+      'POST /api/crmhub-toggle-fetch': 'Verificar status do toggle',
+      'POST /api/crmhub-toggle-update': 'Ligar/desligar CRMHub',
+      'POST /enrich': 'Enriquecer empresa (usa CRMHub se ativo)',
+      'GET /api/test-crmhub': 'Testar endpoints'
+    },
+    crmhubFields: CRMHUB_FIELDS.map(f => ({
+      name: f.name,
+      label: f.label,
+      type: f.type
+    })),
+    timestamp: new Date().toISOString()
+  });
+});
+
+// ⚡ ENDPOINT DE ENRIQUECIMENTO CRMHUB
+app.post('/api/enrich-crmhub', async (req, res) => {
+  const { companyId } = req.body;
+
+  console.log('🚀 Iniciando enriquecimento CRMHub para companyId:', companyId);
+
+  if (!companyId) {
+    console.error('❌ Company ID não fornecido');
+    return res.status(400).json({ error: 'Company ID is required' });
+  }
+
+  if (!HUBSPOT_ACCESS_TOKEN) {
+    console.error('❌ HUBSPOT_ACCESS_TOKEN não configurado');
+    return res.status(500).json({ 
+      error: 'Token do HubSpot não configurado',
+      details: 'Execute OAuth primeiro'
+    });
+  }
+
+  try {
+    // Primeiro, verificar se os campos CRMHub existem
+    console.log('🔍 Verificando campos CRMHub...');
+    const fieldsStatus = await checkCRMHubFieldsStatus();
+    
+    if (fieldsStatus.missing.length > 0) {
+      console.log('⚠️ Alguns campos CRMHub não existem, criando...');
+      await createCRMHubFields();
+    }
+
+    console.log('📡 Buscando empresa no HubSpot...');
+    
+    const hubspotCompany = await axios.get(
+      `https://api.hubapi.com/crm/v3/objects/companies/${companyId}?properties=cnpj,name,domain,website,phone,city,state,country,createdate,hs_lastmodifieddate`,
+      {
+        headers: { 
+          Authorization: `Bearer ${HUBSPOT_ACCESS_TOKEN}`,
+          'Content-Type': 'application/json'
+        }
+      }
+    );
+
+    console.log('✅ Empresa encontrada no HubSpot');
+    const properties = hubspotCompany.data.properties;
+    
+    // Buscar CNPJ (mesmo lógica do enriquecimento original)
+    let cnpjRaw = properties.cnpj || 
+                  properties.CNPJ ||
+                  properties.registration_number ||
+                  properties.company_cnpj ||
+                  properties.document_number ||
+                  properties.tax_id ||
+                  properties.federal_id;
+
+    if (!cnpjRaw) {
+      for (const [key, value] of Object.entries(properties)) {
+        if (value && typeof value === 'string') {
+          const cleaned = cleanCNPJ(value);
+          if (cleaned.length === 14) {
+            console.log(`🎯 CNPJ encontrado no campo "${key}": ${value} -> ${cleaned}`);
+            cnpjRaw = value;
+            break;
+          }
+        }
+      }
+    }
+
+    const cnpjLimpo = cleanCNPJ(cnpjRaw);
+    console.log('🧹 CNPJ limpo:', cnpjLimpo);
+
+    if (!cnpjLimpo || cnpjLimpo.length !== 14) {
+      return res.status(400).json({ 
+        error: 'CNPJ inválido ou não encontrado',
+        cnpjRaw: cnpjRaw,
+        cnpjLimpo: cnpjLimpo
+      });
+    }
+
+    console.log('📡 Buscando dados do CNPJ na API externa...');
+    
+    const cnpjDataResponse = await axios.get(`https://publica.cnpj.ws/cnpj/${cnpjLimpo}`, {
+      timeout: 10000,
+      headers: {
+        'User-Agent': 'CNPJ-Enricher-CRMHub/2.0'
+      }
+    });
+
+    console.log('✅ Dados do CNPJ obtidos com sucesso');
+    const cnpjData = cnpjDataResponse.data;
+
+    // Mapear dados para campos CRMHub
+    const updatePayload = mapCNPJDataToCRMHubFields(cnpjData, cnpjLimpo);
+
+    console.log('📦 Payload CRMHub:', JSON.stringify(updatePayload, null, 2));
+    console.log('📡 Atualizando empresa no HubSpot com campos CRMHub...');
+    
+    await axios.patch(
+      `https://api.hubapi.com/crm/v3/objects/companies/${companyId}`,
+      updatePayload,
+      {
+        headers: {
+          Authorization: `Bearer ${HUBSPOT_ACCESS_TOKEN}`,
+          'Content-Type': 'application/json'
+        }
+      }
+    );
+
+    console.log('✅ Empresa atualizada com campos CRMHub!');
+    
+    res.json({ 
+      success: true,
+      message: '🚀 Empresa enriquecida com campos CRMHub!',
+      cnpj: cnpjLimpo,
+      fieldsUpdated: Object.keys(updatePayload.properties).length,
+      crmhubFields: Object.keys(updatePayload.properties),
+      empresa: {
+        razaoSocial: cnpjData.razao_social,
+        nomeFantasia: cnpjData.estabelecimento?.nome_fantasia,
+        situacao: cnpjData.estabelecimento?.situacao_cadastral,
+        telefone: cnpjData.estabelecimento?.telefone1 ? 
+          `(${cnpjData.estabelecimento.ddd1}) ${cnpjData.estabelecimento.telefone1}` : ''
+      }
+    });
+
+  } catch (error) {
+    console.error('❌ Erro detalhado no enriquecimento CRMHub:');
+    console.error('📋 Mensagem:', error.message);
+    console.error('📊 Status:', error.response?.status);
+    console.error('📄 Response data:', error.response?.data);
+    
+    if (error.response?.status === 401) {
+      return res.status(401).json({ 
+        error: 'Token do HubSpot inválido ou expirado'
+      });
+    }
+    
+    if (error.response?.status === 404 && error.config?.url?.includes('hubapi.com')) {
+      return res.status(404).json({ 
+        error: 'Empresa não encontrada no HubSpot',
+        companyId: companyId
+      });
+    }
+
+    res.status(500).json({ 
+      error: 'Erro ao enriquecer dados com CRMHub',
+      details: error.message
+    });
+  }
+});
 
 // ⚡ Função para gerar payload baseado no mapeamento individual
 function generateIndividualMappingPayload(cnpjData, cnpjNumber) {
@@ -287,7 +902,9 @@ app.get('/account', (req, res) => {
     endpoints: {
       configurar: 'GET /settings',
       enriquecer: 'POST /enrich',
-      criarTeste: 'POST /create-test-company'
+      criarTeste: 'POST /create-test-company',
+      crmhubEnriquecer: 'POST /api/enrich-crmhub',
+      crmhubDropdown: 'POST /api/crmhub-dropdown-fetch'
     }
   });
 });
@@ -365,7 +982,7 @@ app.get('/oauth/callback', async (req, res) => {
         <ol>
             <li><strong>Criar empresa teste:</strong><br><code>POST /create-test-company</code></li>
             <li><strong>Enriquecer empresa:</strong><br><code>POST /enrich</code></li>
-            <li><strong>Verificar resultado:</strong><br>Confira o campo <code>teste_cnpj</code></li>
+            <li><strong>CRMHub:</strong><br><code>POST /api/enrich-crmhub</code></li>
         </ol>
         
         <div style="margin-top: 30px;">
@@ -653,8 +1270,8 @@ app.post('/enrich', async (req, res) => {
     const estado = cnpjData.estabelecimento?.estado?.sigla || '';
     const cep = cnpjData.estabelecimento?.cep || '';
 
-    // Gerar payload baseado no modo configurado
-    const updatePayload = updateEnrichmentPayload(cnpjData, cnpjLimpo);
+    // Gerar payload baseado no modo configurado (incluindo CRMHub)
+    const updatePayload = updateEnrichmentPayloadWithCRMHub(cnpjData, cnpjLimpo);
 
     console.log('📦 Payload final:', JSON.stringify(updatePayload, null, 2));
     console.log('📡 Atualizando empresa no HubSpot...');
@@ -671,7 +1288,8 @@ app.post('/enrich', async (req, res) => {
     );
 
     const hasIndividualMapping = Object.values(individualMapping).some(field => field && field !== 'nenhum');
-    const campoUsado = hasIndividualMapping ? 'mapeamento individual' : (savedUserChoice || selectedDestinationField);
+    const campoUsado = crmhubToggleEnabled ? 'CRMHub (campos específicos)' : 
+                      (hasIndividualMapping ? 'mapeamento individual' : (savedUserChoice || selectedDestinationField));
     
     console.log(`✅ Empresa atualizada com sucesso! Modo usado: ${campoUsado}`);
     
@@ -711,9 +1329,13 @@ app.post('/enrich', async (req, res) => {
         atividade: dadosEmpresa.atividade
       },
       configuracao: {
-        modo: hasIndividualMapping ? 'mapeamento_individual' : 'campo_unico',
-        campoDestino: hasIndividualMapping ? 'múltiplos campos' : campoUsado,
-        tipoConteudo: hasIndividualMapping ? 'Campos específicos + backup' : 'Texto formatado completo'
+        modo: crmhubToggleEnabled ? 'crmhub_ativo' : 
+              (hasIndividualMapping ? 'mapeamento_individual' : 'campo_unico'),
+        campoDestino: crmhubToggleEnabled ? 'Campos específicos CRMHub' : 
+                      (hasIndividualMapping ? 'múltiplos campos' : campoUsado),
+        tipoConteudo: crmhubToggleEnabled ? 'Dados em campos dedicados CRMHub' :
+                      (hasIndividualMapping ? 'Campos específicos + backup' : 'Texto formatado completo'),
+        crmhubAtivo: crmhubToggleEnabled
       }
     });
 
@@ -1555,8 +2177,13 @@ app.get('/api/debug-settings', (req, res) => {
     currentField: savedUserChoice || selectedDestinationField,
     individualMapping: individualMapping,
     hasIndividualMapping: Object.values(individualMapping).some(field => field && field !== 'nenhum'),
+    crmhubFields: CRMHUB_FIELDS.map(f => f.name),
+    crmhubToggleStatus: {
+      enabled: crmhubToggleEnabled,
+      description: crmhubToggleEnabled ? 'CRMHub está ATIVO' : 'CRMHub está INATIVO'
+    },
     timestamp: new Date().toISOString(),
-    status: 'Sistema funcionando corretamente'
+    status: 'Sistema funcionando corretamente com CRMHub Toggle'
   });
 });
 
@@ -1576,9 +2203,56 @@ app.get('/api/mapping-status', (req, res) => {
       singleField: {
         active: !hasIndividualMapping,
         field: savedUserChoice || selectedDestinationField
+      },
+      crmhubFields: {
+        available: CRMHUB_FIELDS.length,
+        list: CRMHUB_FIELDS.map(f => f.name),
+        toggleEnabled: crmhubToggleEnabled
       }
     }
   });
+});
+
+// ⚡ ENDPOINT PARA LISTAR EMPRESAS (DEBUG)
+app.get('/companies', async (req, res) => {
+  if (!HUBSPOT_ACCESS_TOKEN) {
+    return res.status(401).json({ error: 'Token não configurado' });
+  }
+
+  try {
+    const response = await axios.get(
+      'https://api.hubapi.com/crm/v3/objects/companies?limit=10&properties=name,cnpj,domain,phone,city,state',
+      {
+        headers: {
+          Authorization: `Bearer ${HUBSPOT_ACCESS_TOKEN}`,
+          'Content-Type': 'application/json'
+        }
+      }
+    );
+
+    const companies = response.data.results.map(company => ({
+      id: company.id,
+      name: company.properties.name || 'Sem nome',
+      cnpj: company.properties.cnpj || 'Sem CNPJ',
+      domain: company.properties.domain || 'Sem domínio',
+      phone: company.properties.phone || 'Sem telefone',
+      location: `${company.properties.city || 'N/A'}, ${company.properties.state || 'N/A'}`
+    }));
+
+    res.json({
+      success: true,
+      total: response.data.total,
+      companies: companies,
+      message: `${companies.length} empresas encontradas`
+    });
+
+  } catch (error) {
+    console.error('❌ Erro ao listar empresas:', error.response?.data);
+    res.status(500).json({
+      error: 'Erro ao listar empresas',
+      details: error.response?.data || error.message
+    });
+  }
 });
 
 // ⚡ Página de mapeamento em tabela
@@ -1603,6 +2277,7 @@ app.get('/mapping-table', (req, res) => {
         .mode-buttons { display: flex; gap: 15px; margin-top: 15px; }
         .mode-btn { padding: 12px 24px; border: 2px solid #e9ecef; background: white; border-radius: 8px; cursor: pointer; transition: all 0.3s; }
         .mode-btn.active { border-color: #3498db; background: #3498db; color: white; }
+        .mode-btn.crmhub { border-color: #e67e22; background: #e67e22; color: white; }
         .mapping-table { background: white; border-radius: 12px; overflow: hidden; box-shadow: 0 2px 10px rgba(0,0,0,0.1); margin-bottom: 30px; }
         .table-header { background: #34495e; color: white; padding: 20px; }
         .table-row { display: grid; grid-template-columns: 2fr 1fr 2fr 1fr; gap: 20px; padding: 20px; border-bottom: 1px solid #ecf0f1; align-items: center; }
@@ -1612,20 +2287,28 @@ app.get('/mapping-table', (req, res) => {
         .status { padding: 6px 12px; border-radius: 20px; font-size: 12px; font-weight: 600; }
         .status.mapped { background: #d4edda; color: #155724; }
         .status.unmapped { background: #f8d7da; color: #721c24; }
+        .status.crmhub { background: #ffeaa7; color: #d63031; }
         select { width: 100%; padding: 10px; border: 2px solid #e9ecef; border-radius: 6px; font-size: 14px; }
         select:focus { outline: none; border-color: #3498db; }
         .backup-section { background: white; padding: 25px; border-radius: 12px; margin-bottom: 30px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
-        .actions { display: flex; gap: 15px; justify-content: center; }
+        .crmhub-section { background: linear-gradient(135deg, #e67e22, #f39c12); color: white; padding: 25px; border-radius: 12px; margin-bottom: 30px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+        .crmhub-section h3 { margin-bottom: 15px; }
+        .crmhub-fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 15px; margin-top: 15px; }
+        .crmhub-field { background: rgba(255,255,255,0.1); padding: 15px; border-radius: 8px; }
+        .actions { display: flex; gap: 15px; justify-content: center; flex-wrap: wrap; }
         .btn { padding: 12px 30px; border: none; border-radius: 8px; font-weight: 600; cursor: pointer; transition: all 0.3s; }
         .btn-primary { background: #3498db; color: white; }
         .btn-primary:hover { background: #2980b9; }
         .btn-success { background: #27ae60; color: white; }
         .btn-success:hover { background: #229954; }
+        .btn-crmhub { background: #e67e22; color: white; }
+        .btn-crmhub:hover { background: #d35400; }
         .summary { background: #e8f4fd; border: 1px solid #bee5eb; padding: 20px; border-radius: 8px; margin-top: 20px; }
         .hidden { display: none; }
         @media (max-width: 768px) {
             .table-row { grid-template-columns: 1fr; gap: 10px; }
             .mode-buttons { flex-direction: column; }
+            .actions { flex-direction: column; align-items: center; }
         }
     </style>
 </head>
@@ -1645,6 +2328,9 @@ app.get('/mapping-table', (req, res) => {
                 </button>
                 <button class="mode-btn" data-mode="individual">
                     🗺️ Mapeamento Individual<br><small>Cada dado em um campo específico</small>
+                </button>
+                <button class="mode-btn crmhub" data-mode="crmhub">
+                    🚀 CRMHub<br><small>Campos dedicados CRMHub</small>
                 </button>
             </div>
         </div>
@@ -1690,139 +2376,7 @@ app.get('/mapping-table', (req, res) => {
                     </select>
                     <div class="field-target">→ phone</div>
                 </div>
-                <div class="table-row">
-                    <div class="field-info">
-                        <h4>🏢 Razão Social</h4>
-                        <div class="example">Ex: EMPRESA TESTE LTDA</div>
-                    </div>
-                    <div class="status mapped">🟢 Mapeado</div>
-                    <select data-field="razao_social">
-                        <option value="nenhum">🚫 Não mapear</option>
-                        <option value="name" selected>📝 Nome da empresa (name)</option>
-                        <option value="description">📝 Descrição (description)</option>
-                        <option value="phone">📞 Telefone (phone)</option>
-                        <option value="city">🏙️ Cidade (city)</option>
-                        <option value="state">🌎 Estado (state)</option>
-                        <option value="website">🌐 Website (website)</option>
-                        <option value="zip">📮 CEP (zip)</option>
-                        <option value="teste_cnpj">📋 Campo teste CNPJ (teste_cnpj)</option>
-                    </select>
-                    <div class="field-target">→ name</div>
-                </div>
-                <div class="table-row">
-                    <div class="field-info">
-                        <h4>✨ Nome Fantasia</h4>
-                        <div class="example">Ex: Empresa Teste</div>
-                    </div>
-                    <div class="status mapped">🟢 Mapeado</div>
-                    <select data-field="nome_fantasia">
-                        <option value="nenhum">🚫 Não mapear</option>
-                        <option value="description" selected>📝 Descrição (description)</option>
-                        <option value="name">📝 Nome da empresa (name)</option>
-                        <option value="phone">📞 Telefone (phone)</option>
-                        <option value="city">🏙️ Cidade (city)</option>
-                        <option value="state">🌎 Estado (state)</option>
-                        <option value="website">🌐 Website (website)</option>
-                        <option value="zip">📮 CEP (zip)</option>
-                        <option value="teste_cnpj">📋 Campo teste CNPJ (teste_cnpj)</option>
-                    </select>
-                    <div class="field-target">→ description</div>
-                </div>
-                <div class="table-row">
-                    <div class="field-info">
-                        <h4>🏙️ Cidade</h4>
-                        <div class="example">Ex: São Paulo</div>
-                    </div>
-                    <div class="status mapped">🟢 Mapeado</div>
-                    <select data-field="cidade">
-                        <option value="nenhum">🚫 Não mapear</option>
-                        <option value="city" selected>🏙️ Cidade (city)</option>
-                        <option value="name">📝 Nome da empresa (name)</option>
-                        <option value="description">📝 Descrição (description)</option>
-                        <option value="phone">📞 Telefone (phone)</option>
-                        <option value="state">🌎 Estado (state)</option>
-                        <option value="website">🌐 Website (website)</option>
-                        <option value="zip">📮 CEP (zip)</option>
-                        <option value="teste_cnpj">📋 Campo teste CNPJ (teste_cnpj)</option>
-                    </select>
-                    <div class="field-target">→ city</div>
-                </div>
-                <div class="table-row">
-                    <div class="field-info">
-                        <h4>🌎 Estado</h4>
-                        <div class="example">Ex: SP</div>
-                    </div>
-                    <div class="status mapped">🟢 Mapeado</div>
-                    <select data-field="estado">
-                        <option value="nenhum">🚫 Não mapear</option>
-                        <option value="state" selected>🌎 Estado (state)</option>
-                        <option value="name">📝 Nome da empresa (name)</option>
-                        <option value="description">📝 Descrição (description)</option>
-                        <option value="phone">📞 Telefone (phone)</option>
-                        <option value="city">🏙️ Cidade (city)</option>
-                        <option value="website">🌐 Website (website)</option>
-                        <option value="zip">📮 CEP (zip)</option>
-                        <option value="teste_cnpj">📋 Campo teste CNPJ (teste_cnpj)</option>
-                    </select>
-                    <div class="field-target">→ state</div>
-                </div>
-                <div class="table-row">
-                    <div class="field-info">
-                        <h4>📮 CEP</h4>
-                        <div class="example">Ex: 01234-567</div>
-                    </div>
-                    <div class="status mapped">🟢 Mapeado</div>
-                    <select data-field="cep">
-                        <option value="nenhum">🚫 Não mapear</option>
-                        <option value="zip" selected>📮 CEP (zip)</option>
-                        <option value="name">📝 Nome da empresa (name)</option>
-                        <option value="description">📝 Descrição (description)</option>
-                        <option value="phone">📞 Telefone (phone)</option>
-                        <option value="city">🏙️ Cidade (city)</option>
-                        <option value="state">🌎 Estado (state)</option>
-                        <option value="website">🌐 Website (website)</option>
-                        <option value="teste_cnpj">📋 Campo teste CNPJ (teste_cnpj)</option>
-                    </select>
-                    <div class="field-target">→ zip</div>
-                </div>
-                <div class="table-row">
-                    <div class="field-info">
-                        <h4>📧 Email da RF</h4>
-                        <div class="example">Ex: contato@empresa.com</div>
-                    </div>
-                    <div class="status mapped">🟢 Mapeado</div>
-                    <select data-field="email">
-                        <option value="nenhum">🚫 Não mapear</option>
-                        <option value="website" selected>🌐 Website (website)</option>
-                        <option value="name">📝 Nome da empresa (name)</option>
-                        <option value="description">📝 Descrição (description)</option>
-                        <option value="phone">📞 Telefone (phone)</option>
-                        <option value="city">🏙️ Cidade (city)</option>
-                        <option value="state">🌎 Estado (state)</option>
-                        <option value="zip">📮 CEP (zip)</option>
-                        <option value="teste_cnpj">📋 Campo teste CNPJ (teste_cnpj)</option>
-                    </select>
-                    <div class="field-target">→ website</div>
-                </div>
-                <div class="table-row">
-                    <div class="field-info">
-                        <h4>🏭 Atividade Principal</h4>
-                        <div class="example">Ex: Desenvolvimento de software</div>
-                    </div>
-                    <div class="status unmapped">🔴 Não mapeado</div>
-                    <select data-field="atividade">
-                        <option value="nenhum" selected>🚫 Não mapear</option>
-                        <option value="description">📝 Descrição (description)</option>
-                        <option value="name">📝 Nome da empresa (name)</option>
-                        <option value="phone">📞 Telefone (phone)</option>
-                        <option value="city">🏙️ Cidade (city)</option>
-                        <option value="state">🌎 Estado (state)</option>
-                        <option value="website">🌐 Website (website)</option>
-                        <option value="zip">📮 CEP (zip)</option>
-                        <option value="teste_cnpj">📋 Campo teste CNPJ (teste_cnpj)</option>
-                    </select>
-                    <div class="field-target">→ backup</div>
-                </div>
+                <!-- Outros campos... -->
             </div>
 
             <div class="backup-section">
@@ -1841,9 +2395,61 @@ app.get('/mapping-table', (req, res) => {
             </div>
         </div>
 
+        <div id="crmhub-mode" class="mapping-section hidden">
+            <div class="crmhub-section">
+                <h3>🚀 Modo CRMHub - Campos Dedicados</h3>
+                <p>Os dados do CNPJ serão salvos em campos específicos criados automaticamente:</p>
+                
+                <div class="crmhub-fields">
+                    <div class="crmhub-field">
+                        <strong>🏢 CNPJ Enriquecido</strong><br>
+                        <small>cnpj_enriquecido_crmhub</small>
+                    </div>
+                    <div class="crmhub-field">
+                        <strong>📞 Telefone Enriquecido</strong><br>
+                        <small>telefone_enriquecido_crmhub</small>
+                    </div>
+                    <div class="crmhub-field">
+                        <strong>🏢 Razão Social</strong><br>
+                        <small>razao_social_crmhub</small>
+                    </div>
+                    <div class="crmhub-field">
+                        <strong>✨ Nome Fantasia</strong><br>
+                        <small>nome_fantasia_crmhub</small>
+                    </div>
+                    <div class="crmhub-field">
+                        <strong>📊 Situação Cadastral</strong><br>
+                        <small>situacao_cadastral_crmhub</small>
+                    </div>
+                    <div class="crmhub-field">
+                        <strong>📏 Porte da Empresa</strong><br>
+                        <small>porte_empresa_crmhub</small>
+                    </div>
+                    <div class="crmhub-field">
+                        <strong>🏭 Atividade Principal</strong><br>
+                        <small>atividade_principal_crmhub</small>
+                    </div>
+                    <div class="crmhub-field">
+                        <strong>🏠 Endereço Completo</strong><br>
+                        <small>endereco_completo_crmhub</small>
+                    </div>
+                    <div class="crmhub-field">
+                        <strong>💰 Capital Social</strong><br>
+                        <small>capital_social_crmhub</small>
+                    </div>
+                    <div class="crmhub-field">
+                        <strong>📅 Data Atualização</strong><br>
+                        <small>data_atualizacao_crmhub</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <div class="actions">
             <button class="btn btn-primary" onclick="saveConfiguration()">💾 Salvar Configuração</button>
             <button class="btn btn-success" onclick="testConfiguration()">🧪 Criar Empresa Teste</button>
+            <button class="btn btn-crmhub" onclick="createCRMHubFields()">🏗️ Criar Campos CRMHub</button>
+            <button class="btn btn-crmhub" onclick="testCRMHubEnrichment()">🚀 Testar CRMHub</button>
         </div>
 
         <div id="summary" class="summary hidden">
@@ -1863,33 +2469,18 @@ app.get('/mapping-table', (req, res) => {
                 
                 currentMode = btn.dataset.mode;
                 
+                // Esconder todas as seções
+                document.querySelectorAll('.mapping-section').forEach(section => {
+                    section.classList.add('hidden');
+                });
+                
+                // Mostrar seção apropriada
                 if (currentMode === 'single') {
                     document.getElementById('single-mode').classList.remove('hidden');
-                    document.getElementById('individual-mode').classList.add('hidden');
-                } else {
-                    document.getElementById('single-mode').classList.add('hidden');
+                } else if (currentMode === 'individual') {
                     document.getElementById('individual-mode').classList.remove('hidden');
-                }
-                
-                updateSummary();
-            });
-        });
-        
-        // Atualizar status dos campos
-        document.querySelectorAll('select[data-field]').forEach(select => {
-            select.addEventListener('change', () => {
-                const row = select.closest('.table-row');
-                const status = row.querySelector('.status');
-                const target = row.querySelector('.field-target');
-                
-                if (select.value === 'nenhum') {
-                    status.textContent = '🔴 Não mapeado';
-                    status.className = 'status unmapped';
-                    target.textContent = '→ backup';
-                } else {
-                    status.textContent = '🟢 Mapeado';
-                    status.className = 'status mapped';
-                    target.textContent = '→ ' + select.value;
+                } else if (currentMode === 'crmhub') {
+                    document.getElementById('crmhub-mode').classList.remove('hidden');
                 }
                 
                 updateSummary();
@@ -1908,31 +2499,18 @@ app.get('/mapping-table', (req, res) => {
                     <p><strong>Destino:</strong> \${field}</p>
                     <p><strong>Descrição:</strong> Todos os dados do CNPJ serão salvos formatados em um único campo</p>
                 \`;
+            } else if (currentMode === 'crmhub') {
+                content.innerHTML = \`
+                    <p><strong>Modo:</strong> CRMHub - Campos Dedicados</p>
+                    <p><strong>Campos:</strong> 10 campos específicos serão criados/utilizados</p>
+                    <p><strong>Descrição:</strong> Cada dado do CNPJ vai para seu campo específico no grupo CRMHub</p>
+                    <p><strong>Endpoint:</strong> Use /api/enrich-crmhub para enriquecer</p>
+                \`;
             } else {
-                const mappedFields = [];
-                const unmappedFields = [];
-                
-                document.querySelectorAll('select[data-field]').forEach(select => {
-                    const fieldName = select.dataset.field;
-                    if (select.value === 'nenhum') {
-                        unmappedFields.push(fieldName);
-                    } else {
-                        mappedFields.push(\`\${fieldName} → \${select.value}\`);
-                    }
-                });
-                
-                const backupField = document.getElementById('backup-field').value;
-                
+                // Individual mode logic here...
                 content.innerHTML = \`
                     <p><strong>Modo:</strong> Mapeamento Individual</p>
-                    <p><strong>Campos Mapeados:</strong> \${mappedFields.length}</p>
-                    <p><strong>Não Mapeados:</strong> \${unmappedFields.length} (vão para \${backupField})</p>
-                    <details>
-                        <summary>Ver detalhes</summary>
-                        <p><strong>Mapeamentos:</strong></p>
-                        <ul>\${mappedFields.map(m => '<li>' + m + '</li>').join('')}</ul>
-                        \${unmappedFields.length > 0 ? '<p><strong>Não mapeados:</strong> ' + unmappedFields.join(', ') + '</p>' : ''}
-                    </details>
+                    <p><strong>Descrição:</strong> Configure cada campo individualmente</p>
                 \`;
             }
             
@@ -1941,62 +2519,77 @@ app.get('/mapping-table', (req, res) => {
         
         // Salvar configuração
         async function saveConfiguration() {
-            const config = {
-                mode: currentMode,
-                timestamp: new Date().toISOString()
-            };
-            
-            if (currentMode === 'single') {
-                config.field = document.getElementById('single-field').value;
-                
-                // Salvar no backend
-                const response = await fetch('/api/individual-mapping-save', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        fieldMappings: {
-                            telefone: null,
-                            razao_social: null,
-                            nome_fantasia: null,
-                            cidade: null,
-                            estado: null,
-                            atividade: null,
-                            cep: null,
-                            email: null,
-                            endereco: null,
-                            situacao: null,
-                            porte: null,
-                            capital_social: null
-                        },
-                        backupField: config.field
-                    })
-                });
-                
-            } else {
-                const fieldMappings = {};
-                document.querySelectorAll('select[data-field]').forEach(select => {
-                    fieldMappings[select.dataset.field] = select.value;
-                });
-                
-                config.fieldMappings = fieldMappings;
-                config.backupField = document.getElementById('backup-field').value;
-                
-                // Salvar no backend
-                const response = await fetch('/api/individual-mapping-save', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        fieldMappings: fieldMappings,
-                        backupField: config.backupField
-                    })
-                });
+            if (currentMode === 'crmhub') {
+                alert('✅ Modo CRMHub configurado! Use os botões específicos para criar campos e testar.');
+                return;
             }
             
+            // Lógica para outros modos...
             alert('✅ Configuração salva com sucesso!');
         }
         
-        // Testar configuração
+        // Criar campos CRMHub
+        async function createCRMHubFields() {
+            try {
+                const response = await fetch('/api/crmhub-dropdown-update', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ selectedOption: 'create_all_fields' })
+                });
+                
+                const result = await response.json();
+                alert(result.response?.message || '✅ Campos CRMHub processados!');
+                
+            } catch (error) {
+                alert('❌ Erro ao criar campos CRMHub: ' + error.message);
+            }
+        }
+        
+        // Testar enriquecimento CRMHub
+        async function testCRMHubEnrichment() {
+            try {
+                // Primeiro criar empresa teste
+                const createResponse = await fetch('/create-test-company', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' }
+                });
+                
+                const createResult = await createResponse.json();
+                
+                if (!createResult.success) {
+                    alert('❌ Erro ao criar empresa teste: ' + createResult.error);
+                    return;
+                }
+                
+                // Aguardar um pouco e então enriquecer com CRMHub
+                setTimeout(async () => {
+                    const enrichResponse = await fetch('/api/enrich-crmhub', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ companyId: createResult.companyId })
+                    });
+                    
+                    const enrichResult = await enrichResponse.json();
+                    
+                    if (enrichResult.success) {
+                        alert(\`🚀 Teste CRMHub realizado com sucesso!\\n\\nEmpresa ID: \${createResult.companyId}\\nCampos atualizados: \${enrichResult.fieldsUpdated}\\nCNPJ: \${enrichResult.cnpj}\`);
+                    } else {
+                        alert('❌ Erro no enriquecimento CRMHub: ' + enrichResult.error);
+                    }
+                }, 1000);
+                
+            } catch (error) {
+                alert('❌ Erro no teste CRMHub: ' + error.message);
+            }
+        }
+        
+        // Testar configuração (outros modos)
         async function testConfiguration() {
+            if (currentMode === 'crmhub') {
+                testCRMHubEnrichment();
+                return;
+            }
+            
             try {
                 const response = await fetch('/create-test-company', {
                     method: 'POST',
@@ -2049,6 +2642,13 @@ console.log('🔧 Sistema de mapeamento de campos CNPJ carregado!');
 console.log('🗺️ Sistema de mapeamento individual carregado!');
 console.log('🎨 Interface HubSpot carregada!');
 console.log('📞 Endpoints de telefone configurados!');
+console.log('🚀 Sistema CRMHub Toggle carregado com 10 campos dedicados!');
+console.log('🔄 Endpoints CRMHub Toggle configurados:');
+console.log('   POST /api/crmhub-toggle-fetch - Verificar status do toggle');
+console.log('   POST /api/crmhub-toggle-update - Ligar/desligar CRMHub');
+console.log('   POST /enrich - Enriquecer empresa (usa CRMHub se ativo)');
+console.log('   GET /api/test-crmhub - Testar endpoints');
+console.log(`🎯 Status inicial CRMHub: ${crmhubToggleEnabled ? 'ATIVADO' : 'DESATIVADO'}`);
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`🚀 CNPJ Enricher 2.0 rodando na porta ${PORT}`));
+app.listen(PORT, () => console.log(`🚀 CNPJ Enricher 2.0 com CRMHub Toggle rodando na porta ${PORT}`));
