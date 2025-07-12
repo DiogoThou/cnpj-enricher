@@ -412,12 +412,48 @@ function mapCNPJDataToCRMHubFields(cnpjData, cnpjNumber) {
   return payload;
 }
 
+// ⚡ ENDPOINT DE DEBUG PARA HUBSPOT
+app.all('/api/debug-toggle', (req, res) => {
+  console.log('🐛 DEBUG Toggle chamado');
+  console.log('📥 Method:', req.method);
+  console.log('📥 Headers:', JSON.stringify(req.headers, null, 2));
+  console.log('📥 Body:', JSON.stringify(req.body, null, 2));
+  console.log('📥 Query:', JSON.stringify(req.query, null, 2));
+  
+  // Configurar CORS explicitamente
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  
+  if (req.method === 'OPTIONS') {
+    return res.status(200).end();
+  }
+  
+  res.json({
+    success: true,
+    message: '🐛 Debug Toggle funcionando!',
+    method: req.method,
+    timestamp: new Date().toISOString(),
+    receivedData: {
+      headers: req.headers,
+      body: req.body,
+      query: req.query
+    }
+  });
+});
+
 // ⚡ ENDPOINTS CRMHUB - VERSÃO TOGGLE SIMPLES
 
 // CRMHub Toggle Fetch - Retorna status atual
 app.post('/api/crmhub-toggle-fetch', (req, res) => {
   console.log('🔄 CRMHub Toggle Fetch chamado');
   console.log('📥 Request body:', JSON.stringify(req.body, null, 2));
+  console.log('📥 Headers:', JSON.stringify(req.headers, null, 2));
+  
+  // Configurar CORS
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
   
   try {
     console.log(`📊 Status atual do CRMHub: ${crmhubToggleEnabled ? 'ATIVADO' : 'DESATIVADO'}`);
@@ -449,6 +485,12 @@ app.post('/api/crmhub-toggle-fetch', (req, res) => {
 app.post('/api/crmhub-toggle-update', async (req, res) => {
   console.log('🔄 CRMHub Toggle Update chamado');
   console.log('📥 Request body:', JSON.stringify(req.body, null, 2));
+  console.log('📥 Headers:', JSON.stringify(req.headers, null, 2));
+  
+  // Configurar CORS
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
   
   try {
     // O HubSpot envia o novo status do toggle
