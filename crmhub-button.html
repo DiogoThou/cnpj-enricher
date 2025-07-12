@@ -468,6 +468,134 @@ app.post('/crmhub-dropdown-update', async (req, res) => {
   }
 });
 
+// ⚡ ROTAS ALTERNATIVAS PARA VERCEL (caso as principais não funcionem)
+app.post('/api/crmhub-dropdown-fetch', (req, res) => {
+  console.log('🔽 CRMHub Dropdown Fetch (rota alternativa) chamado');
+  
+  try {
+    const options = [
+      {
+        text: '✅ Sim - Criar campos CRMHub',
+        value: 'sim',
+        description: 'Criar 10 campos personalizados para dados do CNPJ'
+      },
+      {
+        text: '❌ Não - Usar campo description',
+        value: 'nao',
+        description: 'Salvar todos os dados no campo description padrão'
+      }
+    ];
+
+    console.log('📋 Retornando opções: Sim/Não (rota alternativa)');
+
+    return res.json({
+      response: {
+        options: options,
+        selectedOption: 'sim',
+        placeholder: 'Criar campos CRMHub?'
+      }
+    });
+    
+  } catch (error) {
+    console.error('❌ Erro no dropdown (rota alternativa):', error);
+    
+    return res.json({
+      response: {
+        options: [
+          { 
+            text: '✅ Sim - Criar campos', 
+            value: 'sim',
+            description: 'Criar campos CRMHub'
+          }
+        ],
+        selectedOption: 'sim',
+        placeholder: 'Criar campos CRMHub?'
+      }
+    });
+  }
+});
+
+app.post('/api/crmhub-dropdown-update', async (req, res) => {
+  console.log('🔽 CRMHub Dropdown Update (rota alternativa) chamado');
+  console.log('📥 Request body:', JSON.stringify(req.body, null, 2));
+  
+  try {
+    const selectedOption = req.body.selectedOption || 'sim';
+    
+    console.log(`🎯 Opção selecionada: ${selectedOption} (rota alternativa)`);
+    
+    if (selectedOption === 'sim') {
+      // Criar campos CRMHub
+      try {
+        const result = await createAllCRMHubFields();
+        
+        const message = `✅ Campos CRMHub configurados! ${result.created} criados, ${result.existing} já existiam. Total: ${result.total} campos.`;
+        
+        console.log('🎉 Campos CRMHub criados com sucesso (rota alternativa)');
+        
+        return res.json({
+          response: {
+            actionType: 'DROPDOWN_UPDATE',
+            selectedOption: selectedOption,
+            message: message,
+            details: {
+              created: result.created,
+              existing: result.existing,
+              total: result.total,
+              results: result.results
+            }
+          }
+        });
+        
+      } catch (error) {
+        console.error('❌ Erro ao criar campos (rota alternativa):', error);
+        
+        return res.json({
+          response: {
+            actionType: 'DROPDOWN_UPDATE',
+            selectedOption: selectedOption,
+            message: `❌ Erro ao criar campos: ${error.message}`,
+            error: error.message
+          }
+        });
+      }
+      
+    } else {
+      // Configurar para usar campo description
+      savedUserChoice = 'description';
+      selectedDestinationField = 'description';
+      
+      const message = '✅ Configurado para usar campo "description" padrão do HubSpot para salvar dados do CNPJ.';
+      
+      console.log('📝 Configurado para usar campo description (rota alternativa)');
+      
+      return res.json({
+        response: {
+          actionType: 'DROPDOWN_UPDATE',
+          selectedOption: selectedOption,
+          message: message,
+          configuration: {
+            mode: 'description_field',
+            field: 'description'
+          }
+        }
+      });
+    }
+    
+  } catch (error) {
+    console.error('❌ Erro no dropdown update (rota alternativa):', error);
+    
+    return res.json({
+      response: {
+        actionType: 'DROPDOWN_UPDATE',
+        selectedOption: 'sim',
+        message: '❌ Erro interno. Tente novamente.',
+        error: error.message
+      }
+    });
+  }
+});
+
 app.post('/accounts-fetch', (req, res) => {
   console.log('🔁 Recebido chamada de /accounts-fetch do HubSpot');
 
