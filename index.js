@@ -627,6 +627,80 @@ app.get('/api/test-crmhub', (req, res) => {
   });
 });
 
+
+
+// ⚡ ENDPOINT PARA BOTÃO CRMHUB (ALTERNATIVA AO TOGGLE)
+app.post('/api/crmhub-button-action', async (req, res) => {
+  console.log('🔘 CRMHub Button Action chamado');
+  console.log('📥 Request body:', JSON.stringify(req.body, null, 2));
+  
+  // Configurar CORS
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  
+  try {
+    // Inverter o estado atual
+    const previousState = crmhubToggleEnabled;
+    crmhubToggleEnabled = !crmhubToggleEnabled;
+    
+    console.log(`🔄 Botão pressionado: ${previousState} → ${crmhubToggleEnabled}`);
+    
+    let message = '';
+    let additionalData = {};
+    
+    if (crmhubToggleEnabled) {
+      // ATIVANDO CRMHUB
+      console.log('🚀 ATIVANDO CRMHub via botão...');
+      
+      try {
+        const fieldsStatus = await checkCRMHubFieldsStatus();
+        
+        if (fieldsStatus.missing.length > 0) {
+          const createResults = await createCRMHubFields();
+          message = `🚀 CRMHub ATIVADO! Campos criados: ${createResults.created.length}`;
+          additionalData = { fieldsCreated: createResults.created.length };
+        } else {
+          message = `✅ CRMHub ATIVADO! Campos já existem: ${fieldsStatus.existing.length}`;
+          additionalData = { fieldsExisting: fieldsStatus.existing.length };
+        }
+        
+      } catch (error) {
+        message = `⚠️ CRMHub ativado com erro: ${error.message}`;
+        additionalData = { error: error.message };
+      }
+      
+    } else {
+      // DESATIVANDO CRMHUB
+      console.log('⚪ DESATIVANDO CRMHub via botão...');
+      message = '⚪ CRMHub DESATIVADO - Sistema padrão ativo';
+      additionalData = { mode: 'standard' };
+    }
+    
+    console.log(`💬 Resultado: ${message}`);
+
+    res.json({
+      success: true,
+      actionType: 'BUTTON_CLICKED',
+      crmhubEnabled: crmhubToggleEnabled,
+      previousState: previousState,
+      message: message,
+      data: additionalData,
+      buttonText: crmhubToggleEnabled ? '⚪ Desativar CRMHub' : '🚀 Ativar CRMHub'
+    });
+    
+  } catch (error) {
+    console.error('❌ Erro no botão CRMHub:', error);
+    
+    res.json({
+      success: false,
+      message: '❌ Erro ao executar ação: ' + error.message,
+      error: error.message
+    });
+  }
+});
+
+
 // ⚡ ENDPOINT DE ENRIQUECIMENTO CRMHUB
 app.post('/api/enrich-crmhub', async (req, res) => {
   const { companyId } = req.body;
