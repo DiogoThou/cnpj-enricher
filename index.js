@@ -3,8 +3,7 @@ console.error('❌ Erro ao buscar mapeamento individual:', error);
       error: 'Erro ao carregar mapeamento individual',
       details: error.message
     });
-  }
-});
+
 
 // ⚡ Individual mapping save
 app.post('/api/individual-mapping-save', (req, res) => {
