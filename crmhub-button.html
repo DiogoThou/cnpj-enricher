@@ -15,6 +15,9 @@ const REDIRECT_URI = process.env.REDIRECT_URI;
 let selectedDestinationField = 'teste_cnpj';
 let savedUserChoice = null;
 
+// ⚡ VARIÁVEL PARA CONTROLE DO TOGGLE CRMHUB
+let crmhubToggleEnabled = false;
+
 // ⚡ SISTEMA DE MAPEAMENTO INDIVIDUAL
 let individualMapping = {
   telefone: null,
@@ -409,299 +412,152 @@ function mapCNPJDataToCRMHubFields(cnpjData, cnpjNumber) {
   return payload;
 }
 
-// ⚡ ENDPOINTS CRMHUB - CORRIGIDOS PARA FUNCIONAR NO HUBSPOT
+// ⚡ ENDPOINTS CRMHUB - VERSÃO TOGGLE SIMPLES
 
-// CRMHub Dropdown Fetch
-app.post('/api/crmhub-dropdown-fetch', (req, res) => {
-  console.log('🔽 CRMHub Dropdown Fetch chamado');
+// CRMHub Toggle Fetch - Retorna status atual
+app.post('/api/crmhub-toggle-fetch', (req, res) => {
+  console.log('🔄 CRMHub Toggle Fetch chamado');
   console.log('📥 Request body:', JSON.stringify(req.body, null, 2));
   
   try {
-    const options = [
-      {
-        text: '🏗️ Criar todos os campos CRMHub',
-        value: 'create_all_fields',
-        description: 'Criar os 10 campos personalizados para dados do CNPJ'
-      },
-      {
-        text: '🔍 Verificar status dos campos',
-        value: 'check_status',
-        description: 'Verificar quais campos CRMHub já existem'
-      },
-      {
-        text: '🧪 Testar enriquecimento CRMHub',
-        value: 'test_enrichment',
-        description: 'Instruções para testar o enriquecimento'
-      }
-    ];
-
-    console.log('📋 Retornando opções CRMHub');
+    console.log(`📊 Status atual do CRMHub: ${crmhubToggleEnabled ? 'ATIVADO' : 'DESATIVADO'}`);
 
     return res.json({
       response: {
-        options: options,
-        selectedOption: 'create_all_fields',
-        placeholder: 'Escolha uma ação CRMHub'
+        toggleEnabled: crmhubToggleEnabled,
+        status: crmhubToggleEnabled ? 'ativado' : 'desativado',
+        message: crmhubToggleEnabled ? 
+          '✅ CRMHub ATIVO - Dados serão salvos em campos específicos' : 
+          '⚪ CRMHub INATIVO - Sistema padrão ativo'
       }
     });
     
   } catch (error) {
-    console.error('❌ Erro no dropdown CRMHub:', error);
+    console.error('❌ Erro no toggle fetch:', error);
     
     return res.json({
       response: {
-        options: [
-          { 
-            text: '🏗️ Criar campos CRMHub', 
-            value: 'create_all_fields',
-            description: 'Criar campos personalizados'
-          }
-        ],
-        selectedOption: 'create_all_fields',
-        placeholder: 'Ações CRMHub'
+        toggleEnabled: false,
+        status: 'erro',
+        message: '❌ Erro ao verificar status do CRMHub'
       }
     });
   }
 });
 
-// CRMHub Dropdown Fetch - GET version para compatibilidade
-app.get('/api/crmhub-dropdown-fetch', (req, res) => {
-  console.log('🔽 CRMHub Dropdown Fetch chamado via GET');
-  
-  try {
-    const options = [
-      {
-        text: '🏗️ Criar todos os campos CRMHub',
-        value: 'create_all_fields',
-        description: 'Criar os 10 campos personalizados para dados do CNPJ'
-      },
-      {
-        text: '🔍 Verificar status dos campos',
-        value: 'check_status',
-        description: 'Verificar quais campos CRMHub já existem'
-      },
-      {
-        text: '🧪 Testar enriquecimento CRMHub',
-        value: 'test_enrichment',
-        description: 'Instruções para testar o enriquecimento'
-      }
-    ];
-
-    console.log('📋 Retornando opções CRMHub via GET');
-
-    return res.json({
-      response: {
-        options: options,
-        selectedOption: 'create_all_fields',
-        placeholder: 'Escolha uma ação CRMHub'
-      }
-    });
-    
-  } catch (error) {
-    console.error('❌ Erro no dropdown CRMHub GET:', error);
-    
-    return res.json({
-      response: {
-        options: [
-          { 
-            text: '🏗️ Criar campos CRMHub', 
-            value: 'create_all_fields',
-            description: 'Criar campos personalizados'
-          }
-        ],
-        selectedOption: 'create_all_fields',
-        placeholder: 'Ações CRMHub'
-      }
-    });
-  }
-});
-
-// CRMHub Dropdown Update
-app.post('/api/crmhub-dropdown-update', async (req, res) => {
-  console.log('🔽 CRMHub Dropdown Update chamado');
+// CRMHub Toggle Update - Liga/desliga CRMHub
+app.post('/api/crmhub-toggle-update', async (req, res) => {
+  console.log('🔄 CRMHub Toggle Update chamado');
   console.log('📥 Request body:', JSON.stringify(req.body, null, 2));
   
   try {
-    const selectedOption = req.body.selectedOption || 'create_all_fields';
+    // O HubSpot envia o novo status do toggle
+    const newToggleState = req.body.toggleEnabled || req.body.enabled || req.body.value || false;
+    const previousState = crmhubToggleEnabled;
     
-    console.log(`🎯 Ação CRMHub selecionada: ${selectedOption}`);
+    console.log(`🔄 Mudança de estado: ${previousState} → ${newToggleState}`);
+    
+    crmhubToggleEnabled = newToggleState;
     
     let message = '';
-    let actionType = 'DROPDOWN_UPDATE';
+    let actionType = 'TOGGLE_UPDATE';
     let additionalData = {};
     
-    switch (selectedOption) {
-      case 'create_all_fields':
-        try {
-          message = '🏗️ Iniciando criação de todos os campos CRMHub... Isso pode levar alguns segundos.';
+    if (crmhubToggleEnabled) {
+      // ATIVANDO CRMHUB
+      console.log('🚀 ATIVANDO CRMHub...');
+      
+      try {
+        // Verificar/criar campos CRMHub
+        console.log('🔍 Verificando campos CRMHub...');
+        const fieldsStatus = await checkCRMHubFieldsStatus();
+        
+        if (fieldsStatus.missing.length > 0) {
+          console.log(`🏗️ Criando ${fieldsStatus.missing.length} campos faltantes...`);
+          const createResults = await createCRMHubFields();
           
-          // Executar criação dos campos
-          const results = await createCRMHubFields();
-          
-          message = `✅ Campos CRMHub processados! Criados: ${results.created.length}, Já existiam: ${results.existing.length}, Erros: ${results.errors.length}`;
+          message = `🚀 CRMHub ATIVADO! Campos criados: ${createResults.created.length}, Já existiam: ${createResults.existing.length}`;
           
           additionalData = {
-            fieldsCreated: results.created.length,
-            fieldsExisting: results.existing.length,
-            fieldsErrors: results.errors.length,
-            details: results
+            fieldsCreated: createResults.created.length,
+            fieldsExisting: createResults.existing.length,
+            totalFields: CRMHUB_FIELDS.length,
+            details: createResults
           };
-          
-        } catch (error) {
-          message = `❌ Erro ao criar campos CRMHub: ${error.message}`;
-          additionalData = { error: error.message };
-        }
-        break;
-        
-      case 'check_status':
-        try {
-          message = '🔍 Verificando status dos campos CRMHub...';
-          
-          const status = await checkCRMHubFieldsStatus();
-          
-          message = `📊 Status dos campos: ${status.existing.length}/${status.total} campos existem no HubSpot`;
+        } else {
+          message = `✅ CRMHub ATIVADO! Todos os ${fieldsStatus.existing.length} campos já existem`;
           
           additionalData = {
-            totalFields: status.total,
-            existingFields: status.existing.length,
-            missingFields: status.missing.length,
-            details: status
+            fieldsCreated: 0,
+            fieldsExisting: fieldsStatus.existing.length,
+            totalFields: CRMHUB_FIELDS.length
           };
-          
-        } catch (error) {
-          message = `❌ Erro ao verificar status: ${error.message}`;
-          additionalData = { error: error.message };
         }
-        break;
         
-      case 'test_enrichment':
-        message = '🧪 Para testar: 1) Crie uma empresa com CNPJ 2) Use POST /api/enrich-crmhub com {"companyId": "ID"} 3) Verifique os campos CRMHub na empresa';
-        
-        additionalData = {
-          testSteps: [
-            'Criar empresa de teste com CNPJ',
-            'Usar endpoint /api/enrich-crmhub',
-            'Verificar campos CRMHub na empresa'
-          ],
-          endpoint: '/api/enrich-crmhub',
-          bodyExample: '{"companyId": "123456789"}'
-        };
-        break;
-        
-      default:
-        message = '✅ Ação CRMHub executada com sucesso!';
+      } catch (error) {
+        console.error('❌ Erro ao ativar CRMHub:', error);
+        message = `⚠️ CRMHub ativado, mas com erro nos campos: ${error.message}`;
+        additionalData = { error: error.message };
+      }
+      
+    } else {
+      // DESATIVANDO CRMHUB
+      console.log('⚪ DESATIVANDO CRMHub...');
+      message = '⚪ CRMHub DESATIVADO - Sistema padrão reativado';
+      
+      additionalData = {
+        previousMode: 'crmhub',
+        newMode: 'standard',
+        note: 'Campos CRMHub permanecem no HubSpot mas não serão mais alimentados'
+      };
     }
     
-    console.log(`💬 Mensagem CRMHub: ${message}`);
+    console.log(`💬 Mensagem final: ${message}`);
+    console.log(`📊 Estado final do CRMHub: ${crmhubToggleEnabled}`);
 
     res.json({
       response: {
         actionType: actionType,
-        selectedOption: selectedOption,
+        toggleEnabled: crmhubToggleEnabled,
+        previousState: previousState,
         message: message,
-        crmhubData: additionalData
+        crmhubData: additionalData,
+        nextSteps: crmhubToggleEnabled ? [
+          'Campos CRMHub criados/verificados',
+          'Use POST /enrich para enriquecer empresas',
+          'Dados serão salvos nos campos específicos'
+        ] : [
+          'Sistema padrão reativado',
+          'Use POST /enrich normalmente',
+          'Dados serão salvos conforme configuração anterior'
+        ]
       }
     });
     
   } catch (error) {
-    console.error('❌ Erro no CRMHub dropdown update:', error);
+    console.error('❌ Erro no CRMHub toggle update:', error);
     
     res.json({
       response: {
-        actionType: 'DROPDOWN_UPDATE',
-        selectedOption: req.body.selectedOption || 'create_all_fields',
-        message: '❌ Erro ao executar ação CRMHub: ' + error.message,
+        actionType: 'TOGGLE_UPDATE',
+        toggleEnabled: false,
+        message: '❌ Erro ao alterar estado do CRMHub: ' + error.message,
         error: error.message
       }
     });
   }
 });
 
-// CRMHub Dropdown Update - GET version para compatibilidade
-app.get('/api/crmhub-dropdown-update', async (req, res) => {
-  console.log('🔽 CRMHub Dropdown Update chamado via GET');
-  console.log('📥 Query params:', req.query);
-  
-  try {
-    const selectedOption = req.query.selectedOption || req.query.action || 'create_all_fields';
-    
-    console.log(`🎯 Ação CRMHub selecionada via GET: ${selectedOption}`);
-    
-    let message = '';
-    let actionType = 'DROPDOWN_UPDATE';
-    let additionalData = {};
-    
-    switch (selectedOption) {
-      case 'create_all_fields':
-        try {
-          message = '🏗️ Iniciando criação de todos os campos CRMHub...';
-          
-          const results = await createCRMHubFields();
-          
-          message = `✅ Campos CRMHub processados! Criados: ${results.created.length}, Já existiam: ${results.existing.length}, Erros: ${results.errors.length}`;
-          
-          additionalData = {
-            fieldsCreated: results.created.length,
-            fieldsExisting: results.existing.length,
-            fieldsErrors: results.errors.length,
-            details: results
-          };
-          
-        } catch (error) {
-          message = `❌ Erro ao criar campos CRMHub: ${error.message}`;
-          additionalData = { error: error.message };
-        }
-        break;
-        
-      case 'check_status':
-        try {
-          message = '🔍 Verificando status dos campos CRMHub...';
-          
-          const status = await checkCRMHubFieldsStatus();
-          
-          message = `📊 Status dos campos: ${status.existing.length}/${status.total} campos existem no HubSpot`;
-          
-          additionalData = {
-            totalFields: status.total,
-            existingFields: status.existing.length,
-            missingFields: status.missing.length,
-            details: status
-          };
-          
-        } catch (error) {
-          message = `❌ Erro ao verificar status: ${error.message}`;
-          additionalData = { error: error.message };
-        }
-        break;
-        
-      default:
-        message = '✅ Ação CRMHub executada com sucesso via GET!';
-    }
-    
-    console.log(`💬 Mensagem CRMHub GET: ${message}`);
-
-    res.json({
-      response: {
-        actionType: actionType,
-        selectedOption: selectedOption,
-        message: message,
-        crmhubData: additionalData
-      }
-    });
-    
-  } catch (error) {
-    console.error('❌ Erro no CRMHub dropdown update GET:', error);
-    
-    res.json({
-      response: {
-        actionType: 'DROPDOWN_UPDATE',
-        selectedOption: req.query.selectedOption || 'create_all_fields',
-        message: '❌ Erro ao executar ação CRMHub via GET: ' + error.message,
-        error: error.message
-      }
-    });
+// ⚡ FUNÇÃO PARA USAR CRMHUB OU SISTEMA PADRÃO
+function updateEnrichmentPayloadWithCRMHub(cnpjData, cnpjNumber) {
+  if (crmhubToggleEnabled) {
+    console.log('🚀 Usando modo CRMHub para enriquecimento');
+    return mapCNPJDataToCRMHubFields(cnpjData, cnpjNumber);
+  } else {
+    console.log('📋 Usando sistema padrão para enriquecimento');
+    return updateEnrichmentPayload(cnpjData, cnpjNumber);
   }
-});
+}
 
 // ⚡ ENDPOINT DE TESTE CRMHUB
 app.get('/api/test-crmhub', (req, res) => {
@@ -709,13 +565,16 @@ app.get('/api/test-crmhub', (req, res) => {
   
   res.json({
     success: true,
-    message: '✅ Endpoints CRMHub funcionando!',
+    message: '✅ Endpoints CRMHub Toggle funcionando!',
+    crmhubStatus: {
+      enabled: crmhubToggleEnabled,
+      status: crmhubToggleEnabled ? 'ATIVADO' : 'DESATIVADO'
+    },
     endpoints: {
-      'POST /api/crmhub-dropdown-fetch': 'Buscar opções do dropdown',
-      'GET /api/crmhub-dropdown-fetch': 'Buscar opções do dropdown (GET)',
-      'POST /api/crmhub-dropdown-update': 'Executar ação selecionada',
-      'GET /api/crmhub-dropdown-update': 'Executar ação selecionada (GET)',
-      'POST /api/enrich-crmhub': 'Enriquecer empresa com campos CRMHub'
+      'POST /api/crmhub-toggle-fetch': 'Verificar status do toggle',
+      'POST /api/crmhub-toggle-update': 'Ligar/desligar CRMHub',
+      'POST /enrich': 'Enriquecer empresa (usa CRMHub se ativo)',
+      'GET /api/test-crmhub': 'Testar endpoints'
     },
     crmhubFields: CRMHUB_FIELDS.map(f => ({
       name: f.name,
@@ -1411,8 +1270,8 @@ app.post('/enrich', async (req, res) => {
     const estado = cnpjData.estabelecimento?.estado?.sigla || '';
     const cep = cnpjData.estabelecimento?.cep || '';
 
-    // Gerar payload baseado no modo configurado
-    const updatePayload = updateEnrichmentPayload(cnpjData, cnpjLimpo);
+    // Gerar payload baseado no modo configurado (incluindo CRMHub)
+    const updatePayload = updateEnrichmentPayloadWithCRMHub(cnpjData, cnpjLimpo);
 
     console.log('📦 Payload final:', JSON.stringify(updatePayload, null, 2));
     console.log('📡 Atualizando empresa no HubSpot...');
@@ -1429,7 +1288,8 @@ app.post('/enrich', async (req, res) => {
     );
 
     const hasIndividualMapping = Object.values(individualMapping).some(field => field && field !== 'nenhum');
-    const campoUsado = hasIndividualMapping ? 'mapeamento individual' : (savedUserChoice || selectedDestinationField);
+    const campoUsado = crmhubToggleEnabled ? 'CRMHub (campos específicos)' : 
+                      (hasIndividualMapping ? 'mapeamento individual' : (savedUserChoice || selectedDestinationField));
     
     console.log(`✅ Empresa atualizada com sucesso! Modo usado: ${campoUsado}`);
     
@@ -1469,9 +1329,13 @@ app.post('/enrich', async (req, res) => {
         atividade: dadosEmpresa.atividade
       },
       configuracao: {
-        modo: hasIndividualMapping ? 'mapeamento_individual' : 'campo_unico',
-        campoDestino: hasIndividualMapping ? 'múltiplos campos' : campoUsado,
-        tipoConteudo: hasIndividualMapping ? 'Campos específicos + backup' : 'Texto formatado completo'
+        modo: crmhubToggleEnabled ? 'crmhub_ativo' : 
+              (hasIndividualMapping ? 'mapeamento_individual' : 'campo_unico'),
+        campoDestino: crmhubToggleEnabled ? 'Campos específicos CRMHub' : 
+                      (hasIndividualMapping ? 'múltiplos campos' : campoUsado),
+        tipoConteudo: crmhubToggleEnabled ? 'Dados em campos dedicados CRMHub' :
+                      (hasIndividualMapping ? 'Campos específicos + backup' : 'Texto formatado completo'),
+        crmhubAtivo: crmhubToggleEnabled
       }
     });
 
@@ -2314,8 +2178,12 @@ app.get('/api/debug-settings', (req, res) => {
     individualMapping: individualMapping,
     hasIndividualMapping: Object.values(individualMapping).some(field => field && field !== 'nenhum'),
     crmhubFields: CRMHUB_FIELDS.map(f => f.name),
+    crmhubToggleStatus: {
+      enabled: crmhubToggleEnabled,
+      description: crmhubToggleEnabled ? 'CRMHub está ATIVO' : 'CRMHub está INATIVO'
+    },
     timestamp: new Date().toISOString(),
-    status: 'Sistema funcionando corretamente com CRMHub'
+    status: 'Sistema funcionando corretamente com CRMHub Toggle'
   });
 });
 
@@ -2338,7 +2206,8 @@ app.get('/api/mapping-status', (req, res) => {
       },
       crmhubFields: {
         available: CRMHUB_FIELDS.length,
-        list: CRMHUB_FIELDS.map(f => f.name)
+        list: CRMHUB_FIELDS.map(f => f.name),
+        toggleEnabled: crmhubToggleEnabled
       }
     }
   });
@@ -2773,14 +2642,13 @@ console.log('🔧 Sistema de mapeamento de campos CNPJ carregado!');
 console.log('🗺️ Sistema de mapeamento individual carregado!');
 console.log('🎨 Interface HubSpot carregada!');
 console.log('📞 Endpoints de telefone configurados!');
-console.log('🚀 Sistema CRMHub carregado com 10 campos dedicados!');
-console.log('🏗️ Endpoints CRMHub configurados:');
-console.log('   POST /api/crmhub-dropdown-fetch - Buscar opções');
-console.log('   GET /api/crmhub-dropdown-fetch - Buscar opções (compatibilidade)');
-console.log('   POST /api/crmhub-dropdown-update - Executar ação');
-console.log('   GET /api/crmhub-dropdown-update - Executar ação (compatibilidade)');
-console.log('   POST /api/enrich-crmhub - Enriquecer empresa');
+console.log('🚀 Sistema CRMHub Toggle carregado com 10 campos dedicados!');
+console.log('🔄 Endpoints CRMHub Toggle configurados:');
+console.log('   POST /api/crmhub-toggle-fetch - Verificar status do toggle');
+console.log('   POST /api/crmhub-toggle-update - Ligar/desligar CRMHub');
+console.log('   POST /enrich - Enriquecer empresa (usa CRMHub se ativo)');
 console.log('   GET /api/test-crmhub - Testar endpoints');
+console.log(`🎯 Status inicial CRMHub: ${crmhubToggleEnabled ? 'ATIVADO' : 'DESATIVADO'}`);
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`🚀 CNPJ Enricher 2.0 com CRMHub rodando na porta ${PORT}`));
+app.listen(PORT, () => console.log(`🚀 CNPJ Enricher 2.0 com CRMHub Toggle rodando na porta ${PORT}`));
