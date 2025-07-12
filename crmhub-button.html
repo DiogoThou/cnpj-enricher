@@ -1494,6 +1494,413 @@ app.post('/api/accounts-fetch', (req, res) => {
   });
 });
 
+// ⚡ ENDPOINTS CRMHUB DROPDOWN - NOVOS
+app.post('/api/crmhub-dropdown-fetch', (req, res) => {
+  console.log('🔽 CRMHub Dropdown fetch solicitado');
+  console.log('📥 Request body:', JSON.stringify(req.body, null, 2));
+  
+  try {
+    const options = [
+      {
+        text: '🏗️ Criar Todos os Campos CRMHub',
+        value: 'create_all_fields',
+        description: 'Cria automaticamente os 10 campos personalizados + grupo'
+      },
+      {
+        text: '🔍 Verificar Status dos Campos',
+        value: 'check_status',
+        description: 'Verifica quais campos CRMHub já existem no HubSpot'
+      },
+      {
+        text: '🧪 Testar Enriquecimento',
+        value: 'test_enrichment',
+        description: 'Instruções para testar o sistema de enriquecimento'
+      }
+    ];
+
+    console.log(`🔽 Retornando ${options.length} opções para CRMHub dropdown`);
+
+    return res.json({
+      response: {
+        options: options,
+        selectedOption: 'create_all_fields',
+        placeholder: 'Escolha uma ação para gerenciar campos CRMHub'
+      }
+    });
+    
+  } catch (error) {
+    console.error('❌ Erro no CRMHub dropdown fetch:', error);
+    
+    return res.json({
+      response: {
+        options: [
+          {
+            text: '🏗️ Criar Campos CRMHub',
+            value: 'create_all_fields',
+            description: 'Criar campos personalizados'
+          }
+        ],
+        selectedOption: 'create_all_fields',
+        placeholder: 'Gerenciar campos CRMHub'
+      }
+    });
+  }
+});
+
+app.post('/api/crmhub-dropdown-update', async (req, res) => {
+  console.log('🔽 CRMHub Dropdown update recebido');
+  console.log('📥 Request body:', JSON.stringify(req.body, null, 2));
+  
+  try {
+    const selectedOption = req.body.selectedOption;
+    
+    if (!selectedOption) {
+      return res.status(400).json({
+        error: 'selectedOption é obrigatório'
+      });
+    }
+    
+    console.log(`🎯 Ação selecionada: ${selectedOption}`);
+    
+    switch (selectedOption) {
+      case 'create_all_fields':
+        console.log('🏗️ Executando criação de todos os campos CRMHub...');
+        
+        if (!HUBSPOT_ACCESS_TOKEN) {
+          return res.json({
+            response: {
+              actionType: 'DROPDOWN_UPDATE',
+              selectedOption: selectedOption,
+              message: '❌ Token do HubSpot não configurado. Execute OAuth primeiro.',
+              status: 'error'
+            }
+          });
+        }
+        
+        try {
+          // Criar campos CRMHub
+          const createResult = await createAllCRMHubFields();
+          
+          return res.json({
+            response: {
+              actionType: 'DROPDOWN_UPDATE',
+              selectedOption: selectedOption,
+              message: `✅ ${createResult.message}`,
+              details: createResult.summary,
+              status: 'success'
+            }
+          });
+          
+        } catch (createError) {
+          console.error('❌ Erro ao criar campos:', createError);
+          
+          return res.json({
+            response: {
+              actionType: 'DROPDOWN_UPDATE',
+              selectedOption: selectedOption,
+              message: `❌ Erro ao criar campos: ${createError.message}`,
+              status: 'error'
+            }
+          });
+        }
+        
+      case 'check_status':
+        console.log('🔍 Verificando status dos campos CRMHub...');
+        
+        if (!HUBSPOT_ACCESS_TOKEN) {
+          return res.json({
+            response: {
+              actionType: 'DROPDOWN_UPDATE',
+              selectedOption: selectedOption,
+              message: '❌ Token do HubSpot não configurado para verificar status.',
+              status: 'error'
+            }
+          });
+        }
+        
+        try {
+          const statusResult = await checkCRMHubFieldsStatus();
+          
+          return res.json({
+            response: {
+              actionType: 'DROPDOWN_UPDATE',
+              selectedOption: selectedOption,
+              message: `📊 Status: ${statusResult.summary.existing}/${statusResult.summary.total} campos existem`,
+              details: statusResult.summary,
+              status: 'success'
+            }
+          });
+          
+        } catch (statusError) {
+          console.error('❌ Erro ao verificar status:', statusError);
+          
+          return res.json({
+            response: {
+              actionType: 'DROPDOWN_UPDATE',
+              selectedOption: selectedOption,
+              message: `❌ Erro ao verificar status: ${statusError.message}`,
+              status: 'error'
+            }
+          });
+        }
+        
+      case 'test_enrichment':
+        console.log('🧪 Fornecendo instruções de teste...');
+        
+        return res.json({
+          response: {
+            actionType: 'DROPDOWN_UPDATE',
+            selectedOption: selectedOption,
+            message: '🧪 Para testar: 1) Crie empresa com CNPJ, 2) Use POST /api/enrich-crmhub com {"companyId": "ID"}',
+            instructions: [
+              'Criar empresa teste: POST /create-test-company',
+              'Enriquecer: POST /api/enrich-crmhub',
+              'Verificar campos CRMHub na empresa'
+            ],
+            status: 'info'
+          }
+        });
+        
+      default:
+        return res.json({
+          response: {
+            actionType: 'DROPDOWN_UPDATE',
+            selectedOption: selectedOption,
+            message: `❌ Ação não reconhecida: ${selectedOption}`,
+            status: 'error'
+          }
+        });
+    }
+    
+  } catch (error) {
+    console.error('❌ Erro no CRMHub dropdown update:', error);
+    
+    return res.json({
+      response: {
+        actionType: 'DROPDOWN_UPDATE',
+        selectedOption: req.body.selectedOption || 'unknown',
+        message: `❌ Erro interno: ${error.message}`,
+        status: 'error'
+      }
+    });
+  }
+});
+
+// ⚡ FUNÇÕES AUXILIARES PARA CRMHUB
+async function createAllCRMHubFields() {
+  const crmhubFields = [
+    {
+      name: 'cnpj_enriquecido_crmhub',
+      label: 'CNPJ Enriquecido CRMHub',
+      type: 'string',
+      fieldType: 'text',
+      description: 'CNPJ formatado e validado pela CRMHub'
+    },
+    {
+      name: 'telefone_enriquecido_crmhub',
+      label: 'Telefone Enriquecido CRMHub',
+      type: 'string',
+      fieldType: 'text',
+      description: 'Telefone da Receita Federal formatado'
+    },
+    {
+      name: 'razao_social_crmhub',
+      label: 'Razão Social CRMHub',
+      type: 'string',
+      fieldType: 'text',
+      description: 'Razão social oficial da Receita Federal'
+    },
+    {
+      name: 'nome_fantasia_crmhub',
+      label: 'Nome Fantasia CRMHub',
+      type: 'string',
+      fieldType: 'text',
+      description: 'Nome fantasia da empresa'
+    },
+    {
+      name: 'situacao_cadastral_crmhub',
+      label: 'Situação Cadastral CRMHub',
+      type: 'string',
+      fieldType: 'text',
+      description: 'Situação cadastral na Receita Federal'
+    },
+    {
+      name: 'porte_empresa_crmhub',
+      label: 'Porte da Empresa CRMHub',
+      type: 'string',
+      fieldType: 'text',
+      description: 'Classificação do porte da empresa'
+    },
+    {
+      name: 'atividade_principal_crmhub',
+      label: 'Atividade Principal CRMHub',
+      type: 'string',
+      fieldType: 'text',
+      description: 'CNAE principal da empresa'
+    },
+    {
+      name: 'endereco_completo_crmhub',
+      label: 'Endereço Completo CRMHub',
+      type: 'string',
+      fieldType: 'textarea',
+      description: 'Endereço completo da sede'
+    },
+    {
+      name: 'capital_social_crmhub',
+      label: 'Capital Social CRMHub',
+      type: 'string',
+      fieldType: 'text',
+      description: 'Capital social registrado'
+    },
+    {
+      name: 'data_atualizacao_crmhub',
+      label: 'Data Atualização CRMHub',
+      type: 'string',
+      fieldType: 'text',
+      description: 'Data da última atualização dos dados'
+    }
+  ];
+
+  let created = 0;
+  let existing = 0;
+  const errors = [];
+
+  // Primeiro, criar o grupo
+  try {
+    await axios.post(
+      'https://api.hubapi.com/crm/v3/properties/companies/groups',
+      {
+        name: 'crmhub_enrichment',
+        label: 'CRMHub - Enriquecimento CNPJ',
+        displayOrder: 10
+      },
+      {
+        headers: {
+          Authorization: `Bearer ${HUBSPOT_ACCESS_TOKEN}`,
+          'Content-Type': 'application/json'
+        }
+      }
+    );
+    console.log('✅ Grupo CRMHub criado');
+  } catch (groupError) {
+    if (groupError.response?.status !== 409) {
+      console.log('⚠️ Erro ao criar grupo (pode já existir):', groupError.response?.data);
+    } else {
+      console.log('✅ Grupo CRMHub já existe');
+    }
+  }
+
+  // Criar cada campo
+  for (const field of crmhubFields) {
+    try {
+      await axios.post(
+        'https://api.hubapi.com/crm/v3/properties/companies',
+        {
+          ...field,
+          groupName: 'crmhub_enrichment',
+          hasUniqueValue: false,
+          hidden: false,
+          displayOrder: -1
+        },
+        {
+          headers: {
+            Authorization: `Bearer ${HUBSPOT_ACCESS_TOKEN}`,
+            'Content-Type': 'application/json'
+          }
+        }
+      );
+      
+      created++;
+      console.log(`✅ Campo criado: ${field.name}`);
+      
+    } catch (fieldError) {
+      if (fieldError.response?.status === 409) {
+        existing++;
+        console.log(`⚠️ Campo já existe: ${field.name}`);
+      } else {
+        errors.push(`${field.name}: ${fieldError.response?.data?.message || fieldError.message}`);
+        console.error(`❌ Erro ao criar ${field.name}:`, fieldError.response?.data);
+      }
+    }
+  }
+
+  const total = crmhubFields.length;
+  
+  if (errors.length > 0) {
+    throw new Error(`Alguns campos falharam: ${errors.join(', ')}`);
+  }
+
+  return {
+    success: true,
+    message: `Campos CRMHub configurados! ${created} criados, ${existing} já existiam.`,
+    summary: {
+      total: total,
+      created: created,
+      existing: existing,
+      errors: errors.length
+    }
+  };
+}
+
+async function checkCRMHubFieldsStatus() {
+  const crmhubFieldNames = [
+    'cnpj_enriquecido_crmhub',
+    'telefone_enriquecido_crmhub',
+    'razao_social_crmhub',
+    'nome_fantasia_crmhub',
+    'situacao_cadastral_crmhub',
+    'porte_empresa_crmhub',
+    'atividade_principal_crmhub',
+    'endereco_completo_crmhub',
+    'capital_social_crmhub',
+    'data_atualizacao_crmhub'
+  ];
+
+  const fields = [];
+  let existing = 0;
+  let missing = 0;
+
+  for (const fieldName of crmhubFieldNames) {
+    try {
+      await axios.get(
+        `https://api.hubapi.com/crm/v3/properties/companies/${fieldName}`,
+        {
+          headers: {
+            Authorization: `Bearer ${HUBSPOT_ACCESS_TOKEN}`,
+            'Content-Type': 'application/json'
+          }
+        }
+      );
+      
+      fields.push({
+        name: fieldName,
+        label: fieldName.replace(/_/g, ' ').replace(/crmhub/g, 'CRMHub'),
+        status: 'exists'
+      });
+      existing++;
+      
+    } catch (error) {
+      fields.push({
+        name: fieldName,
+        label: fieldName.replace(/_/g, ' ').replace(/crmhub/g, 'CRMHub'),
+        status: 'missing'
+      });
+      missing++;
+    }
+  }
+
+  return {
+    success: true,
+    fields: fields,
+    summary: {
+      total: crmhubFieldNames.length,
+      existing: existing,
+      missing: missing,
+      allReady: missing === 0
+    }
+  };
+}
+
 // ⚡ ENDPOINTS ESPECÍFICOS PARA TELEFONE - CORRIGIDOS
 app.post('/api/phone-options', (req, res) => {
   console.log('📞 HubSpot solicitando opções para campo Telefone...');
