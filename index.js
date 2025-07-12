@@ -4,7 +4,67 @@ console.error('❌ Erro ao buscar mapeamento individual:', error);
       details: error.message
     });
 
+// Adicione estas linhas no seu arquivo api/index.js, junto com as outras rotas:
 
+app.post('/api/crmhub-dropdown-fetch', (req, res) => {
+  console.log('🔽 CRMHub Dropdown Fetch chamado via /api/');
+  
+  const options = [
+    {
+      text: '✅ Sim - Criar campos CRMHub',
+      value: 'sim',
+      description: 'Criar 10 campos personalizados para dados do CNPJ'
+    },
+    {
+      text: '❌ Não - Usar campo description',
+      value: 'nao', 
+      description: 'Salvar todos os dados no campo description padrão'
+    }
+  ];
+
+  return res.json({
+    response: {
+      options: options,
+      selectedOption: 'sim',
+      placeholder: 'Criar campos CRMHub?'
+    }
+  });
+});
+
+app.post('/api/crmhub-dropdown-update', (req, res) => {
+  console.log('🔽 CRMHub Dropdown Update chamado via /api/');
+  
+  const selectedOption = req.body.selectedOption || 'sim';
+  
+  if (selectedOption === 'sim') {
+    return res.json({
+      response: {
+        actionType: 'DROPDOWN_UPDATE',
+        selectedOption: selectedOption,
+        message: '✅ Configurado para criar campos CRMHub!',
+        configuration: {
+          mode: 'crmhub_fields',
+          fieldsCount: 10
+        }
+      }
+    });
+  } else {
+    return res.json({
+      response: {
+        actionType: 'DROPDOWN_UPDATE', 
+        selectedOption: selectedOption,
+        message: '✅ Configurado para usar campo description!',
+        configuration: {
+          mode: 'description_field',
+          field: 'description'
+        }
+      }
+    });
+  }
+});
+
+
+    
 // ⚡ Individual mapping save
 app.post('/api/individual-mapping-save', (req, res) => {
   console.log('💾 Salvando mapeamento individual...');
