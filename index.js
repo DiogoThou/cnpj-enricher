@@ -934,7 +934,7 @@ console.log('   POST /api/force-create-crmhub-fields - Forçar criação de camp
 console.log(`🎯 Status inicial CRMHub: ${crmhubToggleEnabled ? 'ATIVADO' : 'DESATIVADO'}`);
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`🚀 CNPJ Enricher 2.0 com CRMHub Toggle rodando na porta ${PORT}`));const express = require('express');
+app.listen(PORT, () => console.log(`🚀 CNPJ Enricher 2.0 com CRMHub Toggle rodando na porta ${PORT}`));
 const axios = require('axios');
 const syncCNPJs = require('./syncCNPJs');
 const app = express();
