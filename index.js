@@ -1232,6 +1232,372 @@ app.post('/api/accounts-fetch', (req, res) => {
   });
 });
 
+// ⚡ ENDPOINTS CRMHUB DROPDOWN - ADICIONADOS DE VOLTA
+
+// CRMHub Dropdown Fetch
+app.post('/api/crmhub-dropdown-fetch', (req, res) => {
+  console.log('🔽 CRMHub Dropdown Fetch chamado via /api/');
+  
+  const options = [
+    {
+      text: '✅ Sim - Criar campos CRMHub',
+      value: 'sim',
+      description: 'Criar 10 campos personalizados para dados do CNPJ'
+    },
+    {
+      text: '❌ Não - Usar campo description',
+      value: 'nao', 
+      description: 'Salvar todos os dados no campo description padrão'
+    }
+  ];
+
+  return res.json({
+    response: {
+      options: options,
+      selectedOption: 'sim',
+      placeholder: 'Criar campos CRMHub?'
+    }
+  });
+});
+
+app.post('/api/crmhub-dropdown-update', (req, res) => {
+  console.log('🔽 CRMHub Dropdown Update chamado via /api/');
+  
+  const selectedOption = req.body.selectedOption || 'sim';
+  
+  if (selectedOption === 'sim') {
+    return res.json({
+      response: {
+        actionType: 'DROPDOWN_UPDATE',
+        selectedOption: selectedOption,
+        message: '✅ Configurado para criar campos CRMHub!',
+        configuration: {
+          mode: 'crmhub_fields',
+          fieldsCount: 10
+        }
+      }
+    });
+  } else {
+    return res.json({
+      response: {
+        actionType: 'DROPDOWN_UPDATE', 
+        selectedOption: selectedOption,
+        message: '✅ Configurado para usar campo description!',
+        configuration: {
+          mode: 'description_field',
+          field: 'description'
+        }
+      }
+    });
+  }
+});
+
+// ⚡ ENDPOINTS CRMHUB TOGGLE - ADICIONADOS DE VOLTA
+
+// CRMHub Toggle Fetch - Retorna status atual
+app.post('/api/crmhub-toggle-fetch', (req, res) => {
+  console.log('🔄 CRMHub Toggle Fetch chamado');
+  console.log('📥 Request body:', JSON.stringify(req.body, null, 2));
+  
+  // Configurar CORS
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  
+  try {
+    console.log(`📊 Status atual do CRMHub: ${crmhubToggleEnabled ? 'ATIVADO' : 'DESATIVADO'}`);
+    console.log(`🔑 Token status: ${HUBSPOT_ACCESS_TOKEN ? 'CONFIGURADO' : 'NÃO CONFIGURADO'}`);
+
+    return res.json({
+      response: {
+        toggleEnabled: crmhubToggleEnabled,
+        status: crmhubToggleEnabled ? 'ativado' : 'desativado',
+        message: crmhubToggleEnabled ? 
+          '✅ CRMHub ATIVO - Dados serão salvos em campos específicos' : 
+          '⚪ CRMHub INATIVO - Sistema padrão ativo',
+        authStatus: {
+          tokenConfigured: !!HUBSPOT_ACCESS_TOKEN,
+          tokenPreview: HUBSPOT_ACCESS_TOKEN ? HUBSPOT_ACCESS_TOKEN.substring(0, 20) + '...' : 'NÃO CONFIGURADO'
+        }
+      }
+    });
+    
+  } catch (error) {
+    console.error('❌ Erro no toggle fetch:', error);
+    
+    return res.json({
+      response: {
+        toggleEnabled: false,
+        status: 'erro',
+        message: '❌ Erro ao verificar status do CRMHub',
+        error: error.message,
+        authStatus: {
+          tokenConfigured: !!HUBSPOT_ACCESS_TOKEN,
+          tokenPreview: 'ERRO'
+        }
+      }
+    });
+  }
+});
+
+// CRMHub Toggle Update - VERSÃO CORRIGIDA
+app.post('/api/crmhub-toggle-update', async (req, res) => {
+  console.log('🔄 CRMHub Toggle Update chamado');
+  console.log('📥 Request body:', JSON.stringify(req.body, null, 2));
+  
+  // Configurar CORS
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  
+  // ⚡ VERIFICAR TOKEN
+  if (!HUBSPOT_ACCESS_TOKEN) {
+    console.error('❌ HUBSPOT_ACCESS_TOKEN não configurado');
+    return res.json({
+      response: {
+        actionType: 'TOGGLE_UPDATE',
+        toggleEnabled: false,
+        message: '❌ Token do HubSpot não configurado - Execute OAuth primeiro',
+        error: 'Token não encontrado',
+        authUrl: `https://app.hubspot.com/oauth/authorize?client_id=${CLIENT_ID}&scope=crm.objects.companies.read%20crm.objects.companies.write&redirect_uri=${REDIRECT_URI}`
+      }
+    });
+  }
+  
+  try {
+    // Inverter o estado atual
+    const previousState = crmhubToggleEnabled;
+    crmhubToggleEnabled = !crmhubToggleEnabled;
+    
+    console.log(`🔄 Botão pressionado: ${previousState} → ${crmhubToggleEnabled}`);
+    
+    let message = '';
+    let additionalData = {};
+    
+    if (crmhubToggleEnabled) {
+      // ATIVANDO CRMHUB
+      console.log('🚀 ATIVANDO CRMHub via botão...');
+      
+      try {
+        const fieldsStatus = await checkCRMHubFieldsStatus();
+        
+        if (fieldsStatus.missing.length > 0) {
+          const createResults = await createCRMHubFields();
+          message = `🚀 CRMHub ATIVADO! Campos criados: ${createResults.created.length}`;
+          additionalData = { 
+            fieldsCreated: createResults.created.length,
+            tokenValid: true
+          };
+        } else {
+          message = `✅ CRMHub ATIVADO! Campos já existem: ${fieldsStatus.existing.length}`;
+          additionalData = { 
+            fieldsExisting: fieldsStatus.existing.length,
+            tokenValid: true
+          };
+        }
+        
+      } catch (error) {
+        message = `⚠️ CRMHub ativado com erro: ${error.message}`;
+        additionalData = { 
+          error: error.message,
+          tokenValid: true
+        };
+      }
+      
+    } else {
+      // DESATIVANDO CRMHUB
+      console.log('⚪ DESATIVANDO CRMHub via botão...');
+      message = '⚪ CRMHub DESATIVADO - Sistema padrão ativo';
+      additionalData = { 
+        mode: 'standard',
+        tokenValid: true
+      };
+    }
+    
+    console.log(`💬 Resultado: ${message}`);
+
+    res.json({
+      success: true,
+      actionType: 'BUTTON_CLICKED',
+      crmhubEnabled: crmhubToggleEnabled,
+      previousState: previousState,
+      message: message,
+      data: additionalData,
+      buttonText: crmhubToggleEnabled ? '⚪ Desativar CRMHub' : '🚀 Ativar CRMHub',
+      authStatus: {
+        tokenConfigured: true,
+        tokenValid: true,
+        tokenPreview: HUBSPOT_ACCESS_TOKEN.substring(0, 20) + '...'
+      }
+    });
+    
+  } catch (error) {
+    console.error('❌ Erro no botão CRMHub:', error);
+    
+    res.json({
+      success: false,
+      message: '❌ Erro ao executar ação: ' + error.message,
+      error: error.message,
+      authStatus: {
+        tokenConfigured: !!HUBSPOT_ACCESS_TOKEN,
+        tokenValid: false
+      }
+    });
+  }
+});
+
+// ⚡ ENDPOINT PARA BOTÃO CRMHUB - ADICIONADO DE VOLTA
+app.post('/api/crmhub-button-action', async (req, res) => {
+  console.log('🔘 CRMHub Button Action chamado');
+  console.log('📥 Request body:', JSON.stringify(req.body, null, 2));
+  
+  // Configurar CORS
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  
+  if (!HUBSPOT_ACCESS_TOKEN) {
+    console.error('❌ HUBSPOT_ACCESS_TOKEN não configurado');
+    return res.json({
+      success: false,
+      message: '❌ Token do HubSpot não configurado - Execute OAuth primeiro',
+      error: 'Token não encontrado',
+      authUrl: `https://app.hubspot.com/oauth/authorize?client_id=${CLIENT_ID}&scope=crm.objects.companies.read%20crm.objects.companies.write&redirect_uri=${REDIRECT_URI}`
+    });
+  }
+  
+  try {
+    // Inverter estado do CRMHub
+    const previousState = crmhubToggleEnabled;
+    crmhubToggleEnabled = !crmhubToggleEnabled;
+    
+    console.log(`🔘 Botão acionado: ${previousState} → ${crmhubToggleEnabled}`);
+    
+    let message = '';
+    
+    if (crmhubToggleEnabled) {
+      message = '🚀 CRMHub ATIVADO! Campos específicos serão utilizados.';
+    } else {
+      message = '⚪ CRMHub DESATIVADO! Sistema padrão reativado.';
+    }
+    
+    res.json({
+      success: true,
+      actionType: 'BUTTON_ACTION',
+      crmhubEnabled: crmhubToggleEnabled,
+      previousState: previousState,
+      message: message,
+      buttonText: crmhubToggleEnabled ? '⚪ Desativar CRMHub' : '🚀 Ativar CRMHub'
+    });
+    
+  } catch (error) {
+    console.error('❌ Erro no botão CRMHub:', error);
+    
+    res.json({
+      success: false,
+      message: '❌ Erro ao executar ação do botão: ' + error.message,
+      error: error.message
+    });
+  }
+});
+
+// ⚡ FUNÇÕES QUE ESTAVAM FALTANDO - ADICIONADAS DE VOLTA
+
+// Função para usar mapeamento individual ou campo único
+function updateEnrichmentPayload(cnpjData, cnpjNumber) {
+  const hasIndividualMapping = Object.values(individualMapping).some(field => field && field !== 'nenhum');
+  
+  if (hasIndividualMapping) {
+    console.log('🗺️ Usando mapeamento individual de campos');
+    return generateIndividualMappingPayload(cnpjData, cnpjNumber);
+  } else {
+    console.log('📋 Usando modo de campo único');
+    const dadosFormatados = formatCNPJData(cnpjData, cnpjNumber);
+    const campoAtual = savedUserChoice || selectedDestinationField;
+    
+    if (campoAtual === 'nenhum') {
+      console.log('🚫 Modo "não mapear" - não salvando dados adicionais');
+      return { properties: {} };
+    }
+    
+    const payload = {
+      properties: {
+        [campoAtual]: dadosFormatados
+      }
+    };
+    
+    console.log(`📦 Dados serão salvos no campo único: ${campoAtual}`);
+    return payload;
+  }
+}
+
+// Função para gerar payload baseado no mapeamento individual
+function generateIndividualMappingPayload(cnpjData, cnpjNumber) {
+  const payload = { properties: {} };
+  const unmappedData = [];
+  
+  // Lista de campos válidos do HubSpot
+  const validFields = ['name', 'description', 'phone', 'city', 'state', 'website', 'zip', 'teste_cnpj'];
+  
+  // Extrair dados do CNPJ
+  const extractedData = {
+    telefone: cnpjData.estabelecimento?.telefone1 ? 
+      `(${cnpjData.estabelecimento.ddd1}) ${cnpjData.estabelecimento.telefone1}` : '',
+    razao_social: cnpjData.razao_social || '',
+    nome_fantasia: cnpjData.estabelecimento?.nome_fantasia || '',
+    cidade: cnpjData.estabelecimento?.cidade?.nome || '',
+    estado: cnpjData.estabelecimento?.estado?.sigla || '',
+    atividade: cnpjData.estabelecimento?.atividade_principal?.descricao || '',
+    cep: cnpjData.estabelecimento?.cep || '',
+    email: cnpjData.estabelecimento?.email || '',
+    endereco: cnpjData.estabelecimento?.logradouro ? 
+      `${cnpjData.estabelecimento.tipo_logradouro || ''} ${cnpjData.estabelecimento.logradouro}, ${cnpjData.estabelecimento.numero || 'S/N'}` : '',
+    situacao: cnpjData.estabelecimento?.situacao_cadastral || '',
+    porte: cnpjData.porte?.descricao || '',
+    capital_social: cnpjData.capital_social ? `R$ ${cnpjData.capital_social}` : ''
+  };
+  
+  console.log('🧩 Dados extraídos do CNPJ:', extractedData);
+  console.log('🗺️ Mapeamento individual atual:', individualMapping);
+  
+  // Mapear campos individuais
+  let mappedFieldsCount = 0;
+  Object.keys(extractedData).forEach(cnpjField => {
+    const hubspotField = individualMapping[cnpjField];
+    const value = extractedData[cnpjField];
+    
+    if (hubspotField && hubspotField !== 'nenhum' && value && validFields.includes(hubspotField)) {
+      payload.properties[hubspotField] = value;
+      mappedFieldsCount++;
+      console.log(`✅ Mapeado: ${cnpjField} → ${hubspotField} = "${value}"`);
+    } else if (value) {
+      unmappedData.push(`${cnpjFieldsDefinition[cnpjField]?.label}: ${value}`);
+      console.log(`📦 Não mapeado: ${cnpjField} = "${value}"`);
+    }
+  });
+  
+  // Se há dados não mapeados, salvar no campo backup
+  if (unmappedData.length > 0) {
+    const backupField = savedUserChoice || selectedDestinationField;
+    if (backupField && backupField !== 'nenhum' && validFields.includes(backupField)) {
+      const backupData = `
+=== DADOS CNPJ NÃO MAPEADOS ===
+CNPJ: ${cnpjNumber}
+${unmappedData.join('\n')}
+
+Atualizado em: ${new Date().toLocaleString('pt-BR')}
+`.trim();
+      
+      payload.properties[backupField] = backupData;
+      console.log(`📦 Dados não mapeados salvos em: ${backupField}`);
+    }
+  }
+  
+  console.log(`📊 Resumo: ${mappedFieldsCount} campos mapeados, ${unmappedData.length} não mapeados`);
+  
+  return payload;
+}
+
 // ⚡ Página inicial
 app.get('/', (req, res) => {
   res.setHeader('Content-Type', 'text/html; charset=utf-8');
