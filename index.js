@@ -682,7 +682,7 @@ async function checkForAutoEnrichment() {
         Authorization: `Bearer ${HUBSPOT_ACCESS_TOKEN}`,
         'Content-Type': 'application/json'
       },
-      timeout: 10000
+      timeout: 30000
     });
 
     const companies = response.data.results || [];
@@ -721,7 +721,8 @@ async function performPollingEnrichment(companyId) {
         headers: { 
           Authorization: `Bearer ${HUBSPOT_ACCESS_TOKEN}`,
           'Content-Type': 'application/json'
-        }
+        },
+        timeout: 30000
       }
     );
 
@@ -1191,7 +1192,8 @@ app.post('/enrich', async (req, res) => {
         headers: { 
           Authorization: `Bearer ${HUBSPOT_ACCESS_TOKEN}`,
           'Content-Type': 'application/json'
-        }
+        },
+        timeout: 30000
       }
     );
 
