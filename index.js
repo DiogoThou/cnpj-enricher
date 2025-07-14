@@ -448,7 +448,7 @@ function mapCNPJDataToCRMHubFields(cnpjData, cnpjNumber, enrichmentStatus = 'enr
     capital_social_crmhub: cnpjData.capital_social ? `R$ ${cnpjData.capital_social}` : '',
     data_atualizacao_crmhub: new Date().toLocaleString('pt-BR'),
     // ⚡ NOVOS CAMPOS
-   enriquecer_empresa_crmhub: '',
+   enriquecer_empresa_crmhub: 'nao',
     status_enriquecimento_crmhub: enrichmentStatus
   };
   
@@ -643,7 +643,11 @@ async function checkForAutoEnrichment() {
   }
 
   try {
-    console.log('🔍 Verificando empresas para auto-enriquecimento...');
+    console.log('🔍 [POLLING] Verificando empresas para auto-enriquecimento...');
+    console.log('🔍 [POLLING] CRMHub ativo:', crmhubToggleEnabled);
+    console.log('🔍 [POLLING] Token:', HUBSPOT_ACCESS_TOKEN ? 'OK' : 'FALTANDO');
+
+    
     
     // ⚡ BUSCAR EMPRESAS COM "SIM" E STATUS "NÃO PROCESSADO"
     const searchUrl = 'https://api.hubapi.com/crm/v3/objects/companies/search';
