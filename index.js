@@ -1,852 +1,4 @@
-statusToUpdate = 'rate_limit';
-          console.log('⚠️ Rate limit detectado - atualizando status');
-        }
-        
-        await axios.patch(
-          `https://api.hubapi.com/crm/v3/objects/companies/${companyId}`,
-          {
-            properties: {
-              status_enriquecimento_crmhub: statusToUpdate
-            }
-          },
-          {
-            headers: {
-              Authorization: `Bearer ${HUBSPOT_ACCESS_TOKEN}`,
-              'Content-Type': 'application/json'
-            }
-          }
-        );
-        console.log(`❌ Status atualizado para: ${statusToUpdate}`);
-      } catch (statusError) {
-        console.error('❌ Erro ao atualizar status:', statusError.message);
-      }
-    }
-    
-    if (error.response?.status === 401) {
-      return res.status(401).json({ 
-        error: 'Token do HubSpot inválido ou expirado',
-        details: 'Execute OAuth novamente',
-        authUrl: `https://app.hubspot.com/oauth/authorize?client_id=${CLIENT_ID}&scope=crm.objects.companies.read%20crm.objects.companies.write&redirect_uri=${REDIRECT_URI}`
-      });
-    }
-    
-    if (error.response?.status === 404 && error.config?.url?.includes('hubapi.com')) {
-      return res.status(404).json({ 
-        error: 'Empresa não encontrada no HubSpot',
-        companyId: companyId
-      });
-    }
-    
-    if (error.response?.status === 400 && error.response?.data?.message?.includes('does not exist')) {
-      console.log('⚠️ Campo teste_cnpj não existe no HubSpot');
-      
-      return res.status(400).json({ 
-        error: 'Campo teste_cnpj não existe no HubSpot',
-        message: 'Execute POST /create-test-field para criar o campo',
-        solucao: 'POST /create-test-field'
-      });
-    }
-    
-    if (error.response?.status === 429 && error.config?.url?.includes('cnpj.ws')) {
-      console.log('⚠️ Rate limit atingido na API CNPJ');
-      
-      return res.status(200).json({ 
-        success: true,
-        message: '✅ CNPJ válido encontrado! Rate limit atingido (3 consultas/min)',
-        cnpj: cnpjLimpo || 'CNPJ válido',
-        empresaEncontrada: properties.name || 'Empresa sem nome',
-        status: 'rate_limit',
-        statusEnriquecimento: 'rate_limit',
-        proximaTentativa: 'Aguarde 1-2 minutos para nova consulta'
-      });
-    }
-    
-    if (error.config?.url?.includes('cnpj.ws')) {
-      return res.status(500).json({ 
-        error: 'Erro ao buscar dados do CNPJ',
-        details: error.response?.data || error.message,
-        statusEnriquecimento: 'falha'
-      });
-    }
-
-    res.status(500).json({ 
-      error: 'Erro ao enriquecer dados',
-      details: error.message,
-      statusEnriquecimento: 'falha'
-    });
-  }
-});
-
-// ⚡ Criar campo teste_cnpj
-app.post('/create-test-field', async (req, res) => {
-  if (!HUBSPOT_ACCESS_TOKEN) {
-    return res.status(401).json({ error: 'Token não configurado' });
-  }
-
-  try {
-    console.log('🔧 Criando campo de teste teste_cnpj...');
-    
-    const response = await axios.post(
-      'https://api.hubapi.com/crm/v3/properties/companies',
-      {
-        name: 'teste_cnpj',
-        label: 'Teste CNPJ',
-        type: 'string',
-        fieldType: 'textarea',
-        description: 'Campo de teste para dados do CNPJ - todos os dados da Receita Federal',
-        groupName: 'companyinformation',
-        hasUniqueValue: false,
-        hidden: false,
-        displayOrder: -1
-      },
-      {
-        headers: {
-          Authorization: `Bearer ${HUBSPOT_ACCESS_TOKEN}`,
-          'Content-Type': 'application/json'
-        }
-      }
-    );
-
-    console.log('✅ Campo teste_cnpj criado com sucesso');
-    
-    res.json({
-      success: true,
-      message: 'Campo teste_cnpj criado com sucesso!',
-      fieldName: 'teste_cnpj',
-      fieldType: 'textarea'
-    });
-    
-  } catch (error) {
-    if (error.response?.status === 409) {
-      console.log('⚠️ Campo teste_cnpj já existe');
-      res.json({
-        success: true,
-        message: 'Campo teste_cnpj já existe no HubSpot',
-        status: 'already_exists'
-      });
-    } else {
-      console.error('❌ Erro ao criar campo teste_cnpj:', error.response?.data);
-      res.status(500).json({
-        error: 'Erro ao criar campo teste_cnpj',
-        details: error.response?.data
-      });
-    }
-  }
-});
-
-// ⚡ Criar empresa de teste
-app.post('/create-test-company', async (req, res) => {
-  if (!HUBSPOT_ACCESS_TOKEN) {
-    return res.status(401).json({ 
-      error: 'Token não configurado',
-      authUrl: `https://app.hubspot.com/oauth/authorize?client_id=${CLIENT_ID}&scope=crm.objects.companies.read%20crm.objects.companies.write&redirect_uri=${REDIRECT_URI}`
-    });
-  }
-
-  try {
-    console.log('🏢 Criando empresa de teste...');
-    
-    const response = await axios.post(
-      'https://api.hubapi.com/crm/v3/objects/companies',
-      {
-        properties: {
-          name: 'Empresa Teste CNPJ - ' + new Date().getTime(),
-          cnpj: '14665903000104',
-          domain: 'teste.com.br',
-          phone: '11999999999',
-          website: 'https://teste.com.br'
-        }
-      },
-      {
-        headers: {
-          Authorization: `Bearer ${HUBSPOT_ACCESS_TOKEN}`,
-          'Content-Type': 'application/json'
-        }
-      }
-    );
-
-    console.log('✅ Empresa criada com sucesso:', response.data.id);
-
-    const hasIndividualMapping = Object.values(individualMapping).some(field => field && field !== 'nenhum');
-    const modo = hasIndividualMapping ? 'mapeamento individual' : 'campo único';
-
-    res.json({
-      success: true,
-      companyId: response.data.id,
-      message: 'Empresa de teste criada com CNPJ 14665903000104',
-      cnpj: '14665903000104',
-      configuracao: {
-        modoAtivo: modo,
-        campoDestino: hasIndividualMapping ? 'múltiplos campos' : (savedUserChoice || selectedDestinationField),
-        crmhubAtivo: crmhubToggleEnabled,
-        pollingAtivo: pollingActive,
-        camposDisponiveis: CRMHUB_FIELDS.length
-      },
-      proximoTeste: {
-        instrucoes: [
-          '1. Ative o CRMHub via toggle se não estiver ativo',
-          '2. Marque a empresa como "SIM" no campo "Enriquecer Empresa - CRMHub"',
-          '3. Aguarde até 30 segundos para enriquecimento automático'
-        ],
-        alternativa: {
-          url: 'POST /enrich',
-          body: { companyId: response.data.id }
-        }
-      }
-    });
-  } catch (error) {
-    console.error('❌ Erro ao criar empresa teste:', error.response?.data);
-    res.status(500).json({
-      error: 'Erro ao criar empresa teste',
-      details: error.response?.data
-    });
-  }
-});
-
-// ⚡ ENDPOINTS PARA HUBSPOT APP - CORRIGIDOS
-
-app.post('/api/accounts-fetch', (req, res) => {
-  console.log('🔁 Recebido chamada de /api/accounts-fetch do HubSpot');
-
-  return res.json({
-    response: {
-      accounts: [
-        {
-          accountId: 'default-account',
-          accountName: 'Enriquecedor CNPJ - CRM Hub',
-          accountLogoUrl: 'https://crmhub.com.br/wp-content/uploads/2025/02/logo-laranja-1.png'
-        }
-      ]
-    }
-  });
-});
-
-// ⚡ ENDPOINTS CRMHUB TOGGLE - VERSÃO CORRIGIDA PARA EVITAR ERRO "FALHA NA AÇÃO"
-
-// CRMHub Toggle Fetch - Retorna status atual
-app.post('/api/crmhub-toggle-fetch', (req, res) => {
-  console.log('🔄 CRMHub Toggle Fetch chamado');
-  console.log('📥 Request body:', JSON.stringify(req.body, null, 2));
-  
-  // ⚡ HEADERS CORS CORRETOS
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-  res.setHeader('Content-Type', 'application/json');
-  
-  try {
-    console.log(`📊 Status atual do CRMHub: ${crmhubToggleEnabled ? 'ATIVADO' : 'DESATIVADO'}`);
-    console.log(`🔑 Token status: ${HUBSPOT_ACCESS_TOKEN ? 'CONFIGURADO' : 'NÃO CONFIGURADO'}`);
-    console.log(`🔄 Polling status: ${pollingActive ? 'ATIVO' : 'INATIVO'}`);
-
-    const responseData = {
-      response: {
-        toggleEnabled: crmhubToggleEnabled,
-        status: crmhubToggleEnabled ? 'ativado' : 'desativado',
-        message: crmhubToggleEnabled ? 
-          '✅ CRMHub ATIVO - Dados serão salvos em campos específicos' : 
-          '⚪ CRMHub INATIVO - Sistema padrão ativo',
-        authStatus: {
-          tokenConfigured: !!HUBSPOT_ACCESS_TOKEN,
-          tokenPreview: HUBSPOT_ACCESS_TOKEN ? HUBSPOT_ACCESS_TOKEN.substring(0, 20) + '...' : 'NÃO CONFIGURADO'
-        },
-        pollingStatus: {
-          active: pollingActive,
-          interval: '30 segundos'
-        },
-        fieldsCount: CRMHUB_FIELDS.length
-      }
-    };
-
-    console.log('📤 Enviando response:', JSON.stringify(responseData, null, 2));
-    return res.json(responseData);
-    
-  } catch (error) {
-    console.error('❌ Erro no toggle fetch:', error);
-    
-    const errorResponse = {
-      response: {
-        toggleEnabled: false,
-        status: 'erro',
-        message: '❌ Erro ao verificar status do CRMHub',
-        error: error.message,
-        authStatus: {
-          tokenConfigured: !!HUBSPOT_ACCESS_TOKEN,
-          tokenPreview: 'ERRO'
-        }
-      }
-    };
-    
-    return res.json(errorResponse);
-  }
-});
-
-// ⚡ CRMHub Toggle Update - VERSÃO TOTALMENTE REESCRITA PARA HUBSPOT
-app.post('/api/crmhub-toggle-update', async (req, res) => {
-  console.log('🔄 CRMHub Toggle Update chamado');
-  console.log('📥 Request body:', JSON.stringify(req.body, null, 2));
-  
-  // ⚡ HEADERS OBRIGATÓRIOS PARA HUBSPOT
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-  res.setHeader('Content-Type', 'application/json');
-  
-  // ⚡ VERIFICAR TOKEN PRIMEIRO
-  if (!HUBSPOT_ACCESS_TOKEN) {
-    console.error('❌ HUBSPOT_ACCESS_TOKEN não configurado');
-    
-    const errorResponse = {
-      response: {
-        actionType: 'TOGGLE_UPDATE',
-        toggleEnabled: false,
-        success: false,
-        message: '❌ Token do HubSpot não configurado - Execute OAuth primeiro',
-        error: 'Token não encontrado',
-        authUrl: `https://app.hubspot.com/oauth/authorize?client_id=${CLIENT_ID}&scope=crm.objects.companies.read%20crm.objects.companies.write&redirect_uri=${REDIRECT_URI}`,
-        logs: [
-          '🔐 Verificação de token',
-          '❌ Token do HubSpot não encontrado',
-          '🔧 Execute OAuth para configurar token'
-        ]
-      }
-    };
-    
-    console.log('📤 Enviando erro de token:', JSON.stringify(errorResponse, null, 2));
-    return res.json(errorResponse);
-  }
-  
-  try {
-    // ⚡ INVERTER O ESTADO ATUAL
-    const previousState = crmhubToggleEnabled;
-    crmhubToggleEnabled = !crmhubToggleEnabled;
-    
-    console.log(`🔄 Estado alterado: ${previousState} → ${crmhubToggleEnabled}`);
-    
-    let message = '';
-    let logs = [];
-    let additionalData = {};
-    
-    logs.push('🔄 Botão CRMHub acionado');
-    logs.push(`📊 Estado anterior: ${previousState ? 'ATIVO' : 'INATIVO'}`);
-    logs.push(`📊 Novo estado: ${crmhubToggleEnabled ? 'ATIVO' : 'INATIVO'}`);
-    logs.push(`🔄 Polling: ${pollingActive ? 'ATIVO' : 'SERÁ INICIADO'}`);
-    
-    if (crmhubToggleEnabled) {
-      // ⚡ ATIVANDO CRMHUB
-      console.log('🚀 ATIVANDO CRMHub via toggle...');
-      logs.push('🚀 ATIVANDO CRMHub...');
-      
-      try {
-        logs.push('🔍 Verificando campos existentes...');
-        const fieldsStatus = await checkCRMHubFieldsStatus();
-        
-        if (fieldsStatus.missing.length > 0) {
-          logs.push(`❌ ${fieldsStatus.missing.length} campos faltando`);
-          logs.push('🏗️ Criando campos CRMHub...');
-          
-          const createResults = await createCRMHubFields();
-          
-          logs.push(`✅ ${createResults.created.length} campos criados`);
-          logs.push(`⚠️ ${createResults.existing.length} já existiam`);
-          
-          if (createResults.errors.length > 0) {
-            logs.push(`❌ ${createResults.errors.length} erros na criação`);
-          }
-          
-          message = `🚀 CRMHub ATIVADO! ${createResults.created.length} campos criados, ${createResults.existing.length} já existiam`;
-          additionalData = { 
-            fieldsCreated: createResults.created.length,
-            fieldsExisting: createResults.existing.length,
-            fieldsErrors: createResults.errors.length,
-            tokenValid: true,
-            pollingActive: pollingActive
-          };
-        } else {
-          logs.push(`✅ Todos os ${fieldsStatus.existing.length} campos já existem`);
-          message = `✅ CRMHub ATIVADO! Todos os ${fieldsStatus.existing.length} campos já existem`;
-          additionalData = { 
-            fieldsExisting: fieldsStatus.existing.length,
-            fieldsCreated: 0,
-            tokenValid: true,
-            pollingActive: pollingActive
-          };
-        }
-        
-        logs.push('🎯 Agora você pode marcar empresas como "SIM"');
-        logs.push('⏱️ Enriquecimento automático em até 30 segundos');
-        
-      } catch (error) {
-        console.error('❌ Erro ao verificar/criar campos:', error);
-        logs.push(`❌ Erro: ${error.message}`);
-        message = `⚠️ CRMHub ativado com erro: ${error.message}`;
-        additionalData = { 
-          error: error.message,
-          tokenValid: true,
-          pollingActive: pollingActive
-        };
-      }
-      
-    } else {
-      // ⚡ DESATIVANDO CRMHUB
-      console.log('⚪ DESATIVANDO CRMHub via toggle...');
-      logs.push('⚪ DESATIVANDO CRMHub...');
-      logs.push('📋 Sistema padrão reativado');
-      logs.push('🔄 Polling continua ativo para outras funções');
-      message = '⚪ CRMHub DESATIVADO - Sistema padrão ativo';
-      additionalData = { 
-        mode: 'standard',
-        tokenValid: true,
-        pollingActive: pollingActive
-      };
-    }
-    
-    console.log(`💬 Resultado: ${message}`);
-    logs.push(`💬 Resultado: ${message}`);
-
-    // ⚡ RESPOSTA NO FORMATO CORRETO PARA HUBSPOT
-    const successResponse = {
-      response: {
-        actionType: 'TOGGLE_UPDATE',
-        toggleEnabled: crmhubToggleEnabled,
-        success: true,
-        previousState: previousState,
-        message: message,
-        logs: logs,
-        data: additionalData,
-        buttonText: crmhubToggleEnabled ? '⚪ Desativar CRMHub' : '🚀 Ativar CRMHub',
-        authStatus: {
-          tokenConfigured: true,
-          tokenValid: true,
-          tokenPreview: HUBSPOT_ACCESS_TOKEN.substring(0, 20) + '...'
-        },
-        pollingInfo: {
-          active: pollingActive,
-          interval: '30 segundos',
-          description: 'Verifica empresas marcadas como SIM automaticamente'
-        },
-        fieldsInfo: {
-          total: CRMHUB_FIELDS.length,
-          newFields: ['enriquecer_empresa_crmhub', 'status_enriquecimento_crmhub']
-        }
-      }
-    };
-    
-    console.log('📤 Enviando resposta de sucesso:', JSON.stringify(successResponse, null, 2));
-    res.json(successResponse);
-    
-  } catch (error) {
-    console.error('❌ Erro geral no toggle:', error);
-    
-    const errorResponse = {
-      response: {
-        actionType: 'TOGGLE_UPDATE',
-        toggleEnabled: crmhubToggleEnabled,
-        success: false,
-        message: '❌ Erro ao executar ação: ' + error.message,
-        error: error.message,
-        logs: [
-          '🔄 Tentativa de alternar CRMHub',
-          `❌ Erro: ${error.message}`,
-          '🔧 Tente novamente em alguns segundos'
-        ],
-        authStatus: {
-          tokenConfigured: !!HUBSPOT_ACCESS_TOKEN,
-          tokenValid: false
-        }
-      }
-    };
-    
-    console.log('📤 Enviando resposta de erro:', JSON.stringify(errorResponse, null, 2));
-    res.json(errorResponse);
-  }
-});
-
-// ⚡ ENDPOINTS DE CONTROLE DO POLLING
-
-// ⚡ ENDPOINT PARA CONTROLAR POLLING
-app.post('/api/polling-control', (req, res) => {
-  const { action } = req.body;
-  
-  console.log(`🎛️ Controle de polling: ${action}`);
-  
-  if (action === 'start') {
-    startPolling();
-    res.json({
-      success: true,
-      message: '🚀 Polling iniciado',
-      status: 'ativo',
-      intervalo: '30 segundos'
-    });
-  } else if (action === 'stop') {
-    stopPolling();
-    res.json({
-      success: true,
-      message: '⏹️ Polling interrompido',
-      status: 'inativo'
-    });
-  } else if (action === 'status') {
-    res.json({
-      success: true,
-      polling: pollingActive,
-      status: pollingActive ? 'ativo' : 'inativo',
-      intervalo: pollingActive ? '30 segundos' : 'n/a',
-      proximaVerificacao: pollingActive ? 'Próximos 30 segundos' : 'Polling inativo',
-      crmhubAtivo: crmhubToggleEnabled,
-      tokenConfigured: !!HUBSPOT_ACCESS_TOKEN
-    });
-  } else {
-    res.status(400).json({
-      error: 'Ação inválida',
-      acoes: ['start', 'stop', 'status']
-    });
-  }
-});
-
-// ⚡ ENDPOINT PARA TESTAR BUSCA MANUAL
-app.get('/api/test-search', async (req, res) => {
-  try {
-    console.log('🧪 Testando busca de empresas...');
-    
-    const searchUrl = 'https://api.hubapi.com/crm/v3/objects/companies/search';
-    const searchPayload = {
-      filterGroups: [
-        {
-          filters: [
-            {
-              propertyName: 'enriquecer_empresa_crmhub',
-              operator: 'EQ',
-              value: 'sim'
-            }
-          ]
-        }
-      ],
-      properties: [
-        'name',
-        'cnpj',
-        'enriquecer_empresa_crmhub',
-        'status_enriquecimento_crmhub'
-      ],
-      limit: 10
-    };
-
-    const response = await axios.post(searchUrl, searchPayload, {
-      headers: {
-        Authorization: `Bearer ${HUBSPOT_ACCESS_TOKEN}`,
-        'Content-Type': 'application/json'
-      }
-    });
-
-    const companies = response.data.results || [];
-    
-    res.json({
-      success: true,
-      message: `🔍 Encontradas ${companies.length} empresas com "SIM"`,
-      pollingStatus: pollingActive ? 'ativo' : 'inativo',
-      crmhubStatus: crmhubToggleEnabled ? 'ativo' : 'inativo',
-      companies: companies.map(c => ({
-        id: c.id,
-        name: c.properties.name,
-        cnpj: c.properties.cnpj,
-        enriquecer: c.properties.enriquecer_empresa_crmhub,
-        status: c.properties.status_enriquecimento_crmhub
-      }))
-    });
-    
-  } catch (error) {
-    res.status(500).json({
-      error: 'Erro na busca',
-      details: error.message
-    });
-  }
-});
-
-// ⚡ Página inicial
-app.get('/', (req, res) => {
-  res.setHeader('Content-Type', 'text/html; charset=utf-8');
-  
-  const html = `
-<!DOCTYPE html>
-<html lang="pt-BR">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>CNPJ Enricher 2.1 - Auto Polling</title>
-    <style>
-        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; margin: 0; padding: 20px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); min-height: 100vh; }
-        .container { max-width: 800px; margin: 0 auto; background: white; border-radius: 15px; padding: 40px; box-shadow: 0 10px 30px rgba(0,0,0,0.2); }
-        .header { text-align: center; margin-bottom: 40px; }
-        .header h1 { color: #2c3e50; margin: 0; font-size: 2.5em; }
-        .header p { color: #7f8c8d; margin: 10px 0; font-size: 1.2em; }
-        .status { background: #e8f5e8; border: 1px solid #4caf50; padding: 20px; border-radius: 10px; margin: 20px 0; }
-        .polling-status { background: #e3f2fd; border: 1px solid #2196f3; padding: 20px; border-radius: 10px; margin: 20px 0; }
-        .endpoints { background: #f8f9fa; padding: 20px; border-radius: 10px; margin: 20px 0; }
-        .endpoint { background: white; padding: 15px; margin: 10px 0; border-radius: 8px; border-left: 4px solid #007bff; }
-        .btn { display: inline-block; padding: 12px 24px; background: #007bff; color: white; text-decoration: none; border-radius: 8px; margin: 10px 5px; transition: all 0.3s; }
-        .btn:hover { background: #0056b3; transform: translateY(-2px); }
-        .btn-success { background: #28a745; }
-        .btn-success:hover { background: #1e7e34; }
-        .btn-warning { background: #ffc107; color: #212529; }
-        .btn-warning:hover { background: #e0a800; }
-        .new-features { background: #fff3cd; border: 1px solid #ffeaa7; padding: 15px; border-radius: 8px; margin: 20px 0; }
-        .auto-feature { background: #d4edda; border: 1px solid #c3e6cb; padding: 15px; border-radius: 8px; margin: 20px 0; }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <div class="header">
-            <h1>🚀 CNPJ Enricher 2.1</h1>
-            <p>Sistema Inteligente de Enriquecimento Automático</p>
-        </div>
-        
-        <div class="status">
-            <h3>✅ Sistema Online</h3>
-            <p><strong>Status:</strong> Funcionando</p>
-            <p><strong>Token:</strong> ${HUBSPOT_ACCESS_TOKEN ? 'Configurado ✅' : 'Não configurado ❌'}</p>
-            <p><strong>CRMHub:</strong> ${crmhubToggleEnabled ? 'Ativo 🚀' : 'Inativo ⚪'}</p>
-            <p><strong>Campos disponíveis:</strong> ${CRMHUB_FIELDS.length} campos CRMHub</p>
-        </div>
-        
-        <div class="polling-status">
-            <h3>🔄 Status do Polling Automático</h3>
-            <p><strong>Polling:</strong> ${pollingActive ? 'Ativo 🟢' : 'Inativo 🔴'}</p>
-            <p><strong>Intervalo:</strong> ${pollingActive ? '30 segundos' : 'Aguardando ativação'}</p>
-            <p><strong>Última verificação:</strong> ${pollingActive ? 'Executando...' : 'Não iniciado'}</p>
-        </div>
-        
-        <div class="auto-feature">
-            <h3>🎯 Enriquecimento Automático</h3>
-            <p><strong>Como usar:</strong></p>
-            <ol>
-                <li>Ative o <strong>CRMHub</strong> via toggle</li>
-                <li>Marque empresa como <strong>"SIM"</strong> no campo "Enriquecer Empresa - CRMHub"</li>
-                <li>Aguarde <strong>até 30 segundos</strong> para enriquecimento automático</li>
-                <li>Verifique o <strong>status</strong> no campo "Status do Enriquecimento"</li>
-            </ol>
-        </div>
-        
-        <div class="new-features">
-            <h3>🆕 Novidades v2.1</h3>
-            <p>🎯 <strong>Enriquecimento Automático:</strong> Marca SIM → Enriquece automaticamente</p>
-            <p>🔄 <strong>Polling System:</strong> Verifica empresas a cada 30 segundos</p>
-            <p>📈 <strong>Status Inteligente:</strong> Enriquecido/Rate Limit/Falha/Não Processado</p>
-            <p>⚡ <strong>Zero Configuração:</strong> Funciona sem webhooks ou workflows</p>
-        </div>
-        
-        <div class="endpoints">
-            <h3>📋 Endpoints Principais</h3>
-            
-            <div class="endpoint">
-                <h4>POST /api/polling-control</h4>
-                <p>Controlar sistema de polling automático</p>
-                <code>{"action": "start|stop|status"}</code>
-            </div>
-            
-            <div class="endpoint">
-                <h4>GET /api/test-search</h4>
-                <p>Testar busca de empresas marcadas como "SIM"</p>
-            </div>
-            
-            <div class="endpoint">
-                <h4>POST /enrich</h4>
-                <p>Enriquecer empresa manualmente (backup)</p>
-                <code>{"companyId": "123456789"}</code>
-            </div>
-            
-            <div class="endpoint">
-                <h4>POST /create-test-company</h4>
-                <p>Criar empresa de teste com CNPJ válido</p>
-            </div>
-        </div>
-        
-        <div style="text-align: center; margin-top: 30px;">
-            <a href="/account" class="btn">📊 Status do Sistema</a>
-            <a href="/api/test-search" class="btn btn-success">🧪 Testar Busca</a>
-            <a href="/settings" class="btn btn-warning">⚙️ Configurações</a>
-        </div>
-        
-        <div style="text-align: center; margin-top: 20px; color: #7f8c8d;">
-            <p>CNPJ Enricher 2.1 - Auto Polling System - Powered by CRMHub</p>
-        </div>
-    </div>
-</body>
-</html>`;
-  
-  res.send(html);
-});
-
-// ⚡ Página de configurações
-app.get('/settings', (req, res) => {
-  res.setHeader('X-Frame-Options', 'ALLOWALL');
-  res.setHeader('Content-Security-Policy', "frame-ancestors 'self' https://app.hubspot.com https://app-eu1.hubspot.com;");
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Content-Type', 'text/html; charset=utf-8');
-
-  res.send(`
-<!DOCTYPE html>
-<html lang="pt-BR">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Configurações - CNPJ Enricher 2.1</title>
-    <style>
-        body { font-family: Arial, sans-serif; max-width: 600px; margin: 50px auto; padding: 20px; background: #f8f9fa; }
-        .container { background: white; padding: 30px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
-        .field-mapping { margin: 20px 0; padding: 15px; background: #f8f9fa; border-radius: 8px; }
-        .field-mapping label { display: block; margin-bottom: 5px; font-weight: bold; }
-        .field-mapping input { width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; }
-        .btn { background: #007bff; color: white; padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer; }
-        .btn:hover { background: #0056b3; }
-        .status { background: #e8f5e8; padding: 15px; border-radius: 8px; margin: 20px 0; }
-        .polling-info { background: #e3f2fd; padding: 15px; border-radius: 8px; margin: 20px 0; }
-        .test-btn { background: #28a745; margin-left: 10px; }
-        .test-btn:hover { background: #1e7e34; }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <h2>⚙️ Configurações CNPJ Enricher 2.1</h2>
-        
-        <div class="status">
-            <h3>📊 Status Atual</h3>
-            <p><strong>CRMHub:</strong> ${crmhubToggleEnabled ? 'Ativo 🚀' : 'Inativo ⚪'}</p>
-            <p><strong>Polling:</strong> ${pollingActive ? 'Ativo 🟢' : 'Inativo 🔴'}</p>
-            <p><strong>Campos disponíveis:</strong> ${CRMHUB_FIELDS.length} campos</p>
-            <p><strong>Token:</strong> ${HUBSPOT_ACCESS_TOKEN ? 'Configurado ✅' : 'Não configurado ❌'}</p>
-        </div>
-        
-        <div class="polling-info">
-            <h3>🔄 Sistema de Polling Automático</h3>
-            <p><strong>Status:</strong> ${pollingActive ? 'Verificando empresas a cada 30 segundos' : 'Aguardando ativação'}</p>
-            <p><strong>Funcionamento:</strong></p>
-            <ol>
-                <li>Busca empresas com campo "Enriquecer Empresa" = "SIM"</li>
-                <li>Filtra apenas as não processadas</li>
-                <li>Enriquece automaticamente uma por vez</li>
-                <li>Atualiza status conforme resultado</li>
-            </ol>
-            
-            <button class="btn" onclick="controlPolling('status')">📊 Verificar Status</button>
-            <button class="btn test-btn" onclick="testSearch()">🧪 Testar Busca</button>
-        </div>
-        
-        <div class="field-mapping">
-            <label for="company_name_field">Nome da empresa →</label>
-            <input id="company_name_field" placeholder="Ex: nome_fantasia" />
-            <small>Mapeamento personalizado para nome da empresa</small>
-        </div>
-        
-        <button class="btn" onclick="saveMapping()">Salvar mapeamento</button>
-        
-        <h3>🆕 Novos Campos CRMHub</h3>
-        <ul>
-            <li>🎯 <strong>Enriquecer Empresa:</strong> SIM/NÃO (trigger automático)</li>
-            <li>📈 <strong>Status do Enriquecimento:</strong> Enriquecido/Rate Limit/Falha/Não Processado</li>
-        </ul>
-        
-        <h3>📋 Como Usar o Sistema Automático</h3>
-        <ol>
-            <li><strong>Ative CRMHub</strong> via toggle no HubSpot</li>
-            <li><strong>Marque empresas</strong> como "SIM" no campo "Enriquecer Empresa - CRMHub"</li>
-            <li><strong>Aguarde</strong> até 30 segundos para processamento automático</li>
-            <li><strong>Monitore</strong> o campo "Status do Enriquecimento"</li>
-        </ol>
-    </div>
-
-    <script>
-        async function saveMapping() {
-            const field = document.getElementById("company_name_field").value;
-            
-            try {
-                const res = await fetch("/api/save-mapping", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ mapping: { company_name: field } })
-                });
-
-                const result = await res.json();
-                alert(result.message || "Mapeamento salvo!");
-            } catch (error) {
-                alert("Erro ao salvar: " + error.message);
-            }
-        }
-        
-        async function controlPolling(action) {
-            try {
-                const res = await fetch("/api/polling-control", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ action: action })
-                });
-
-                const result = await res.json();
-                alert(JSON.stringify(result, null, 2));
-            } catch (error) {
-                alert("Erro: " + error.message);
-            }
-        }
-        
-        async function testSearch() {
-            try {
-                const res = await fetch("/api/test-search");
-                const result = await res.json();
-                
-                let message = \`Resultado da busca:\\n\\n\`;
-                message += \`✅ Status: \${result.success ? 'Sucesso' : 'Erro'}\\n\`;
-                message += \`📊 Polling: \${result.pollingStatus}\\n\`;
-                message += \`🚀 CRMHub: \${result.crmhubStatus}\\n\`;
-                message += \`🏢 Empresas encontradas: \${result.companies?.length || 0}\\n\\n\`;
-                
-                if (result.companies && result.companies.length > 0) {
-                    message += "Empresas:\\n";
-                    result.companies.forEach((company, index) => {
-                        message += \`\${index + 1}. \${company.name} (\${company.status || 'sem status'})\\n\`;
-                    });
-                }
-                
-                alert(message);
-            } catch (error) {
-                alert("Erro na busca: " + error.message);
-            }
-        }
-    </script>
-</body>
-</html>`);
-});
-
-console.log('🔧 Sistema de mapeamento de campos CNPJ carregado!');
-console.log('🗺️ Sistema de mapeamento individual carregado!');
-console.log('🎨 Interface HubSpot carregada!');
-console.log('📞 Endpoints de telefone configurados!');
-console.log('🚀 Sistema CRMHub Toggle carregado com 12 campos dedicados!');
-console.log('🔄 Endpoints CRMHub Dropdown configurados:');
-console.log('   POST /api/crmhub-dropdown-fetch - Verificar opções');
-console.log('   POST /api/crmhub-dropdown-update - Executar ação');
-console.log('🆕 Novos campos adicionados:');
-console.log('   🎯 enriquecer_empresa_crmhub - Campo SIM/NÃO');
-console.log('   📈 status_enriquecimento_crmhub - Status do processo');
-console.log('🔄 Sistema de Polling carregado!');
-console.log('📡 Endpoints de polling adicionados:');
-console.log('   POST /api/polling-control - Controlar polling');
-console.log('   GET /api/test-search - Testar busca de empresas');
-console.log('⏱️ Intervalo de verificação: 30 segundos');
-console.log(`🎯 Status inicial CRMHub: ${crmhubToggleEnabled ? 'ATIVADO' : 'DESATIVADO'}`);
-console.log(`🔄 Status inicial Polling: ${pollingActive ? 'ATIVO' : 'SERÁ INICIADO AUTOMATICAMENTE'}`);
-
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-  console.log(`🚀 CNPJ Enricher 2.1 com Auto-Polling rodando na porta ${PORT}`);
-  
-  // ⚡ INICIAR POLLING AUTOMATICAMENTE APÓS 5 SEGUNDOS
-  setTimeout(() => {
-    if (!pollingActive) {
-      console.log('🔄 Iniciando polling automaticamente...');
-      startPolling();
-    }
-  }, 5000);
-});
-
-module.exports = app;const express = require('express');
+const express = require('express');
 const axios = require('axios');
 
 const app = express();
@@ -864,10 +16,6 @@ let savedUserChoice = null;
 
 // ⚡ VARIÁVEL PARA CONTROLE DO TOGGLE CRMHUB
 let crmhubToggleEnabled = false;
-
-// ⚡ VARIÁVEIS DE CONTROLE DO POLLING
-let pollingInterval = null;
-let pollingActive = false;
 
 // ⚡ SISTEMA DE MAPEAMENTO INDIVIDUAL
 let individualMapping = {
@@ -1481,252 +629,6 @@ Atualizado em: ${new Date().toLocaleString('pt-BR')}
   return payload;
 }
 
-// ⚡ SISTEMA DE POLLING - ENRIQUECIMENTO AUTOMÁTICO
-
-// ⚡ FUNÇÃO PRINCIPAL DO POLLING
-async function checkForAutoEnrichment() {
-  if (!HUBSPOT_ACCESS_TOKEN) {
-    console.log('⚠️ Token não configurado - pulando verificação');
-    return;
-  }
-
-  try {
-    console.log('🔍 Verificando empresas para auto-enriquecimento...');
-    
-    // ⚡ BUSCAR EMPRESAS COM "SIM" E STATUS "NÃO PROCESSADO"
-    const searchUrl = 'https://api.hubapi.com/crm/v3/objects/companies/search';
-    const searchPayload = {
-      filterGroups: [
-        {
-          filters: [
-            {
-              propertyName: 'enriquecer_empresa_crmhub',
-              operator: 'EQ',
-              value: 'sim'
-            },
-            {
-              propertyName: 'status_enriquecimento_crmhub',
-              operator: 'NEQ',
-              value: 'enriquecido'
-            }
-          ]
-        }
-      ],
-      properties: [
-        'name',
-        'cnpj',
-        'enriquecer_empresa_crmhub',
-        'status_enriquecimento_crmhub'
-      ],
-      limit: 10
-    };
-
-    const response = await axios.post(searchUrl, searchPayload, {
-      headers: {
-        Authorization: `Bearer ${HUBSPOT_ACCESS_TOKEN}`,
-        'Content-Type': 'application/json'
-      },
-      timeout: 10000
-    });
-
-    const companies = response.data.results || [];
-    
-    if (companies.length === 0) {
-      console.log('✅ Nenhuma empresa pendente para enriquecimento');
-      return;
-    }
-
-    console.log(`🎯 Encontradas ${companies.length} empresas para enriquecer`);
-
-    // ⚡ PROCESSAR APENAS A PRIMEIRA (PARA RESPEITAR RATE LIMIT)
-    const company = companies[0];
-    const companyId = company.id;
-    const companyName = company.properties.name || 'Empresa sem nome';
-    
-    console.log(`🏢 Enriquecendo: ${companyName} (ID: ${companyId})`);
-    
-    // ⚡ CHAMAR FUNÇÃO DE ENRIQUECIMENTO
-    await performPollingEnrichment(companyId);
-    
-  } catch (error) {
-    console.error('❌ Erro na verificação de auto-enriquecimento:', error.message);
-  }
-}
-
-// ⚡ FUNÇÃO DE ENRIQUECIMENTO PARA POLLING
-async function performPollingEnrichment(companyId) {
-  try {
-    console.log(`🔄 Iniciando enriquecimento automático para: ${companyId}`);
-    
-    // ⚡ BUSCAR DADOS DA EMPRESA
-    const hubspotCompany = await axios.get(
-      `https://api.hubapi.com/crm/v3/objects/companies/${companyId}?properties=cnpj,name,enriquecer_empresa_crmhub,status_enriquecimento_crmhub`,
-      {
-        headers: { 
-          Authorization: `Bearer ${HUBSPOT_ACCESS_TOKEN}`,
-          'Content-Type': 'application/json'
-        }
-      }
-    );
-
-    const properties = hubspotCompany.data.properties;
-    
-    // ⚡ VERIFICAR SE AINDA ESTÁ MARCADO COMO SIM
-    if (properties.enriquecer_empresa_crmhub !== 'sim') {
-      console.log('⚠️ Campo não está mais marcado como SIM, cancelando');
-      return;
-    }
-    
-    // ⚡ BUSCAR E LIMPAR CNPJ
-    let cnpjRaw = properties.cnpj;
-    
-    // Se não encontrou, procurar em outros campos
-    if (!cnpjRaw) {
-      const allPropsResponse = await axios.get(
-        `https://api.hubapi.com/crm/v3/objects/companies/${companyId}`,
-        {
-          headers: { 
-            Authorization: `Bearer ${HUBSPOT_ACCESS_TOKEN}`,
-            'Content-Type': 'application/json'
-          }
-        }
-      );
-      
-      const allProps = allPropsResponse.data.properties;
-      
-      for (const [key, value] of Object.entries(allProps)) {
-        if (value && typeof value === 'string') {
-          const cleaned = cleanCNPJ(value);
-          if (cleaned.length === 14) {
-            console.log(`🎯 CNPJ encontrado no campo "${key}": ${value}`);
-            cnpjRaw = value;
-            break;
-          }
-        }
-      }
-    }
-
-    const cnpjLimpo = cleanCNPJ(cnpjRaw);
-    
-    // ⚡ VALIDAR CNPJ
-    if (!cnpjLimpo || cnpjLimpo.length !== 14) {
-      console.warn(`⚠️ CNPJ inválido para empresa ${companyId}: ${cnpjRaw}`);
-      
-      await axios.patch(
-        `https://api.hubapi.com/crm/v3/objects/companies/${companyId}`,
-        {
-          properties: {
-            status_enriquecimento_crmhub: 'falha',
-            data_atualizacao_crmhub: new Date().toLocaleString('pt-BR')
-          }
-        },
-        {
-          headers: {
-            Authorization: `Bearer ${HUBSPOT_ACCESS_TOKEN}`,
-            'Content-Type': 'application/json'
-          }
-        }
-      );
-      
-      return;
-    }
-
-    console.log(`📡 Consultando CNPJ: ${cnpjLimpo}`);
-    
-    // ⚡ CONSULTAR API CNPJ
-    const cnpjDataResponse = await axios.get(`https://publica.cnpj.ws/cnpj/${cnpjLimpo}`, {
-      timeout: 10000,
-      headers: {
-        'User-Agent': 'CNPJ-Enricher-Polling/2.1'
-      }
-    });
-
-    const cnpjData = cnpjDataResponse.data;
-    console.log(`✅ Dados obtidos para CNPJ: ${cnpjLimpo}`);
-
-    // ⚡ MAPEAR DADOS USANDO CRMHUB
-    const updatePayload = mapCNPJDataToCRMHubFields(cnpjData, cnpjLimpo, 'enriquecido');
-
-    // ⚡ ATUALIZAR EMPRESA
-    await axios.patch(
-      `https://api.hubapi.com/crm/v3/objects/companies/${companyId}`,
-      updatePayload,
-      {
-        headers: {
-          Authorization: `Bearer ${HUBSPOT_ACCESS_TOKEN}`,
-          'Content-Type': 'application/json'
-        }
-      }
-    );
-
-    console.log(`🎉 Empresa ${companyId} enriquecida com sucesso via polling!`);
-    
-  } catch (error) {
-    console.error(`❌ Erro no enriquecimento polling para ${companyId}:`, error.message);
-    
-    // ⚡ ATUALIZAR STATUS DE ERRO
-    let statusToUpdate = 'falha';
-    
-    if (error.response?.status === 429 && error.config?.url?.includes('cnpj.ws')) {
-      statusToUpdate = 'rate_limit';
-      console.log(`⚠️ Rate limit atingido para empresa ${companyId}`);
-    }
-    
-    try {
-      await axios.patch(
-        `https://api.hubapi.com/crm/v3/objects/companies/${companyId}`,
-        {
-          properties: {
-            status_enriquecimento_crmhub: statusToUpdate,
-            data_atualizacao_crmhub: new Date().toLocaleString('pt-BR')
-          }
-        },
-        {
-          headers: {
-            Authorization: `Bearer ${HUBSPOT_ACCESS_TOKEN}`,
-            'Content-Type': 'application/json'
-          }
-        }
-      );
-    } catch (updateError) {
-      console.error('❌ Erro ao atualizar status de erro:', updateError.message);
-    }
-  }
-}
-
-// ⚡ INICIAR POLLING
-function startPolling() {
-  if (pollingInterval) {
-    console.log('⚠️ Polling já está ativo');
-    return;
-  }
-  
-  console.log('🚀 Iniciando sistema de polling (30 segundos)...');
-  pollingActive = true;
-  
-  // ⚡ RODAR IMEDIATAMENTE
-  checkForAutoEnrichment();
-  
-  // ⚡ CONFIGURAR INTERVAL DE 30 SEGUNDOS
-  pollingInterval = setInterval(() => {
-    if (pollingActive) {
-      checkForAutoEnrichment();
-    }
-  }, 30000); // 30 segundos
-  
-  console.log('✅ Polling iniciado com sucesso');
-}
-
-// ⚡ PARAR POLLING
-function stopPolling() {
-  if (pollingInterval) {
-    clearInterval(pollingInterval);
-    pollingInterval = null;
-    pollingActive = false;
-    console.log('⏹️ Polling interrompido');
-  }
-}
-
 // ⚡ ENDPOINTS PRINCIPAIS
 
 // Status do app
@@ -1737,15 +639,13 @@ app.get('/account', (req, res) => {
     version: '2.1',
     tokenStatus: HUBSPOT_ACCESS_TOKEN ? 'Configurado' : 'Não configurado',
     crmhubStatus: crmhubToggleEnabled ? 'Ativo' : 'Inativo',
-    pollingStatus: pollingActive ? 'Ativo' : 'Inativo',
     fieldsTotal: CRMHUB_FIELDS.length,
     endpoints: {
       configurar: 'GET /settings',
       enriquecer: 'POST /enrich',
       criarTeste: 'POST /create-test-company',
       crmhubEnriquecer: 'POST /api/enrich-crmhub',
-      crmhubDropdown: 'POST /api/crmhub-dropdown-fetch',
-      pollingControl: 'POST /api/polling-control'
+      crmhubDropdown: 'POST /api/crmhub-dropdown-fetch'
     }
   });
 });
@@ -1926,14 +826,13 @@ app.get('/oauth/callback', async (req, res) => {
             <p><strong>Expira em:</strong> ${Math.floor(expires_in / 3600)} horas</p>
             <p><strong>Status:</strong> Conectado ao HubSpot ✅</p>
             <p><strong>Campos CRMHub:</strong> ${CRMHUB_FIELDS.length} campos disponíveis</p>
-            <p><strong>Polling:</strong> ${pollingActive ? 'Ativo 🟢' : 'Será iniciado automaticamente 🔄'}</p>
         </div>
         
         <h3>🚀 Próximos passos:</h3>
         <ol>
             <li><strong>Criar empresa teste:</strong><br><code>POST /create-test-company</code></li>
-            <li><strong>Marcar empresa como SIM</strong> no campo "Enriquecer Empresa - CRMHub"</li>
-            <li><strong>Aguardar até 30 segundos</strong> para enriquecimento automático</li>
+            <li><strong>Enriquecer empresa:</strong><br><code>POST /enrich</code></li>
+            <li><strong>CRMHub:</strong><br><code>POST /api/enrich-crmhub</code></li>
         </ol>
         
         <div style="margin-top: 30px;">
@@ -2199,7 +1098,6 @@ app.post('/enrich', async (req, res) => {
         tipoConteudo: crmhubToggleEnabled ? 'Dados em campos dedicados CRMHub' :
                       (hasIndividualMapping ? 'Campos específicos + backup' : 'Texto formatado completo'),
         crmhubAtivo: crmhubToggleEnabled,
-        pollingAtivo: pollingActive,
         statusEnriquecimento: 'enriquecido'
       }
     });
@@ -2211,37 +1109,12 @@ app.post('/enrich', async (req, res) => {
     console.error('📄 Response data:', error.response?.data);
     
     // ⚡ ATUALIZAR STATUS BASEADO NO TIPO DE ERRO
-if (crmhubToggleEnabled) {
-  try {
-    let statusToUpdate = 'falha';
-    
-    if (error.response?.status === 429 && error.config?.url?.includes('cnpj.ws')) {
-      statusToUpdate = 'rate_limit';
-      console.log('⚠️ Rate limit detectado - atualizando status');
-    }
-    
-    await axios.patch(
-      `https://api.hubapi.com/crm/v3/objects/companies/${companyId}`,
-      {
-        properties: {
-          status_enriquecimento_crmhub: statusToUpdate
-        }
-      },
-      {
-        headers: {
-          Authorization: `Bearer ${HUBSPOT_ACCESS_TOKEN}`,
-          'Content-Type': 'application/json'
-        }
-      }
-    );
-    console.log(`❌ Status atualizado para: ${statusToUpdate}`);
-  } catch (statusError) {
-    console.error('❌ Erro ao atualizar status:', statusError.message);
-  }
-}
-
-
-statusToUpdate = 'rate_limit';
+    if (crmhubToggleEnabled) {
+      try {
+        let statusToUpdate = 'falha';
+        
+        if (error.response?.status === 429 && error.config?.url?.includes('cnpj.ws')) {
+          statusToUpdate = 'rate_limit';
           console.log('⚠️ Rate limit detectado - atualizando status');
         }
         
@@ -2422,19 +1295,11 @@ app.post('/create-test-company', async (req, res) => {
         modoAtivo: modo,
         campoDestino: hasIndividualMapping ? 'múltiplos campos' : (savedUserChoice || selectedDestinationField),
         crmhubAtivo: crmhubToggleEnabled,
-        pollingAtivo: pollingActive,
         camposDisponiveis: CRMHUB_FIELDS.length
       },
       proximoTeste: {
-        instrucoes: [
-          '1. Ative o CRMHub via toggle se não estiver ativo',
-          '2. Marque a empresa como "SIM" no campo "Enriquecer Empresa - CRMHub"',
-          '3. Aguarde até 30 segundos para enriquecimento automático'
-        ],
-        alternativa: {
-          url: 'POST /enrich',
-          body: { companyId: response.data.id }
-        }
+        url: 'POST /enrich',
+        body: { companyId: response.data.id }
       }
     });
   } catch (error) {
@@ -2480,7 +1345,6 @@ app.post('/api/crmhub-toggle-fetch', (req, res) => {
   try {
     console.log(`📊 Status atual do CRMHub: ${crmhubToggleEnabled ? 'ATIVADO' : 'DESATIVADO'}`);
     console.log(`🔑 Token status: ${HUBSPOT_ACCESS_TOKEN ? 'CONFIGURADO' : 'NÃO CONFIGURADO'}`);
-    console.log(`🔄 Polling status: ${pollingActive ? 'ATIVO' : 'INATIVO'}`);
 
     const responseData = {
       response: {
@@ -2492,10 +1356,6 @@ app.post('/api/crmhub-toggle-fetch', (req, res) => {
         authStatus: {
           tokenConfigured: !!HUBSPOT_ACCESS_TOKEN,
           tokenPreview: HUBSPOT_ACCESS_TOKEN ? HUBSPOT_ACCESS_TOKEN.substring(0, 20) + '...' : 'NÃO CONFIGURADO'
-        },
-        pollingStatus: {
-          active: pollingActive,
-          interval: '30 segundos'
         },
         fieldsCount: CRMHUB_FIELDS.length
       }
@@ -2573,7 +1433,6 @@ app.post('/api/crmhub-toggle-update', async (req, res) => {
     logs.push('🔄 Botão CRMHub acionado');
     logs.push(`📊 Estado anterior: ${previousState ? 'ATIVO' : 'INATIVO'}`);
     logs.push(`📊 Novo estado: ${crmhubToggleEnabled ? 'ATIVO' : 'INATIVO'}`);
-    logs.push(`🔄 Polling: ${pollingActive ? 'ATIVO' : 'SERÁ INICIADO'}`);
     
     if (crmhubToggleEnabled) {
       // ⚡ ATIVANDO CRMHUB
@@ -2602,8 +1461,7 @@ app.post('/api/crmhub-toggle-update', async (req, res) => {
             fieldsCreated: createResults.created.length,
             fieldsExisting: createResults.existing.length,
             fieldsErrors: createResults.errors.length,
-            tokenValid: true,
-            pollingActive: pollingActive
+            tokenValid: true
           };
         } else {
           logs.push(`✅ Todos os ${fieldsStatus.existing.length} campos já existem`);
@@ -2611,13 +1469,9 @@ app.post('/api/crmhub-toggle-update', async (req, res) => {
           additionalData = { 
             fieldsExisting: fieldsStatus.existing.length,
             fieldsCreated: 0,
-            tokenValid: true,
-            pollingActive: pollingActive
+            tokenValid: true
           };
         }
-        
-        logs.push('🎯 Agora você pode marcar empresas como "SIM"');
-        logs.push('⏱️ Enriquecimento automático em até 30 segundos');
         
       } catch (error) {
         console.error('❌ Erro ao verificar/criar campos:', error);
@@ -2625,8 +1479,7 @@ app.post('/api/crmhub-toggle-update', async (req, res) => {
         message = `⚠️ CRMHub ativado com erro: ${error.message}`;
         additionalData = { 
           error: error.message,
-          tokenValid: true,
-          pollingActive: pollingActive
+          tokenValid: true
         };
       }
       
@@ -2635,12 +1488,10 @@ app.post('/api/crmhub-toggle-update', async (req, res) => {
       console.log('⚪ DESATIVANDO CRMHub via toggle...');
       logs.push('⚪ DESATIVANDO CRMHub...');
       logs.push('📋 Sistema padrão reativado');
-      logs.push('🔄 Polling continua ativo para outras funções');
       message = '⚪ CRMHub DESATIVADO - Sistema padrão ativo';
       additionalData = { 
         mode: 'standard',
-        tokenValid: true,
-        pollingActive: pollingActive
+        tokenValid: true
       };
     }
     
@@ -2662,11 +1513,6 @@ app.post('/api/crmhub-toggle-update', async (req, res) => {
           tokenConfigured: true,
           tokenValid: true,
           tokenPreview: HUBSPOT_ACCESS_TOKEN.substring(0, 20) + '...'
-        },
-        pollingInfo: {
-          active: pollingActive,
-          interval: '30 segundos',
-          description: 'Verifica empresas marcadas como SIM automaticamente'
         },
         fieldsInfo: {
           total: CRMHUB_FIELDS.length,
@@ -2705,104 +1551,157 @@ app.post('/api/crmhub-toggle-update', async (req, res) => {
   }
 });
 
-// ⚡ ENDPOINTS DE CONTROLE DO POLLING
-
-// ⚡ ENDPOINT PARA CONTROLAR POLLING
-app.post('/api/polling-control', (req, res) => {
-  const { action } = req.body;
+// ⚡ ENDPOINT PARA BOTÃO CRMHUB - ADICIONADO DE VOLTA
+app.post('/api/crmhub-button-action', async (req, res) => {
+  console.log('🔘 CRMHub Button Action chamado');
+  console.log('📥 Request body:', JSON.stringify(req.body, null, 2));
   
-  console.log(`🎛️ Controle de polling: ${action}`);
+  // Configurar CORS
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
   
-  if (action === 'start') {
-    startPolling();
-    res.json({
-      success: true,
-      message: '🚀 Polling iniciado',
-      status: 'ativo',
-      intervalo: '30 segundos'
-    });
-  } else if (action === 'stop') {
-    stopPolling();
-    res.json({
-      success: true,
-      message: '⏹️ Polling interrompido',
-      status: 'inativo'
-    });
-  } else if (action === 'status') {
-    res.json({
-      success: true,
-      polling: pollingActive,
-      status: pollingActive ? 'ativo' : 'inativo',
-      intervalo: pollingActive ? '30 segundos' : 'n/a',
-      proximaVerificacao: pollingActive ? 'Próximos 30 segundos' : 'Polling inativo',
-      crmhubAtivo: crmhubToggleEnabled,
-      tokenConfigured: !!HUBSPOT_ACCESS_TOKEN
-    });
-  } else {
-    res.status(400).json({
-      error: 'Ação inválida',
-      acoes: ['start', 'stop', 'status']
+  if (!HUBSPOT_ACCESS_TOKEN) {
+    console.error('❌ HUBSPOT_ACCESS_TOKEN não configurado');
+    return res.json({
+      success: false,
+      message: '❌ Token do HubSpot não configurado - Execute OAuth primeiro',
+      error: 'Token não encontrado',
+      authUrl: `https://app.hubspot.com/oauth/authorize?client_id=${CLIENT_ID}&scope=crm.objects.companies.read%20crm.objects.companies.write&redirect_uri=${REDIRECT_URI}`
     });
   }
-});
-
-// ⚡ ENDPOINT PARA TESTAR BUSCA MANUAL
-app.get('/api/test-search', async (req, res) => {
+  
   try {
-    console.log('🧪 Testando busca de empresas...');
+    // Inverter estado do CRMHub
+    const previousState = crmhubToggleEnabled;
+    crmhubToggleEnabled = !crmhubToggleEnabled;
     
-    const searchUrl = 'https://api.hubapi.com/crm/v3/objects/companies/search';
-    const searchPayload = {
-      filterGroups: [
-        {
-          filters: [
-            {
-              propertyName: 'enriquecer_empresa_crmhub',
-              operator: 'EQ',
-              value: 'sim'
-            }
-          ]
-        }
-      ],
-      properties: [
-        'name',
-        'cnpj',
-        'enriquecer_empresa_crmhub',
-        'status_enriquecimento_crmhub'
-      ],
-      limit: 10
-    };
-
-    const response = await axios.post(searchUrl, searchPayload, {
-      headers: {
-        Authorization: `Bearer ${HUBSPOT_ACCESS_TOKEN}`,
-        'Content-Type': 'application/json'
-      }
-    });
-
-    const companies = response.data.results || [];
+    console.log(`🔘 Botão acionado: ${previousState} → ${crmhubToggleEnabled}`);
+    
+    let message = '';
+    
+    if (crmhubToggleEnabled) {
+      message = '🚀 CRMHub ATIVADO! Campos específicos serão utilizados.';
+    } else {
+      message = '⚪ CRMHub DESATIVADO! Sistema padrão reativado.';
+    }
     
     res.json({
       success: true,
-      message: `🔍 Encontradas ${companies.length} empresas com "SIM"`,
-      pollingStatus: pollingActive ? 'ativo' : 'inativo',
-      crmhubStatus: crmhubToggleEnabled ? 'ativo' : 'inativo',
-      companies: companies.map(c => ({
-        id: c.id,
-        name: c.properties.name,
-        cnpj: c.properties.cnpj,
-        enriquecer: c.properties.enriquecer_empresa_crmhub,
-        status: c.properties.status_enriquecimento_crmhub
-      }))
+      actionType: 'BUTTON_ACTION',
+      crmhubEnabled: crmhubToggleEnabled,
+      previousState: previousState,
+      message: message,
+      buttonText: crmhubToggleEnabled ? '⚪ Desativar CRMHub' : '🚀 Ativar CRMHub'
     });
     
   } catch (error) {
-    res.status(500).json({
-      error: 'Erro na busca',
-      details: error.message
+    console.error('❌ Erro no botão CRMHub:', error);
+    
+    res.json({
+      success: false,
+      message: '❌ Erro ao executar ação do botão: ' + error.message,
+      error: error.message
     });
   }
 });
+
+// ⚡ FUNÇÕES QUE ESTAVAM FALTANDO - ADICIONADAS DE VOLTA
+
+// Função para usar mapeamento individual ou campo único
+function updateEnrichmentPayload(cnpjData, cnpjNumber) {
+  const hasIndividualMapping = Object.values(individualMapping).some(field => field && field !== 'nenhum');
+  
+  if (hasIndividualMapping) {
+    console.log('🗺️ Usando mapeamento individual de campos');
+    return generateIndividualMappingPayload(cnpjData, cnpjNumber);
+  } else {
+    console.log('📋 Usando modo de campo único');
+    const dadosFormatados = formatCNPJData(cnpjData, cnpjNumber);
+    const campoAtual = savedUserChoice || selectedDestinationField;
+    
+    if (campoAtual === 'nenhum') {
+      console.log('🚫 Modo "não mapear" - não salvando dados adicionais');
+      return { properties: {} };
+    }
+    
+    const payload = {
+      properties: {
+        [campoAtual]: dadosFormatados
+      }
+    };
+    
+    console.log(`📦 Dados serão salvos no campo único: ${campoAtual}`);
+    return payload;
+  }
+}
+
+// Função para gerar payload baseado no mapeamento individual
+function generateIndividualMappingPayload(cnpjData, cnpjNumber) {
+  const payload = { properties: {} };
+  const unmappedData = [];
+  
+  // Lista de campos válidos do HubSpot
+  const validFields = ['name', 'description', 'phone', 'city', 'state', 'website', 'zip', 'teste_cnpj'];
+  
+  // Extrair dados do CNPJ
+  const extractedData = {
+    telefone: cnpjData.estabelecimento?.telefone1 ? 
+      `(${cnpjData.estabelecimento.ddd1}) ${cnpjData.estabelecimento.telefone1}` : '',
+    razao_social: cnpjData.razao_social || '',
+    nome_fantasia: cnpjData.estabelecimento?.nome_fantasia || '',
+    cidade: cnpjData.estabelecimento?.cidade?.nome || '',
+    estado: cnpjData.estabelecimento?.estado?.sigla || '',
+    atividade: cnpjData.estabelecimento?.atividade_principal?.descricao || '',
+    cep: cnpjData.estabelecimento?.cep || '',
+    email: cnpjData.estabelecimento?.email || '',
+    endereco: cnpjData.estabelecimento?.logradouro ? 
+      `${cnpjData.estabelecimento.tipo_logradouro || ''} ${cnpjData.estabelecimento.logradouro}, ${cnpjData.estabelecimento.numero || 'S/N'}` : '',
+    situacao: cnpjData.estabelecimento?.situacao_cadastral || '',
+    porte: cnpjData.porte?.descricao || '',
+    capital_social: cnpjData.capital_social ? `R$ ${cnpjData.capital_social}` : ''
+  };
+  
+  console.log('🧩 Dados extraídos do CNPJ:', extractedData);
+  console.log('🗺️ Mapeamento individual atual:', individualMapping);
+  
+  // Mapear campos individuais
+  let mappedFieldsCount = 0;
+  Object.keys(extractedData).forEach(cnpjField => {
+    const hubspotField = individualMapping[cnpjField];
+    const value = extractedData[cnpjField];
+    
+    if (hubspotField && hubspotField !== 'nenhum' && value && validFields.includes(hubspotField)) {
+      payload.properties[hubspotField] = value;
+      mappedFieldsCount++;
+      console.log(`✅ Mapeado: ${cnpjField} → ${hubspotField} = "${value}"`);
+    } else if (value) {
+      unmappedData.push(`${cnpjFieldsDefinition[cnpjField]?.label}: ${value}`);
+      console.log(`📦 Não mapeado: ${cnpjField} = "${value}"`);
+    }
+  });
+  
+  // Se há dados não mapeados, salvar no campo backup
+  if (unmappedData.length > 0) {
+    const backupField = savedUserChoice || selectedDestinationField;
+    if (backupField && backupField !== 'nenhum' && validFields.includes(backupField)) {
+      const backupData = `
+=== DADOS CNPJ NÃO MAPEADOS ===
+CNPJ: ${cnpjNumber}
+${unmappedData.join('\n')}
+
+Atualizado em: ${new Date().toLocaleString('pt-BR')}
+`.trim();
+      
+      payload.properties[backupField] = backupData;
+      console.log(`📦 Dados não mapeados salvos em: ${backupField}`);
+    }
+  }
+  
+  console.log(`📊 Resumo: ${mappedFieldsCount} campos mapeados, ${unmappedData.length} não mapeados`);
+  
+  return payload;
+}
 
 // ⚡ Página inicial
 app.get('/', (req, res) => {
@@ -2814,7 +1713,7 @@ app.get('/', (req, res) => {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>CNPJ Enricher 2.1 - Auto Polling</title>
+    <title>CNPJ Enricher 2.1</title>
     <style>
         body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; margin: 0; padding: 20px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); min-height: 100vh; }
         .container { max-width: 800px; margin: 0 auto; background: white; border-radius: 15px; padding: 40px; box-shadow: 0 10px 30px rgba(0,0,0,0.2); }
@@ -2822,7 +1721,6 @@ app.get('/', (req, res) => {
         .header h1 { color: #2c3e50; margin: 0; font-size: 2.5em; }
         .header p { color: #7f8c8d; margin: 10px 0; font-size: 1.2em; }
         .status { background: #e8f5e8; border: 1px solid #4caf50; padding: 20px; border-radius: 10px; margin: 20px 0; }
-        .polling-status { background: #e3f2fd; border: 1px solid #2196f3; padding: 20px; border-radius: 10px; margin: 20px 0; }
         .endpoints { background: #f8f9fa; padding: 20px; border-radius: 10px; margin: 20px 0; }
         .endpoint { background: white; padding: 15px; margin: 10px 0; border-radius: 8px; border-left: 4px solid #007bff; }
         .btn { display: inline-block; padding: 12px 24px; background: #007bff; color: white; text-decoration: none; border-radius: 8px; margin: 10px 5px; transition: all 0.3s; }
@@ -2832,14 +1730,13 @@ app.get('/', (req, res) => {
         .btn-warning { background: #ffc107; color: #212529; }
         .btn-warning:hover { background: #e0a800; }
         .new-features { background: #fff3cd; border: 1px solid #ffeaa7; padding: 15px; border-radius: 8px; margin: 20px 0; }
-        .auto-feature { background: #d4edda; border: 1px solid #c3e6cb; padding: 15px; border-radius: 8px; margin: 20px 0; }
     </style>
 </head>
 <body>
     <div class="container">
         <div class="header">
             <h1>🚀 CNPJ Enricher 2.1</h1>
-            <p>Sistema Inteligente de Enriquecimento Automático</p>
+            <p>Sistema Inteligente de Enriquecimento de Empresas</p>
         </div>
         
         <div class="status">
@@ -2850,49 +1747,19 @@ app.get('/', (req, res) => {
             <p><strong>Campos disponíveis:</strong> ${CRMHUB_FIELDS.length} campos CRMHub</p>
         </div>
         
-        <div class="polling-status">
-            <h3>🔄 Status do Polling Automático</h3>
-            <p><strong>Polling:</strong> ${pollingActive ? 'Ativo 🟢' : 'Inativo 🔴'}</p>
-            <p><strong>Intervalo:</strong> ${pollingActive ? '30 segundos' : 'Aguardando ativação'}</p>
-            <p><strong>Última verificação:</strong> ${pollingActive ? 'Executando...' : 'Não iniciado'}</p>
-        </div>
-        
-        <div class="auto-feature">
-            <h3>🎯 Enriquecimento Automático</h3>
-            <p><strong>Como usar:</strong></p>
-            <ol>
-                <li>Ative o <strong>CRMHub</strong> via toggle</li>
-                <li>Marque empresa como <strong>"SIM"</strong> no campo "Enriquecer Empresa - CRMHub"</li>
-                <li>Aguarde <strong>até 30 segundos</strong> para enriquecimento automático</li>
-                <li>Verifique o <strong>status</strong> no campo "Status do Enriquecimento"</li>
-            </ol>
-        </div>
-        
         <div class="new-features">
             <h3>🆕 Novidades v2.1</h3>
-            <p>🎯 <strong>Enriquecimento Automático:</strong> Marca SIM → Enriquece automaticamente</p>
-            <p>🔄 <strong>Polling System:</strong> Verifica empresas a cada 30 segundos</p>
-            <p>📈 <strong>Status Inteligente:</strong> Enriquecido/Rate Limit/Falha/Não Processado</p>
-            <p>⚡ <strong>Zero Configuração:</strong> Funciona sem webhooks ou workflows</p>
+            <p>✅ <strong>Enriquecer Empresa - CRMHub:</strong> Campo SIM/NÃO para marcar empresas</p>
+            <p>📈 <strong>Status do Enriquecimento:</strong> Acompanhe status (Enriquecido/Rate Limit/Falha)</p>
+            <p>🔄 <strong>Toggle melhorado:</strong> Logs detalhados nas notificações</p>
         </div>
         
         <div class="endpoints">
             <h3>📋 Endpoints Principais</h3>
             
             <div class="endpoint">
-                <h4>POST /api/polling-control</h4>
-                <p>Controlar sistema de polling automático</p>
-                <code>{"action": "start|stop|status"}</code>
-            </div>
-            
-            <div class="endpoint">
-                <h4>GET /api/test-search</h4>
-                <p>Testar busca de empresas marcadas como "SIM"</p>
-            </div>
-            
-            <div class="endpoint">
                 <h4>POST /enrich</h4>
-                <p>Enriquecer empresa manualmente (backup)</p>
+                <p>Enriquecer empresa com dados da Receita Federal</p>
                 <code>{"companyId": "123456789"}</code>
             </div>
             
@@ -2900,16 +1767,26 @@ app.get('/', (req, res) => {
                 <h4>POST /create-test-company</h4>
                 <p>Criar empresa de teste com CNPJ válido</p>
             </div>
+            
+            <div class="endpoint">
+                <h4>POST /api/crmhub-toggle-update</h4>
+                <p>Ativar/Desativar CRMHub com logs detalhados</p>
+            </div>
+            
+            <div class="endpoint">
+                <h4>GET /account</h4>
+                <p>Verificar status do sistema</p>
+            </div>
         </div>
         
         <div style="text-align: center; margin-top: 30px;">
             <a href="/account" class="btn">📊 Status do Sistema</a>
-            <a href="/api/test-search" class="btn btn-success">🧪 Testar Busca</a>
+            <a href="/create-test-company" class="btn btn-success">🏢 Criar Empresa Teste</a>
             <a href="/settings" class="btn btn-warning">⚙️ Configurações</a>
         </div>
         
         <div style="text-align: center; margin-top: 20px; color: #7f8c8d;">
-            <p>CNPJ Enricher 2.1 - Auto Polling System - Powered by CRMHub</p>
+            <p>CNPJ Enricher 2.1 - Powered by CRMHub</p>
         </div>
     </div>
 </body>
@@ -2941,9 +1818,6 @@ app.get('/settings', (req, res) => {
         .btn { background: #007bff; color: white; padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer; }
         .btn:hover { background: #0056b3; }
         .status { background: #e8f5e8; padding: 15px; border-radius: 8px; margin: 20px 0; }
-        .polling-info { background: #e3f2fd; padding: 15px; border-radius: 8px; margin: 20px 0; }
-        .test-btn { background: #28a745; margin-left: 10px; }
-        .test-btn:hover { background: #1e7e34; }
     </style>
 </head>
 <body>
@@ -2953,24 +1827,8 @@ app.get('/settings', (req, res) => {
         <div class="status">
             <h3>📊 Status Atual</h3>
             <p><strong>CRMHub:</strong> ${crmhubToggleEnabled ? 'Ativo 🚀' : 'Inativo ⚪'}</p>
-            <p><strong>Polling:</strong> ${pollingActive ? 'Ativo 🟢' : 'Inativo 🔴'}</p>
             <p><strong>Campos disponíveis:</strong> ${CRMHUB_FIELDS.length} campos</p>
             <p><strong>Token:</strong> ${HUBSPOT_ACCESS_TOKEN ? 'Configurado ✅' : 'Não configurado ❌'}</p>
-        </div>
-        
-        <div class="polling-info">
-            <h3>🔄 Sistema de Polling Automático</h3>
-            <p><strong>Status:</strong> ${pollingActive ? 'Verificando empresas a cada 30 segundos' : 'Aguardando ativação'}</p>
-            <p><strong>Funcionamento:</strong></p>
-            <ol>
-                <li>Busca empresas com campo "Enriquecer Empresa" = "SIM"</li>
-                <li>Filtra apenas as não processadas</li>
-                <li>Enriquece automaticamente uma por vez</li>
-                <li>Atualiza status conforme resultado</li>
-            </ol>
-            
-            <button class="btn" onclick="controlPolling('status')">📊 Verificar Status</button>
-            <button class="btn test-btn" onclick="testSearch()">🧪 Testar Busca</button>
         </div>
         
         <div class="field-mapping">
@@ -2983,17 +1841,9 @@ app.get('/settings', (req, res) => {
         
         <h3>🆕 Novos Campos CRMHub</h3>
         <ul>
-            <li>🎯 <strong>Enriquecer Empresa:</strong> SIM/NÃO (trigger automático)</li>
+            <li>🎯 <strong>Enriquecer Empresa:</strong> SIM/NÃO</li>
             <li>📈 <strong>Status do Enriquecimento:</strong> Enriquecido/Rate Limit/Falha/Não Processado</li>
         </ul>
-        
-        <h3>📋 Como Usar o Sistema Automático</h3>
-        <ol>
-            <li><strong>Ative CRMHub</strong> via toggle no HubSpot</li>
-            <li><strong>Marque empresas</strong> como "SIM" no campo "Enriquecer Empresa - CRMHub"</li>
-            <li><strong>Aguarde</strong> até 30 segundos para processamento automático</li>
-            <li><strong>Monitore</strong> o campo "Status do Enriquecimento"</li>
-        </ol>
     </div>
 
     <script>
@@ -3013,45 +1863,6 @@ app.get('/settings', (req, res) => {
                 alert("Erro ao salvar: " + error.message);
             }
         }
-        
-        async function controlPolling(action) {
-            try {
-                const res = await fetch("/api/polling-control", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ action: action })
-                });
-
-                const result = await res.json();
-                alert(JSON.stringify(result, null, 2));
-            } catch (error) {
-                alert("Erro: " + error.message);
-            }
-        }
-        
-        async function testSearch() {
-            try {
-                const res = await fetch("/api/test-search");
-                const result = await res.json();
-                
-                let message = \`Resultado da busca:\\n\\n\`;
-                message += \`✅ Status: \${result.success ? 'Sucesso' : 'Erro'}\\n\`;
-                message += \`📊 Polling: \${result.pollingStatus}\\n\`;
-                message += \`🚀 CRMHub: \${result.crmhubStatus}\\n\`;
-                message += \`🏢 Empresas encontradas: \${result.companies?.length || 0}\\n\\n\`;
-                
-                if (result.companies && result.companies.length > 0) {
-                    message += "Empresas:\\n";
-                    result.companies.forEach((company, index) => {
-                        message += \`\${index + 1}. \${company.name} (\${company.status || 'sem status'})\\n\`;
-                    });
-                }
-                
-                alert(message);
-            } catch (error) {
-                alert("Erro na busca: " + error.message);
-            }
-        }
     </script>
 </body>
 </html>`);
@@ -3068,25 +1879,9 @@ console.log('   POST /api/crmhub-dropdown-update - Executar ação');
 console.log('🆕 Novos campos adicionados:');
 console.log('   🎯 enriquecer_empresa_crmhub - Campo SIM/NÃO');
 console.log('   📈 status_enriquecimento_crmhub - Status do processo');
-console.log('🔄 Sistema de Polling carregado!');
-console.log('📡 Endpoints de polling adicionados:');
-console.log('   POST /api/polling-control - Controlar polling');
-console.log('   GET /api/test-search - Testar busca de empresas');
-console.log('⏱️ Intervalo de verificação: 30 segundos');
 console.log(`🎯 Status inicial CRMHub: ${crmhubToggleEnabled ? 'ATIVADO' : 'DESATIVADO'}`);
-console.log(`🔄 Status inicial Polling: ${pollingActive ? 'ATIVO' : 'SERÁ INICIADO AUTOMATICAMENTE'}`);
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-  console.log(`🚀 CNPJ Enricher 2.1 com Auto-Polling rodando na porta ${PORT}`);
-  
-  // ⚡ INICIAR POLLING AUTOMATICAMENTE APÓS 5 SEGUNDOS
-  setTimeout(() => {
-    if (!pollingActive) {
-      console.log('🔄 Iniciando polling automaticamente...');
-      startPolling();
-    }
-  }, 5000);
-});
+app.listen(PORT, () => console.log(`🚀 CNPJ Enricher 2.1 com CRMHub rodando na porta ${PORT}`));
 
 module.exports = app;
