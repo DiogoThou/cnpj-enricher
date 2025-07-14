@@ -448,7 +448,7 @@ function mapCNPJDataToCRMHubFields(cnpjData, cnpjNumber, enrichmentStatus = 'enr
     capital_social_crmhub: cnpjData.capital_social ? `R$ ${cnpjData.capital_social}` : '',
     data_atualizacao_crmhub: new Date().toLocaleString('pt-BR'),
     // ⚡ NOVOS CAMPOS
-    enriquecer_empresa_crmhub: 'sim', // Auto-marcar como SIM quando enriquecido
+   enriquecer_empresa_crmhub: '',
     status_enriquecimento_crmhub: enrichmentStatus
   };
   
