@@ -452,13 +452,13 @@ function mapCNPJDataToCRMHubFields(cnpjData, cnpjNumber, enrichmentStatus = 'enr
     status_enriquecimento_crmhub: enrichmentStatus
   };
   
-  // Filtrar apenas campos com valores
-  const payload = { properties: {} };
-  Object.keys(mappedData).forEach(key => {
-    if (mappedData[key]) {
-      payload.properties[key] = mappedData[key];
-    }
-  });
+  // Filtrar apenas campos com valores, EXCETO o campo enriquecer que deve ser limpo
+const payload = { properties: {} };
+Object.keys(mappedData).forEach(key => {
+  if (mappedData[key] || key === 'enriquecer_empresa_crmhub') {
+    payload.properties[key] = mappedData[key];
+  }
+});
   
   console.log('🗺️ Dados mapeados para campos CRMHub:', payload);
   return payload;
