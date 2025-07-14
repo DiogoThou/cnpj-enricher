@@ -1,61 +1,4 @@
-statusToUpdate = 'rate_limit';
-          console.log('⚠️ Rate limit detectado - atualizando status');
-        }
-        
-        await axios.patch(
-          `https://api.hubapi.com/crm/v3/objects/companies/${companyId}`,
-          {
-            properties: {
-              status_enriquecimento_crmhub: statusToUpdate
-            }
-          },
-          {
-            headers: {
-              Authorization: `Bearer ${HUBSPOT_ACCESS_TOKEN}`,
-              'Content-Type': 'application/json'
-            }
-          }
-        );
-        console.log(`❌ Status atualizado para: ${statusToUpdate}`);
-      } catch (statusError) {
-        console.error('❌ Erro ao atualizar status:', statusError.message);
-      }
-    }
-    
-    if (error.response?.status === 401) {
-      return res.status(401).json({ 
-        error: 'Token do HubSpot inválido ou expirado',
-        details: 'Execute OAuth novamente',
-        authUrl: `https://app.hubspot.com/oauth/authorize?client_id=${CLIENT_ID}&scope=crm.objects.companies.read%20crm.objects.companies.write&redirect_uri=${REDIRECT_URI}`
-      });
-    }
-    
-    if (error.response?.status === 404 && error.config?.url?.includes('hubapi.com')) {
-      return res.status(404).json({ 
-        error: 'Empresa não encontrada no HubSpot',
-        companyId: companyId
-      });
-    }
-    
-    if (error.response?.status === 400 && error.response?.data?.message?.includes('does not exist')) {
-      console.log('⚠️ Campo teste_cnpj não existe no HubSpot');
-      
-      return res.status(400).json({ 
-        error: 'Campo teste_cnpj não existe no HubSpot',
-        message: 'Execute POST /create-test-field para criar o campo',
-        solucao: 'POST /create-test-field'
-      });
-    }
-    
-    if (error.response?.status === 429 && error.config?.url?.includes('cnpj.ws')) {
-      console.log('⚠️ Rate limit atingido na API CNPJ');
-      
-      return res.status(200).json({ 
-        success: true,
-        message: '✅ CNPJ válido encontrado! Rate limit atingido (3 consultas/min)',
-        cnpj: cnpjLimpo || 'CNPJ válido',
-        empresaEncontrada: properties.name || 'Empresa sem nome',
-        status: 'rate_limit',
+status: 'rate_limit',
         statusEnriquecimento: 'rate_limit',
         proximaTentativa: 'Aguarde 1-2 minutos para nova consulta'
       });
@@ -203,7 +146,7 @@ app.post('/create-test-company', async (req, res) => {
   }
 });
 
-// ⚡ ENDPOINTS PARA HUBSPOT APP - CORRIGIDOS
+// ⚡ ENDPOINTS PARA HUBSPOT APP
 
 app.post('/api/accounts-fetch', (req, res) => {
   console.log('🔁 Recebido chamada de /api/accounts-fetch do HubSpot');
@@ -221,14 +164,13 @@ app.post('/api/accounts-fetch', (req, res) => {
   });
 });
 
-// ⚡ ENDPOINTS CRMHUB TOGGLE - VERSÃO CORRIGIDA PARA EVITAR ERRO "FALHA NA AÇÃO"
+// ⚡ ENDPOINTS CRMHUB TOGGLE
 
 // CRMHub Toggle Fetch - Retorna status atual
 app.post('/api/crmhub-toggle-fetch', (req, res) => {
   console.log('🔄 CRMHub Toggle Fetch chamado');
   console.log('📥 Request body:', JSON.stringify(req.body, null, 2));
   
-  // ⚡ HEADERS CORS CORRETOS
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
@@ -281,18 +223,16 @@ app.post('/api/crmhub-toggle-fetch', (req, res) => {
   }
 });
 
-// ⚡ CRMHub Toggle Update - VERSÃO TOTALMENTE REESCRITA PARA HUBSPOT
+// CRMHub Toggle Update
 app.post('/api/crmhub-toggle-update', async (req, res) => {
   console.log('🔄 CRMHub Toggle Update chamado');
   console.log('📥 Request body:', JSON.stringify(req.body, null, 2));
   
-  // ⚡ HEADERS OBRIGATÓRIOS PARA HUBSPOT
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
   res.setHeader('Content-Type', 'application/json');
   
-  // ⚡ VERIFICAR TOKEN PRIMEIRO
   if (!HUBSPOT_ACCESS_TOKEN) {
     console.error('❌ HUBSPOT_ACCESS_TOKEN não configurado');
     
@@ -317,7 +257,6 @@ app.post('/api/crmhub-toggle-update', async (req, res) => {
   }
   
   try {
-    // ⚡ INVERTER O ESTADO ATUAL
     const previousState = crmhubToggleEnabled;
     crmhubToggleEnabled = !crmhubToggleEnabled;
     
@@ -333,7 +272,6 @@ app.post('/api/crmhub-toggle-update', async (req, res) => {
     logs.push(`🔄 Polling: ${pollingActive ? 'ATIVO' : 'SERÁ INICIADO'}`);
     
     if (crmhubToggleEnabled) {
-      // ⚡ ATIVANDO CRMHUB
       console.log('🚀 ATIVANDO CRMHub via toggle...');
       logs.push('🚀 ATIVANDO CRMHub...');
       
@@ -388,7 +326,6 @@ app.post('/api/crmhub-toggle-update', async (req, res) => {
       }
       
     } else {
-      // ⚡ DESATIVANDO CRMHUB
       console.log('⚪ DESATIVANDO CRMHub via toggle...');
       logs.push('⚪ DESATIVANDO CRMHub...');
       logs.push('📋 Sistema padrão reativado');
@@ -404,7 +341,6 @@ app.post('/api/crmhub-toggle-update', async (req, res) => {
     console.log(`💬 Resultado: ${message}`);
     logs.push(`💬 Resultado: ${message}`);
 
-    // ⚡ RESPOSTA NO FORMATO CORRETO PARA HUBSPOT
     const successResponse = {
       response: {
         actionType: 'TOGGLE_UPDATE',
@@ -464,7 +400,6 @@ app.post('/api/crmhub-toggle-update', async (req, res) => {
 
 // ⚡ ENDPOINTS DE CONTROLE DO POLLING
 
-// ⚡ ENDPOINT PARA CONTROLAR POLLING
 app.post('/api/polling-control', (req, res) => {
   const { action } = req.body;
   
@@ -503,7 +438,6 @@ app.post('/api/polling-control', (req, res) => {
   }
 });
 
-// ⚡ ENDPOINT PARA TESTAR BUSCA MANUAL
 app.get('/api/test-search', async (req, res) => {
   try {
     console.log('🧪 Testando busca de empresas...');
@@ -609,107 +543,6 @@ app.get('/', (req, res) => {
         
         <div class="polling-status">
             <h3>🔄 Status do Polling Automático</h3>
-            <p><strong>Polling:</strong> ${pollingActive ? 'Ativo 🟢' : 'Inativo 🔴'}</p>
-            <p><strong>Intervalo:</strong> ${pollingActive ? '30 segundos' : 'Aguardando ativação'}</p>
-            <p><strong>Última verificação:</strong> ${pollingActive ? 'Executando...' : 'Não iniciado'}</p>
-        </div>
-        
-        <div class="auto-feature">
-            <h3>🎯 Enriquecimento Automático</h3>
-            <p><strong>Como usar:</strong></p>
-            <ol>
-                <li>Ative o <strong>CRMHub</strong> via toggle</li>
-                <li>Marque empresa como <strong>"SIM"</strong> no campo "Enriquecer Empresa - CRMHub"</li>
-                <li>Aguarde <strong>até 30 segundos</strong> para enriquecimento automático</li>
-                <li>Verifique o <strong>status</strong> no campo "Status do Enriquecimento"</li>
-            </ol>
-        </div>
-        
-        <div class="new-features">
-            <h3>🆕 Novidades v2.1</h3>
-            <p>🎯 <strong>Enriquecimento Automático:</strong> Marca SIM → Enriquece automaticamente</p>
-            <p>🔄 <strong>Polling System:</strong> Verifica empresas a cada 30 segundos</p>
-            <p>📈 <strong>Status Inteligente:</strong> Enriquecido/Rate Limit/Falha/Não Processado</p>
-            <p>⚡ <strong>Zero Configuração:</strong> Funciona sem webhooks ou workflows</p>
-        </div>
-        
-        <div class="endpoints">
-            <h3>📋 Endpoints Principais</h3>
-            
-            <div class="endpoint">
-                <h4>POST /api/polling-control</h4>
-                <p>Controlar sistema de polling automático</p>
-                <code>{"action": "start|stop|status"}</code>
-            </div>
-            
-            <div class="endpoint">
-                <h4>GET /api/test-search</h4>
-                <p>Testar busca de empresas marcadas como "SIM"</p>
-            </div>
-            
-            <div class="endpoint">
-                <h4>POST /enrich</h4>
-                <p>Enriquecer empresa manualmente (backup)</p>
-                <code>{"companyId": "123456789"}</code>
-            </div>
-            
-            <div class="endpoint">
-                <h4>POST /create-test-company</h4>
-                <p>Criar empresa de teste com CNPJ válido</p>
-            </div>
-        </div>
-        
-        <div style="text-align: center; margin-top: 30px;">
-            <a href="/account" class="btn">📊 Status do Sistema</a>
-            <a href="/api/test-search" class="btn btn-success">🧪 Testar Busca</a>
-            <a href="/settings" class="btn btn-warning">⚙️ Configurações</a>
-        </div>
-        
-        <div style="text-align: center; margin-top: 20px; color: #7f8c8d;">
-            <p>CNPJ Enricher 2.1 - Auto Polling System - Powered by CRMHub</p>
-        </div>
-    </div>
-</body>
-</html>`;
-  
-  res.send(html);
-});
-
-// ⚡ Página de configurações
-app.get('/settings', (req, res) => {
-  res.setHeader('X-Frame-Options', 'ALLOWALL');
-  res.setHeader('Content-Security-Policy', "frame-ancestors 'self' https://app.hubspot.com https://app-eu1.hubspot.com;");
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Content-Type', 'text/html; charset=utf-8');
-
-  res.send(`
-<!DOCTYPE html>
-<html lang="pt-BR">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Configurações - CNPJ Enricher 2.1</title>
-    <style>
-        body { font-family: Arial, sans-serif; max-width: 600px; margin: 50px auto; padding: 20px; background: #f8f9fa; }
-        .container { background: white; padding: 30px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
-        .field-mapping { margin: 20px 0; padding: 15px; background: #f8f9fa; border-radius: 8px; }
-        .field-mapping label { display: block; margin-bottom: 5px; font-weight: bold; }
-        .field-mapping input { width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; }
-        .btn { background: #007bff; color: white; padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer; }
-        .btn:hover { background: #0056b3; }
-        .status { background: #e8f5e8; padding: 15px; border-radius: 8px; margin: 20px 0; }
-        .polling-info { background: #e3f2fd; padding: 15px; border-radius: 8px; margin: 20px 0; }
-        .test-btn { background: #28a745; margin-left: 10px; }
-        .test-btn:hover { background: #1e7e34; }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <h2>⚙️ Configurações CNPJ Enricher 2.1</h2>
-        
-        <div class="status">
-            <h3>📊 Status Atual</h3>
-            <p><strong>CRMHub:</strong> ${crmhubToggleEnabled ? 'Ativo 🚀' : 'Inativo ⚪'}</p>
             <p><strong>Polling:</strong> ${pollingActive ? 'Ativo 🟢' : 'Inativo 🔴'}</p>
             <p><strong>Campos disponíveis:</strong> ${CRMHUB_FIELDS.length} campos</p>
             <p><strong>Token:</strong> ${HUBSPOT_ACCESS_TOKEN ? 'Configurado ✅' : 'Não configurado ❌'}</p>
@@ -846,7 +679,804 @@ app.listen(PORT, () => {
   }, 5000);
 });
 
-module.exports = app;const express = require('express');
+module.exports = app;>
+            <p><strong>Intervalo:</strong> ${pollingActive ? '30 segundos' : 'Aguardando ativação'}</p>
+            <p><strong>Última verificação:</strong> ${pollingActive ? 'Executando...' : 'Não iniciado'}</p>
+        </div>
+        
+        <div class="auto-feature">
+            <h3>🎯 Enriquecimento Automático</h3>
+            <p><strong>Como usar:</strong></p>
+            <ol>
+                <li>Ative o <strong>CRMHub</strong> via toggle</li>
+                <li>Marque empresa como <strong>"SIM"</strong> no campo "Enriquecer Empresa - CRMHub"</li>
+                <li>Aguarde <strong>até 30 segundos</strong> para enriquecimento automático</li>
+                <li>Verifique o <strong>status</strong> no campo "Status do Enriquecimento"</li>
+            </ol>
+        </div>
+        
+        <div class="new-features">
+            <h3>🆕 Novidades v2.1</h3>
+            <p>🎯 <strong>Enriquecimento Automático:</strong> Marca SIM → Enriquece automaticamente</p>
+            <p>🔄 <strong>Polling System:</strong> Verifica empresas a cada 30 segundos</p>
+            <p>📈 <strong>Status Inteligente:</strong> Enriquecido/Rate Limit/Falha/Não Processado</p>
+            <p>⚡ <strong>Zero Configuração:</strong> Funciona sem webhooks ou workflows</p>
+        </div>
+        
+        <div class="endpoints">
+            <h3>📋 Endpoints Principais</h3>
+            
+            <div class="endpoint">
+                <h4>POST /api/polling-control</h4>
+                <p>Controlar sistema de polling automático</p>
+                <code>{"action": "start|stop|status"}</code>
+            </div>
+            
+            <div class="endpoint">
+                <h4>GET /api/test-search</h4>
+                <p>Testar busca de empresas marcadas como "SIM"</p>
+            </div>
+            
+            <div class="endpoint">
+                <h4>POST /enrich</h4>
+                <p>Enriquecer empresa manualmente (backup)</p>
+                <code>{"companyId": "123456789"}</code>
+            </div>
+            
+            <div class="endpoint">
+                <h4>POST /create-test-company</h4>
+                <p>Criar empresa de teste com CNPJ válido</p>
+            </div>
+        </div>
+        
+        <div style="text-align: center; margin-top: 30px;">
+            <a href="/account" class="btn">📊 Status do Sistema</a>
+            <a href="/api/test-search" class="btn btn-success">🧪 Testar Busca</a>
+            <a href="/settings" class="btn btn-warning">⚙️ Configurações</a>
+        </div>
+        
+        <div style="text-align: center; margin-top: 20px; color: #7f8c8d;">
+            <p>CNPJ Enricher 2.1 - Auto Polling System - Powered by CRMHub</p>
+        </div>
+    </div>
+</body>
+</html>`;
+  
+  res.send(html);
+});
+
+// ⚡ Página de configurações
+app.get('/settings', (req, res) => {
+  res.setHeader('X-Frame-Options', 'ALLOWALL');
+  res.setHeader('Content-Security-Policy', "frame-ancestors 'self' https://app.hubspot.com https://app-eu1.hubspot.com;");
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Content-Type', 'text/html; charset=utf-8');
+
+  res.send(`
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Configurações - CNPJ Enricher 2.1</title>
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 600px; margin: 50px auto; padding: 20px; background: #f8f9fa; }
+        .container { background: white; padding: 30px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+        .field-mapping { margin: 20px 0; padding: 15px; background: #f8f9fa; border-radius: 8px; }
+        .field-mapping label { display: block; margin-bottom: 5px; font-weight: bold; }
+        .field-mapping input { width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; }
+        .btn { background: #007bff; color: white; padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer; }
+        .btn:hover { background: #0056b3; }
+        .status { background: #e8f5e8; padding: 15px; border-radius: 8px; margin: 20px 0; }
+        .polling-info { background: #e3f2fd; padding: 15px; border-radius: 8px; margin: 20px 0; }
+        .test-btn { background: #28a745; margin-left: 10px; }
+        .test-btn:hover { background: #1e7e34; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h2>⚙️ Configurações CNPJ Enricher 2.1</h2>
+        
+        <div class="status">
+            <h3>📊 Status Atual</h3>
+            <p><strong>CRMHub:</strong> ${crmhubToggleEnabled ? 'Ativo 🚀' : 'Inativo ⚪'}</p>
+            <p><strong>Polling:</strong> ${pollingActive ? 'Ativo 🟢' : 'Inativo 🔴'}</p// ⚡ FUNÇÃO DE ENRIQUECIMENTO PARA POLLING
+async function performPollingEnrichment(companyId) {
+  try {
+    console.log(`🔄 Iniciando enriquecimento automático para: ${companyId}`);
+    
+    const hubspotCompany = await axios.get(
+      `https://api.hubapi.com/crm/v3/objects/companies/${companyId}?properties=cnpj,name,enriquecer_empresa_crmhub,status_enriquecimento_crmhub`,
+      {
+        headers: { 
+          Authorization: `Bearer ${HUBSPOT_ACCESS_TOKEN}`,
+          'Content-Type': 'application/json'
+        }
+      }
+    );
+
+    const properties = hubspotCompany.data.properties;
+    
+    if (properties.enriquecer_empresa_crmhub !== 'sim') {
+      console.log('⚠️ Campo não está mais marcado como SIM, cancelando');
+      return;
+    }
+    
+    let cnpjRaw = properties.cnpj;
+    
+    if (!cnpjRaw) {
+      const allPropsResponse = await axios.get(
+        `https://api.hubapi.com/crm/v3/objects/companies/${companyId}`,
+        {
+          headers: { 
+            Authorization: `Bearer ${HUBSPOT_ACCESS_TOKEN}`,
+            'Content-Type': 'application/json'
+          }
+        }
+      );
+      
+      const allProps = allPropsResponse.data.properties;
+      
+      for (const [key, value] of Object.entries(allProps)) {
+        if (value && typeof value === 'string') {
+          const cleaned = cleanCNPJ(value);
+          if (cleaned.length === 14) {
+            console.log(`🎯 CNPJ encontrado no campo "${key}": ${value}`);
+            cnpjRaw = value;
+            break;
+          }
+        }
+      }
+    }
+
+    const cnpjLimpo = cleanCNPJ(cnpjRaw);
+    
+    if (!cnpjLimpo || cnpjLimpo.length !== 14) {
+      console.warn(`⚠️ CNPJ inválido para empresa ${companyId}: ${cnpjRaw}`);
+      
+      await axios.patch(
+        `https://api.hubapi.com/crm/v3/objects/companies/${companyId}`,
+        {
+          properties: {
+            status_enriquecimento_crmhub: 'falha',
+            data_atualizacao_crmhub: new Date().toLocaleString('pt-BR')
+          }
+        },
+        {
+          headers: {
+            Authorization: `Bearer ${HUBSPOT_ACCESS_TOKEN}`,
+            'Content-Type': 'application/json'
+          }
+        }
+      );
+      
+      return;
+    }
+
+    console.log(`📡 Consultando CNPJ: ${cnpjLimpo}`);
+    
+    const cnpjDataResponse = await axios.get(`https://publica.cnpj.ws/cnpj/${cnpjLimpo}`, {
+      timeout: 10000,
+      headers: {
+        'User-Agent': 'CNPJ-Enricher-Polling/2.1'
+      }
+    });
+
+    const cnpjData = cnpjDataResponse.data;
+    console.log(`✅ Dados obtidos para CNPJ: ${cnpjLimpo}`);
+
+    const updatePayload = mapCNPJDataToCRMHubFields(cnpjData, cnpjLimpo, 'enriquecido');
+
+    await axios.patch(
+      `https://api.hubapi.com/crm/v3/objects/companies/${companyId}`,
+      updatePayload,
+      {
+        headers: {
+          Authorization: `Bearer ${HUBSPOT_ACCESS_TOKEN}`,
+          'Content-Type': 'application/json'
+        }
+      }
+    );
+
+    console.log(`🎉 Empresa ${companyId} enriquecida com sucesso via polling!`);
+    
+  } catch (error) {
+    console.error(`❌ Erro no enriquecimento polling para ${companyId}:`, error.message);
+    
+    let statusToUpdate = 'falha';
+    
+    if (error.response?.status === 429 && error.config?.url?.includes('cnpj.ws')) {
+      statusToUpdate = 'rate_limit';
+      console.log(`⚠️ Rate limit atingido para empresa ${companyId}`);
+    }
+    
+    try {
+      await axios.patch(
+        `https://api.hubapi.com/crm/v3/objects/companies/${companyId}`,
+        {
+          properties: {
+            status_enriquecimento_crmhub: statusToUpdate,
+            data_atualizacao_crmhub: new Date().toLocaleString('pt-BR')
+          }
+        },
+        {
+          headers: {
+            Authorization: `Bearer ${HUBSPOT_ACCESS_TOKEN}`,
+            'Content-Type': 'application/json'
+          }
+        }
+      );
+    } catch (updateError) {
+      console.error('❌ Erro ao atualizar status de erro:', updateError.message);
+    }
+  }
+}
+
+// ⚡ INICIAR POLLING
+function startPolling() {
+  if (pollingInterval) {
+    console.log('⚠️ Polling já está ativo');
+    return;
+  }
+  
+  console.log('🚀 Iniciando sistema de polling (30 segundos)...');
+  pollingActive = true;
+  
+  checkForAutoEnrichment();
+  
+  pollingInterval = setInterval(() => {
+    if (pollingActive) {
+      checkForAutoEnrichment();
+    }
+  }, 30000);
+  
+  console.log('✅ Polling iniciado com sucesso');
+}
+
+// ⚡ PARAR POLLING
+function stopPolling() {
+  if (pollingInterval) {
+    clearInterval(pollingInterval);
+    pollingInterval = null;
+    pollingActive = false;
+    console.log('⏹️ Polling interrompido');
+  }
+}
+
+// ⚡ ENDPOINTS PRINCIPAIS
+
+// Status do app
+app.get('/account', (req, res) => {
+  res.json({
+    status: 'connected',
+    app: 'CNPJ Enricher',
+    version: '2.1',
+    tokenStatus: HUBSPOT_ACCESS_TOKEN ? 'Configurado' : 'Não configurado',
+    crmhubStatus: crmhubToggleEnabled ? 'Ativo' : 'Inativo',
+    pollingStatus: pollingActive ? 'Ativo' : 'Inativo',
+    fieldsTotal: CRMHUB_FIELDS.length,
+    endpoints: {
+      configurar: 'GET /settings',
+      enriquecer: 'POST /enrich',
+      criarTeste: 'POST /create-test-company',
+      crmhubEnriquecer: 'POST /api/enrich-crmhub',
+      crmhubDropdown: 'POST /api/crmhub-dropdown-fetch',
+      pollingControl: 'POST /api/polling-control'
+    }
+  });
+});
+
+// ⚡ ENDPOINTS CRMHUB DROPDOWN
+
+// CRMHub Dropdown Fetch
+app.post('/api/crmhub-dropdown-fetch', (req, res) => {
+  console.log('🔽 CRMHub Dropdown Fetch chamado');
+  
+  try {
+    const options = [
+      {
+        text: '✅ Sim - Criar campos CRMHub',
+        value: 'sim',
+        description: `Criar ${CRMHUB_FIELDS.length} campos personalizados para dados do CNPJ`
+      },
+      {
+        text: '❌ Não - Usar campo description',
+        value: 'nao',
+        description: 'Salvar todos os dados no campo description padrão'
+      }
+    ];
+
+    return res.json({
+      response: {
+        options: options,
+        selectedOption: 'sim',
+        placeholder: 'Criar campos CRMHub?'
+      }
+    });
+    
+  } catch (error) {
+    console.error('❌ Erro no dropdown:', error);
+    
+    return res.json({
+      response: {
+        options: [
+          { 
+            text: '✅ Sim - Criar campos', 
+            value: 'sim',
+            description: 'Criar campos CRMHub'
+          }
+        ],
+        selectedOption: 'sim',
+        placeholder: 'Criar campos CRMHub?'
+      }
+    });
+  }
+});
+
+// CRMHub Dropdown Update
+app.post('/api/crmhub-dropdown-update', (req, res) => {
+  console.log('🔽 CRMHub Dropdown Update chamado');
+  console.log('📥 Request body:', JSON.stringify(req.body, null, 2));
+  
+  try {
+    const selectedOption = req.body.selectedOption || 'sim';
+    
+    if (selectedOption === 'sim') {
+      const message = `✅ Configurado para criar campos CRMHub! Os ${CRMHUB_FIELDS.length} campos personalizados serão criados automaticamente quando necessário.`;
+      
+      return res.json({
+        response: {
+          actionType: 'DROPDOWN_UPDATE',
+          selectedOption: selectedOption,
+          message: message,
+          configuration: {
+            mode: 'crmhub_fields',
+            fieldsCount: CRMHUB_FIELDS.length
+          }
+        }
+      });
+      
+    } else {
+      const message = '✅ Configurado para usar campo "description" padrão do HubSpot para salvar dados do CNPJ.';
+      
+      return res.json({
+        response: {
+          actionType: 'DROPDOWN_UPDATE',
+          selectedOption: selectedOption,
+          message: message,
+          configuration: {
+            mode: 'description_field',
+            field: 'description'
+          }
+        }
+      });
+    }
+    
+  } catch (error) {
+    console.error('❌ Erro no dropdown update:', error);
+    
+    return res.json({
+      response: {
+        actionType: 'DROPDOWN_UPDATE',
+        selectedOption: 'sim',
+        message: '❌ Erro interno. Tente novamente.',
+        error: error.message
+      }
+    });
+  }
+});
+
+// ⚡ OAuth Callback
+app.get('/oauth/callback', async (req, res) => {
+  const code = req.query.code;
+  if (!code) return res.status(400).send('❌ Código de autorização não fornecido.');
+
+  console.log('🔍 Processando OAuth callback...');
+
+  try {
+    if (!CLIENT_ID || !CLIENT_SECRET || !REDIRECT_URI) {
+      console.error('❌ Variáveis de ambiente não configuradas');
+      return res.status(500).send(`
+        <h2>❌ Erro de Configuração</h2>
+        <p><strong>CLIENT_ID:</strong> ${CLIENT_ID ? 'Configurado' : 'NÃO CONFIGURADO'}</p>
+        <p><strong>CLIENT_SECRET:</strong> ${CLIENT_SECRET ? 'Configurado' : 'NÃO CONFIGURADO'}</p>
+        <p><strong>REDIRECT_URI:</strong> ${REDIRECT_URI ? 'Configurado' : 'NÃO CONFIGURADO'}</p>
+      `);
+    }
+
+    const response = await axios.post(
+      'https://api.hubapi.com/oauth/v1/token',
+      new URLSearchParams({
+        grant_type: 'authorization_code',
+        client_id: CLIENT_ID,
+        client_secret: CLIENT_SECRET,
+        redirect_uri: REDIRECT_URI,
+        code: code
+      }),
+      {
+        headers: { 
+          'Content-Type': 'application/x-www-form-urlencoded',
+          'User-Agent': 'CNPJ-Enricher/2.1'
+        },
+        timeout: 10000
+      }
+    );
+
+    const { access_token, refresh_token, expires_in } = response.data;
+    HUBSPOT_ACCESS_TOKEN = access_token;
+
+    console.log('✅ Access Token gerado:', access_token);
+    console.log('⏰ Expira em (segundos):', expires_in);
+
+    const successHtml = `
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OAuth Sucesso</title>
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 600px; margin: 50px auto; padding: 20px; background: #f8f9fa; }
+        .container { background: white; padding: 30px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+        .success { color: #28a745; border-left: 4px solid #28a745; padding-left: 15px; margin-bottom: 20px; }
+        .info { background: #e9ecef; padding: 15px; border-radius: 5px; margin: 15px 0; }
+        .btn { display: inline-block; padding: 10px 20px; background: #007bff; color: white; text-decoration: none; border-radius: 5px; margin: 10px 5px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="success">
+            <h2>✅ Token OAuth gerado com sucesso!</h2>
+        </div>
+        
+        <div class="info">
+            <p><strong>Access Token:</strong> ${access_token.substring(0, 20)}...</p>
+            <p><strong>Expira em:</strong> ${Math.floor(expires_in / 3600)} horas</p>
+            <p><strong>Status:</strong> Conectado ao HubSpot ✅</p>
+            <p><strong>Campos CRMHub:</strong> ${CRMHUB_FIELDS.length} campos disponíveis</p>
+            <p><strong>Polling:</strong> ${pollingActive ? 'Ativo 🟢' : 'Será iniciado automaticamente 🔄'}</p>
+        </div>
+        
+        <h3>🚀 Próximos passos:</h3>
+        <ol>
+            <li><strong>Criar empresa teste:</strong><br><code>POST /create-test-company</code></li>
+            <li><strong>Marcar empresa como SIM</strong> no campo "Enriquecer Empresa - CRMHub"</li>
+            <li><strong>Aguardar até 30 segundos</strong> para enriquecimento automático</li>
+        </ol>
+        
+        <div style="margin-top: 30px;">
+            <a href="/account" class="btn">📊 Verificar Status</a>
+            <a href="/settings" class="btn">⚙️ Configurações</a>
+        </div>
+        
+        <script>
+            if (window.opener) {
+                setTimeout(() => window.close(), 3000);
+            }
+            if (window.parent && window.parent !== window) {
+                window.parent.postMessage({
+                    type: 'oauth_success',
+                    token: '${access_token.substring(0, 20)}...',
+                    expiresIn: ${expires_in}
+                }, '*');
+            }
+        </script>
+    </div>
+</body>
+</html>`;
+
+    res.send(successHtml);
+    
+  } catch (error) {
+    console.error('❌ Erro no OAuth:', error.response?.data);
+    
+    const errorHtml = `
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Erro OAuth</title>
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 600px; margin: 50px auto; padding: 20px; background: #f8f9fa; }
+        .container { background: white; padding: 30px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+        .error { color: #dc3545; border-left: 4px solid #dc3545; padding-left: 15px; margin-bottom: 20px; }
+        .debug { background: #f8f9fa; padding: 15px; border-radius: 5px; margin: 15px 0; font-family: monospace; font-size: 12px; }
+        .btn { display: inline-block; padding: 10px 20px; background: #007bff; color: white; text-decoration: none; border-radius: 5px; margin: 10px 5px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="error">
+            <h2>❌ Erro ao gerar token OAuth</h2>
+        </div>
+        
+        <p><strong>Status:</strong> ${error.response?.status || 'Desconhecido'}</p>
+        <p><strong>Mensagem:</strong> ${error.message}</p>
+        
+        <div class="debug">
+            <h4>🔍 Debug:</h4>
+            <p><strong>CLIENT_ID:</strong> ${CLIENT_ID || 'Não configurado'}</p>
+            <p><strong>REDIRECT_URI:</strong> ${REDIRECT_URI || 'Não configurado'}</p>
+            <p><strong>CLIENT_SECRET:</strong> ${CLIENT_SECRET ? 'Configurado' : 'Não configurado'}</p>
+            <pre>${JSON.stringify(error.response?.data, null, 2)}</pre>
+        </div>
+        
+        <div style="margin-top: 30px;">
+            <a href="/account" class="btn">📊 Status</a>
+        </div>
+    </div>
+</body>
+</html>`;
+
+    res.status(500).send(errorHtml);
+  }
+});
+
+// ⚡ ENRICHMENT PRINCIPAL
+app.post('/enrich', async (req, res) => {
+  const { companyId } = req.body;
+
+  console.log('🔍 Iniciando enriquecimento para companyId:', companyId);
+
+  if (!companyId) {
+    console.error('❌ Company ID não fornecido');
+    return res.status(400).json({ error: 'Company ID is required' });
+  }
+
+  if (!HUBSPOT_ACCESS_TOKEN) {
+    console.error('❌ HUBSPOT_ACCESS_TOKEN não configurado');
+    return res.status(500).json({ 
+      error: 'Token do HubSpot não configurado',
+      details: 'Execute OAuth primeiro',
+      authUrl: `https://app.hubspot.com/oauth/authorize?client_id=${CLIENT_ID}&scope=crm.objects.companies.read%20crm.objects.companies.write&redirect_uri=${REDIRECT_URI}`
+    });
+  }
+
+  try {
+    console.log('📡 Buscando empresa no HubSpot...');
+    
+    const hubspotCompany = await axios.get(
+      `https://api.hubapi.com/crm/v3/objects/companies/${companyId}?properties=cnpj,name,domain,website,phone,city,state,country,createdate,hs_lastmodifieddate`,
+      {
+        headers: { 
+          Authorization: `Bearer ${HUBSPOT_ACCESS_TOKEN}`,
+          'Content-Type': 'application/json'
+        }
+      }
+    );
+
+    console.log('✅ Empresa encontrada no HubSpot');
+    const properties = hubspotCompany.data.properties;
+    
+    console.log('🔍 Propriedades da empresa:');
+    Object.keys(properties).forEach(key => {
+      console.log(`${key}: "${properties[key]}"`);
+    });
+    
+    let cnpjRaw = properties.cnpj || 
+                  properties.CNPJ ||
+                  properties.registration_number ||
+                  properties.company_cnpj ||
+                  properties.document_number ||
+                  properties.tax_id ||
+                  properties.federal_id;
+
+    if (!cnpjRaw) {
+      console.log('🔍 CNPJ não encontrado nos campos padrão, procurando em todos os campos...');
+      
+      for (const [key, value] of Object.entries(properties)) {
+        if (value && typeof value === 'string') {
+          const cleaned = cleanCNPJ(value);
+          if (cleaned.length === 14) {
+            console.log(`🎯 CNPJ encontrado no campo "${key}": ${value} -> ${cleaned}`);
+            cnpjRaw = value;
+            break;
+          }
+        }
+      }
+    }
+
+    console.log('🔍 CNPJ bruto encontrado:', cnpjRaw);
+
+    const cnpjLimpo = cleanCNPJ(cnpjRaw);
+    console.log('🧹 CNPJ limpo:', cnpjLimpo);
+
+    if (!cnpjLimpo || cnpjLimpo.length !== 14) {
+      console.warn('⚠️ CNPJ inválido ou não encontrado');
+      
+      if (crmhubToggleEnabled) {
+        try {
+          await axios.patch(
+            `https://api.hubapi.com/crm/v3/objects/companies/${companyId}`,
+            {
+              properties: {
+                status_enriquecimento_crmhub: 'falha'
+              }
+            },
+            {
+              headers: {
+                Authorization: `Bearer ${HUBSPOT_ACCESS_TOKEN}`,
+                'Content-Type': 'application/json'
+              }
+            }
+          );
+          console.log('❌ Status atualizado para FALHA - CNPJ inválido');
+        } catch (statusError) {
+          console.error('❌ Erro ao atualizar status:', statusError.message);
+        }
+      }
+      
+      let sugestoes = [];
+      if (!cnpjRaw) {
+        sugestoes.push('Campo CNPJ não encontrado na empresa');
+        sugestoes.push(`Use: POST /add-cnpj/${companyId} com {"cnpj": "14665903000104"}`);
+      } else if (cnpjLimpo.length !== 14) {
+        sugestoes.push(`CNPJ tem ${cnpjLimpo.length} dígitos, precisa ter 14`);
+        sugestoes.push('Formatos aceitos: 14665903000104 ou 14.665.903/0001-04');
+      }
+      
+      return res.status(400).json({ 
+        error: 'CNPJ inválido ou não encontrado',
+        cnpjRaw: cnpjRaw,
+        cnpjLimpo: cnpjLimpo,
+        cnpjTamanho: cnpjLimpo.length,
+        sugestoes: sugestoes
+      });
+    }
+
+    console.log('📡 Buscando dados do CNPJ na API externa...');
+    
+    const cnpjDataResponse = await axios.get(`https://publica.cnpj.ws/cnpj/${cnpjLimpo}`, {
+      timeout: 10000,
+      headers: {
+        'User-Agent': 'CNPJ-Enricher/2.1'
+      }
+    });
+
+    console.log('✅ Dados do CNPJ obtidos com sucesso');
+    const cnpjData = cnpjDataResponse.data;
+
+    const updatePayload = updateEnrichmentPayloadWithCRMHub(cnpjData, cnpjLimpo, 'enriquecido');
+
+    console.log('📦 Payload final:', JSON.stringify(updatePayload, null, 2));
+    console.log('📡 Atualizando empresa no HubSpot...');
+    
+    await axios.patch(
+      `https://api.hubapi.com/crm/v3/objects/companies/${companyId}`,
+      updatePayload,
+      {
+        headers: {
+          Authorization: `Bearer ${HUBSPOT_ACCESS_TOKEN}`,
+          'Content-Type': 'application/json'
+        }
+      }
+    );
+
+    const hasIndividualMapping = Object.values(individualMapping).some(field => field && field !== 'nenhum');
+    const campoUsado = crmhubToggleEnabled ? 'CRMHub (campos específicos)' : 
+                      (hasIndividualMapping ? 'mapeamento individual' : (savedUserChoice || selectedDestinationField));
+    
+    console.log(`✅ Empresa atualizada com sucesso! Modo usado: ${campoUsado}`);
+    
+    const dadosEmpresa = {
+      razaoSocial: cnpjData.razao_social || '',
+      nomeFantasia: cnpjData.estabelecimento?.nome_fantasia || '',
+      situacao: cnpjData.estabelecimento?.situacao_cadastral || '',
+      porte: cnpjData.porte?.descricao || '',
+      cidade: cnpjData.estabelecimento?.cidade?.nome || '',
+      estado: cnpjData.estabelecimento?.estado?.sigla || '',
+      atividade: cnpjData.estabelecimento?.atividade_principal?.descricao || '',
+      email: cnpjData.estabelecimento?.email || '',
+      telefone: cnpjData.estabelecimento?.telefone1 ? 
+        `(${cnpjData.estabelecimento.ddd1}) ${cnpjData.estabelecimento.telefone1}` : ''
+    };
+    
+    console.log('🎉 SUCESSO COMPLETO:');
+    console.log('🏢 Razão Social:', dadosEmpresa.razaoSocial);
+    console.log('✨ Nome Fantasia:', dadosEmpresa.nomeFantasia);
+    console.log('📊 Situação:', dadosEmpresa.situacao);
+    console.log('📍 Local:', `${dadosEmpresa.cidade}/${dadosEmpresa.estado}`);
+    console.log('📞 Telefone:', dadosEmpresa.telefone);
+
+    res.json({ 
+      success: true,
+      message: `🎉 Empresa enriquecida com sucesso! Modo: ${campoUsado}`,
+      cnpj: cnpjLimpo,
+      empresa: {
+        razaoSocial: dadosEmpresa.razaoSocial,
+        nomeFantasia: dadosEmpresa.nomeFantasia,
+        situacao: dadosEmpresa.situacao,
+        localizacao: `${dadosEmpresa.cidade}/${dadosEmpresa.estado}`,
+        porte: dadosEmpresa.porte,
+        contato: {
+          email: dadosEmpresa.email,
+          telefone: dadosEmpresa.telefone
+        },
+        atividade: dadosEmpresa.atividade
+      },
+      configuracao: {
+        modo: crmhubToggleEnabled ? 'crmhub_ativo' : 
+              (hasIndividualMapping ? 'mapeamento_individual' : 'campo_unico'),
+        campoDestino: crmhubToggleEnabled ? 'Campos específicos CRMHub' : 
+                      (hasIndividualMapping ? 'múltiplos campos' : campoUsado),
+        tipoConteudo: crmhubToggleEnabled ? 'Dados em campos dedicados CRMHub' :
+                      (hasIndividualMapping ? 'Campos específicos + backup' : 'Texto formatado completo'),
+        crmhubAtivo: crmhubToggleEnabled,
+        pollingAtivo: pollingActive,
+        statusEnriquecimento: 'enriquecido'
+      }
+    });
+
+  } catch (error) {
+    console.error('❌ Erro detalhado no enriquecimento:');
+    console.error('📋 Mensagem:', error.message);
+    console.error('📊 Status:', error.response?.status);
+    console.error('📄 Response data:', error.response?.data);
+    
+    if (crmhubToggleEnabled) {
+      try {
+        let statusToUpdate = 'falha';
+        
+        if (error.response?.status === 429 && error.config?.url?.includes('cnpj.ws')) {
+          statusToUpdate = 'rate_limit';
+          console.log('⚠️ Rate limit detectado - atualizando status');
+        }
+        
+        await axios.patch(
+          `https://api.hubapi.com/crm/v3/objects/companies/${companyId}`,
+          {
+            properties: {
+              status_enriquecimento_crmhub: statusToUpdate
+            }
+          },
+          {
+            headers: {
+              Authorization: `Bearer ${HUBSPOT_ACCESS_TOKEN}`,
+              'Content-Type': 'application/json'
+            }
+          }
+        );
+        console.log(`❌ Status atualizado para: ${statusToUpdate}`);
+      } catch (statusError) {
+        console.error('❌ Erro ao atualizar status:', statusError.message);
+      }
+    }
+    
+    if (error.response?.status === 401) {
+      return res.status(401).json({ 
+        error: 'Token do HubSpot inválido ou expirado',
+        details: 'Execute OAuth novamente',
+        authUrl: `https://app.hubspot.com/oauth/authorize?client_id=${CLIENT_ID}&scope=crm.objects.companies.read%20crm.objects.companies.write&redirect_uri=${REDIRECT_URI}`
+      });
+    }
+    
+    if (error.response?.status === 404 && error.config?.url?.includes('hubapi.com')) {
+      return res.status(404).json({ 
+        error: 'Empresa não encontrada no HubSpot',
+        companyId: companyId
+      });
+    }
+    
+    if (error.response?.status === 400 && error.response?.data?.message?.includes('does not exist')) {
+      console.log('⚠️ Campo teste_cnpj não existe no HubSpot');
+      
+      return res.status(400).json({ 
+        error: 'Campo teste_cnpj não existe no HubSpot',
+        message: 'Execute POST /create-test-field para criar o campo',
+        solucao: 'POST /create-test-field'
+      });
+    }
+    
+    if (error.response?.status === 429 && error.config?.url?.includes('cnpj.ws')) {
+      console.log('⚠️ Rate limit atingido na API CNPJ');
+      
+      return res.status(200).json({ 
+        success: true,
+        message: '✅ CNPJ válido encontrado! Rate limit atingido (3 consultas/min)',
+        cnpj: cnpjLimpo || 'CNPJ válido',
+        empresaEncontrada: properties.name || 'Empresa sem nome',
+        status:const express = require('express');
 const axios = require('axios');
 
 const app = express();
@@ -1077,7 +1707,6 @@ async function createOrVerifyCRMHubGroup() {
   try {
     console.log('🔍 Verificando se grupo CRMHub já existe...');
     
-    // Primeiro, verificar se o grupo já existe
     try {
       const existingGroups = await axios.get(
         'https://api.hubapi.com/crm/v3/properties/companies/groups',
@@ -1101,7 +1730,6 @@ async function createOrVerifyCRMHubGroup() {
       console.log('🔍 Grupo não encontrado, criando novo...');
     }
     
-    // Criar novo grupo
     console.log('🏗️ Criando grupo CRMHub...');
     const response = await axios.post(
       'https://api.hubapi.com/crm/v3/properties/companies/groups',
@@ -1123,11 +1751,11 @@ async function createOrVerifyCRMHubGroup() {
     
   } catch (error) {
     console.error('❌ Erro ao criar/verificar grupo CRMHub:', error.response?.data);
-    return 'companyinformation'; // Fallback para grupo padrão
+    return 'companyinformation';
   }
 }
 
-// ⚡ FUNÇÃO PARA CRIAR CAMPOS CRMHUB - VERSÃO CORRIGIDA
+// ⚡ FUNÇÃO PARA CRIAR CAMPOS CRMHUB
 async function createCRMHubFields() {
   try {
     console.log('🏗️ Iniciando criação dos campos CRMHub...');
@@ -1136,7 +1764,6 @@ async function createCRMHubFields() {
       throw new Error('Token do HubSpot não configurado');
     }
     
-    // Criar/verificar grupo primeiro
     const groupName = await createOrVerifyCRMHubGroup();
     
     const results = {
@@ -1161,7 +1788,6 @@ async function createCRMHubFields() {
           displayOrder: -1
         };
 
-        // ⚡ ADICIONAR OPTIONS PARA CAMPOS DE SELEÇÃO
         if (field.options) {
           fieldData.options = field.options;
         }
@@ -1181,7 +1807,6 @@ async function createCRMHubFields() {
         console.log(`✅ Campo criado: ${field.name}`);
         results.created.push(field.name);
         
-        // Pausa maior entre criações para evitar rate limit
         await new Promise(resolve => setTimeout(resolve, 500));
         
       } catch (error) {
@@ -1189,11 +1814,7 @@ async function createCRMHubFields() {
           console.log(`⚠️ Campo já existe: ${field.name}`);
           results.existing.push(field.name);
         } else {
-          console.error(`❌ Erro ao criar campo ${field.name}:`, {
-            status: error.response?.status,
-            data: error.response?.data,
-            message: error.message
-          });
+          console.error(`❌ Erro ao criar campo ${field.name}:`, error.response?.data);
           results.errors.push({
             field: field.name,
             error: error.response?.data || error.message,
@@ -1216,7 +1837,7 @@ async function createCRMHubFields() {
   }
 }
 
-// ⚡ FUNÇÃO PARA VERIFICAR STATUS DOS CAMPOS CRMHUB - VERSÃO CORRIGIDA
+// ⚡ FUNÇÃO PARA VERIFICAR STATUS DOS CAMPOS CRMHUB
 async function checkCRMHubFieldsStatus() {
   try {
     console.log('🔍 Verificando status dos campos CRMHub...');
@@ -1251,7 +1872,6 @@ async function checkCRMHubFieldsStatus() {
           type: response.data.type
         });
         
-        // Pequena pausa entre verificações
         await new Promise(resolve => setTimeout(resolve, 100));
         
       } catch (error) {
@@ -1259,17 +1879,13 @@ async function checkCRMHubFieldsStatus() {
           console.log(`❌ Campo não encontrado: ${field.name}`);
           status.missing.push(field.name);
         } else {
-          console.error(`⚠️ Erro ao verificar campo ${field.name}:`, {
-            status: error.response?.status,
-            data: error.response?.data
-          });
+          console.error(`⚠️ Erro ao verificar campo ${field.name}:`, error.response?.data);
           status.missing.push(field.name);
         }
       }
     }
     
     console.log(`📊 Status: ${status.existing.length}/${status.total} campos existem`);
-    
     return status;
     
   } catch (error) {
@@ -1278,7 +1894,7 @@ async function checkCRMHubFieldsStatus() {
   }
 }
 
-// ⚡ FUNÇÃO PARA MAPEAR DADOS DO CNPJ PARA CAMPOS CRMHUB - VERSÃO ATUALIZADA
+// ⚡ FUNÇÃO PARA MAPEAR DADOS DO CNPJ PARA CAMPOS CRMHUB
 function mapCNPJDataToCRMHubFields(cnpjData, cnpjNumber, enrichmentStatus = 'enriquecido') {
   const estabelecimento = cnpjData.estabelecimento || {};
   
@@ -1295,12 +1911,10 @@ function mapCNPJDataToCRMHubFields(cnpjData, cnpjNumber, enrichmentStatus = 'enr
       `${estabelecimento.tipo_logradouro || ''} ${estabelecimento.logradouro}, ${estabelecimento.numero || 'S/N'}${estabelecimento.complemento ? ', ' + estabelecimento.complemento : ''}, ${estabelecimento.bairro || ''}, ${estabelecimento.cidade?.nome || ''} - ${estabelecimento.estado?.sigla || ''}, CEP: ${estabelecimento.cep || ''}` : '',
     capital_social_crmhub: cnpjData.capital_social ? `R$ ${cnpjData.capital_social}` : '',
     data_atualizacao_crmhub: new Date().toLocaleString('pt-BR'),
-    // ⚡ NOVOS CAMPOS
-    enriquecer_empresa_crmhub: 'sim', // Auto-marcar como SIM quando enriquecido
+    enriquecer_empresa_crmhub: 'sim',
     status_enriquecimento_crmhub: enrichmentStatus
   };
   
-  // Filtrar apenas campos com valores
   const payload = { properties: {} };
   Object.keys(mappedData).forEach(key => {
     if (mappedData[key]) {
@@ -1312,7 +1926,7 @@ function mapCNPJDataToCRMHubFields(cnpjData, cnpjNumber, enrichmentStatus = 'enr
   return payload;
 }
 
-// ⚡ Função melhorada para limpar CNPJ
+// ⚡ FUNÇÃO PARA LIMPAR CNPJ
 function cleanCNPJ(cnpjInput) {
   console.log('🧹 Limpando CNPJ:', cnpjInput, 'Tipo:', typeof cnpjInput);
   
@@ -1325,11 +1939,10 @@ function cleanCNPJ(cnpjInput) {
   const cleaned = cnpjString.replace(/[^\d]/g, '');
   
   console.log('🧹 CNPJ após limpeza:', cleaned, 'Tamanho:', cleaned.length);
-  
   return cleaned;
 }
 
-// ⚡ Função para formatar dados do CNPJ em texto legível
+// ⚡ FUNÇÃO PARA FORMATAR DADOS DO CNPJ
 function formatCNPJData(cnpjData, cnpjNumber) {
   const estabelecimento = cnpjData.estabelecimento || {};
   const endereco = estabelecimento.logradouro ? 
@@ -1340,7 +1953,7 @@ function formatCNPJData(cnpjData, cnpjNumber) {
     `(${estabelecimento.ddd1}) ${estabelecimento.telefone1}` : 
     'Não informado';
 
-  const formattedData = `
+  return `
 === DADOS DA RECEITA FEDERAL ===
 CNPJ: ${cnpjNumber}
 Razão Social: ${cnpjData.razao_social || 'Não informado'}
@@ -1371,8 +1984,6 @@ Natureza Jurídica: ${cnpjData.natureza_juridica?.descricao || 'Não informado'}
 
 Atualizado em: ${new Date().toLocaleString('pt-BR')}
   `.trim();
-
-  return formattedData;
 }
 
 // ⚡ FUNÇÃO PARA USAR CRMHUB OU SISTEMA PADRÃO
@@ -1386,7 +1997,7 @@ function updateEnrichmentPayloadWithCRMHub(cnpjData, cnpjNumber, enrichmentStatu
   }
 }
 
-// ⚡ FUNÇÃO para usar mapeamento individual ou campo único
+// ⚡ FUNÇÃO PARA MAPEAMENTO INDIVIDUAL OU CAMPO ÚNICO
 function updateEnrichmentPayload(cnpjData, cnpjNumber) {
   const hasIndividualMapping = Object.values(individualMapping).some(field => field && field !== 'nenhum');
   
@@ -1414,15 +2025,13 @@ function updateEnrichmentPayload(cnpjData, cnpjNumber) {
   }
 }
 
-// ⚡ Função para gerar payload baseado no mapeamento individual
+// ⚡ FUNÇÃO PARA GERAR PAYLOAD BASEADO NO MAPEAMENTO INDIVIDUAL
 function generateIndividualMappingPayload(cnpjData, cnpjNumber) {
   const payload = { properties: {} };
   const unmappedData = [];
   
-  // Lista de campos válidos do HubSpot
   const validFields = ['name', 'description', 'phone', 'city', 'state', 'website', 'zip', 'teste_cnpj'];
   
-  // Extrair dados do CNPJ
   const extractedData = {
     telefone: cnpjData.estabelecimento?.telefone1 ? 
       `(${cnpjData.estabelecimento.ddd1}) ${cnpjData.estabelecimento.telefone1}` : '',
@@ -1440,10 +2049,6 @@ function generateIndividualMappingPayload(cnpjData, cnpjNumber) {
     capital_social: cnpjData.capital_social ? `R$ ${cnpjData.capital_social}` : ''
   };
   
-  console.log('🧩 Dados extraídos do CNPJ:', extractedData);
-  console.log('🗺️ Mapeamento individual atual:', individualMapping);
-  
-  // Mapear campos individuais
   let mappedFieldsCount = 0;
   Object.keys(extractedData).forEach(cnpjField => {
     const hubspotField = individualMapping[cnpjField];
@@ -1459,7 +2064,6 @@ function generateIndividualMappingPayload(cnpjData, cnpjNumber) {
     }
   });
   
-  // Se há dados não mapeados, salvar no campo backup
   if (unmappedData.length > 0) {
     const backupField = savedUserChoice || selectedDestinationField;
     if (backupField && backupField !== 'nenhum' && validFields.includes(backupField)) {
@@ -1477,7 +2081,6 @@ Atualizado em: ${new Date().toLocaleString('pt-BR')}
   }
   
   console.log(`📊 Resumo: ${mappedFieldsCount} campos mapeados, ${unmappedData.length} não mapeados`);
-  
   return payload;
 }
 
@@ -1493,7 +2096,6 @@ async function checkForAutoEnrichment() {
   try {
     console.log('🔍 Verificando empresas para auto-enriquecimento...');
     
-    // ⚡ BUSCAR EMPRESAS COM "SIM" E STATUS "NÃO PROCESSADO"
     const searchUrl = 'https://api.hubapi.com/crm/v3/objects/companies/search';
     const searchPayload = {
       filterGroups: [
@@ -1538,14 +2140,12 @@ async function checkForAutoEnrichment() {
 
     console.log(`🎯 Encontradas ${companies.length} empresas para enriquecer`);
 
-    // ⚡ PROCESSAR APENAS A PRIMEIRA (PARA RESPEITAR RATE LIMIT)
     const company = companies[0];
     const companyId = company.id;
     const companyName = company.properties.name || 'Empresa sem nome';
     
     console.log(`🏢 Enriquecendo: ${companyName} (ID: ${companyId})`);
     
-    // ⚡ CHAMAR FUNÇÃO DE ENRIQUECIMENTO
     await performPollingEnrichment(companyId);
     
   } catch (error) {
@@ -1553,666 +2153,4 @@ async function checkForAutoEnrichment() {
   }
 }
 
-// ⚡ FUNÇÃO DE ENRIQUECIMENTO PARA POLLING
-async function performPollingEnrichment(companyId) {
-  try {
-    console.log(`🔄 Iniciando enriquecimento automático para: ${companyId}`);
-    
-    // ⚡ BUSCAR DADOS DA EMPRESA
-    const hubspotCompany = await axios.get(
-      `https://api.hubapi.com/crm/v3/objects/companies/${companyId}?properties=cnpj,name,enriquecer_empresa_crmhub,status_enriquecimento_crmhub`,
-      {
-        headers: { 
-          Authorization: `Bearer ${HUBSPOT_ACCESS_TOKEN}`,
-          'Content-Type': 'application/json'
-        }
-      }
-    );
-
-    const properties = hubspotCompany.data.properties;
-    
-    // ⚡ VERIFICAR SE AINDA ESTÁ MARCADO COMO SIM
-    if (properties.enriquecer_empresa_crmhub !== 'sim') {
-      console.log('⚠️ Campo não está mais marcado como SIM, cancelando');
-      return;
-    }
-    
-    // ⚡ BUSCAR E LIMPAR CNPJ
-    let cnpjRaw = properties.cnpj;
-    
-    // Se não encontrou, procurar em outros campos
-    if (!cnpjRaw) {
-      const allPropsResponse = await axios.get(
-        `https://api.hubapi.com/crm/v3/objects/companies/${companyId}`,
-        {
-          headers: { 
-            Authorization: `Bearer ${HUBSPOT_ACCESS_TOKEN}`,
-            'Content-Type': 'application/json'
-          }
-        }
-      );
-      
-      const allProps = allPropsResponse.data.properties;
-      
-      for (const [key, value] of Object.entries(allProps)) {
-        if (value && typeof value === 'string') {
-          const cleaned = cleanCNPJ(value);
-          if (cleaned.length === 14) {
-            console.log(`🎯 CNPJ encontrado no campo "${key}": ${value}`);
-            cnpjRaw = value;
-            break;
-          }
-        }
-      }
-    }
-
-    const cnpjLimpo = cleanCNPJ(cnpjRaw);
-    
-    // ⚡ VALIDAR CNPJ
-    if (!cnpjLimpo || cnpjLimpo.length !== 14) {
-      console.warn(`⚠️ CNPJ inválido para empresa ${companyId}: ${cnpjRaw}`);
-      
-      await axios.patch(
-        `https://api.hubapi.com/crm/v3/objects/companies/${companyId}`,
-        {
-          properties: {
-            status_enriquecimento_crmhub: 'falha',
-            data_atualizacao_crmhub: new Date().toLocaleString('pt-BR')
-          }
-        },
-        {
-          headers: {
-            Authorization: `Bearer ${HUBSPOT_ACCESS_TOKEN}`,
-            'Content-Type': 'application/json'
-          }
-        }
-      );
-      
-      return;
-    }
-
-    console.log(`📡 Consultando CNPJ: ${cnpjLimpo}`);
-    
-    // ⚡ CONSULTAR API CNPJ
-    const cnpjDataResponse = await axios.get(`https://publica.cnpj.ws/cnpj/${cnpjLimpo}`, {
-      timeout: 10000,
-      headers: {
-        'User-Agent': 'CNPJ-Enricher-Polling/2.1'
-      }
-    });
-
-    const cnpjData = cnpjDataResponse.data;
-    console.log(`✅ Dados obtidos para CNPJ: ${cnpjLimpo}`);
-
-    // ⚡ MAPEAR DADOS USANDO CRMHUB
-    const updatePayload = mapCNPJDataToCRMHubFields(cnpjData, cnpjLimpo, 'enriquecido');
-
-    // ⚡ ATUALIZAR EMPRESA
-    await axios.patch(
-      `https://api.hubapi.com/crm/v3/objects/companies/${companyId}`,
-      updatePayload,
-      {
-        headers: {
-          Authorization: `Bearer ${HUBSPOT_ACCESS_TOKEN}`,
-          'Content-Type': 'application/json'
-        }
-      }
-    );
-
-    console.log(`🎉 Empresa ${companyId} enriquecida com sucesso via polling!`);
-    
-  } catch (error) {
-    console.error(`❌ Erro no enriquecimento polling para ${companyId}:`, error.message);
-    
-    // ⚡ ATUALIZAR STATUS DE ERRO
-    let statusToUpdate = 'falha';
-    
-    if (error.response?.status === 429 && error.config?.url?.includes('cnpj.ws')) {
-      statusToUpdate = 'rate_limit';
-      console.log(`⚠️ Rate limit atingido para empresa ${companyId}`);
-    }
-    
-    try {
-      await axios.patch(
-        `https://api.hubapi.com/crm/v3/objects/companies/${companyId}`,
-        {
-          properties: {
-            status_enriquecimento_crmhub: statusToUpdate,
-            data_atualizacao_crmhub: new Date().toLocaleString('pt-BR')
-          }
-        },
-        {
-          headers: {
-            Authorization: `Bearer ${HUBSPOT_ACCESS_TOKEN}`,
-            'Content-Type': 'application/json'
-          }
-        }
-      );
-    } catch (updateError) {
-      console.error('❌ Erro ao atualizar status de erro:', updateError.message);
-    }
-  }
-}
-
-// ⚡ INICIAR POLLING
-function startPolling() {
-  if (pollingInterval) {
-    console.log('⚠️ Polling já está ativo');
-    return;
-  }
-  
-  console.log('🚀 Iniciando sistema de polling (30 segundos)...');
-  pollingActive = true;
-  
-  // ⚡ RODAR IMEDIATAMENTE
-  checkForAutoEnrichment();
-  
-  // ⚡ CONFIGURAR INTERVAL DE 30 SEGUNDOS
-  pollingInterval = setInterval(() => {
-    if (pollingActive) {
-      checkForAutoEnrichment();
-    }
-  }, 30000); // 30 segundos
-  
-  console.log('✅ Polling iniciado com sucesso');
-}
-
-// ⚡ PARAR POLLING
-function stopPolling() {
-  if (pollingInterval) {
-    clearInterval(pollingInterval);
-    pollingInterval = null;
-    pollingActive = false;
-    console.log('⏹️ Polling interrompido');
-  }
-}
-
-// ⚡ ENDPOINTS PRINCIPAIS
-
-// Status do app
-app.get('/account', (req, res) => {
-  res.json({
-    status: 'connected',
-    app: 'CNPJ Enricher',
-    version: '2.1',
-    tokenStatus: HUBSPOT_ACCESS_TOKEN ? 'Configurado' : 'Não configurado',
-    crmhubStatus: crmhubToggleEnabled ? 'Ativo' : 'Inativo',
-    pollingStatus: pollingActive ? 'Ativo' : 'Inativo',
-    fieldsTotal: CRMHUB_FIELDS.length,
-    endpoints: {
-      configurar: 'GET /settings',
-      enriquecer: 'POST /enrich',
-      criarTeste: 'POST /create-test-company',
-      crmhubEnriquecer: 'POST /api/enrich-crmhub',
-      crmhubDropdown: 'POST /api/crmhub-dropdown-fetch',
-      pollingControl: 'POST /api/polling-control'
-    }
-  });
-});
-
-// ⚡ ENDPOINTS CRMHUB DROPDOWN - CORRIGIDOS
-
-// CRMHub Dropdown Fetch
-app.post('/api/crmhub-dropdown-fetch', (req, res) => {
-  console.log('🔽 CRMHub Dropdown Fetch chamado');
-  
-  try {
-    const options = [
-      {
-        text: '✅ Sim - Criar campos CRMHub',
-        value: 'sim',
-        description: `Criar ${CRMHUB_FIELDS.length} campos personalizados para dados do CNPJ`
-      },
-      {
-        text: '❌ Não - Usar campo description',
-        value: 'nao',
-        description: 'Salvar todos os dados no campo description padrão'
-      }
-    ];
-
-    console.log('📋 Retornando opções: Sim/Não');
-
-    return res.json({
-      response: {
-        options: options,
-        selectedOption: 'sim',
-        placeholder: 'Criar campos CRMHub?'
-      }
-    });
-    
-  } catch (error) {
-    console.error('❌ Erro no dropdown:', error);
-    
-    return res.json({
-      response: {
-        options: [
-          { 
-            text: '✅ Sim - Criar campos', 
-            value: 'sim',
-            description: 'Criar campos CRMHub'
-          }
-        ],
-        selectedOption: 'sim',
-        placeholder: 'Criar campos CRMHub?'
-      }
-    });
-  }
-});
-
-// CRMHub Dropdown Update
-app.post('/api/crmhub-dropdown-update', (req, res) => {
-  console.log('🔽 CRMHub Dropdown Update chamado');
-  console.log('📥 Request body:', JSON.stringify(req.body, null, 2));
-  
-  try {
-    const selectedOption = req.body.selectedOption || 'sim';
-    
-    console.log(`🎯 Opção selecionada: ${selectedOption}`);
-    
-    if (selectedOption === 'sim') {
-      const message = `✅ Configurado para criar campos CRMHub! Os ${CRMHUB_FIELDS.length} campos personalizados serão criados automaticamente quando necessário.`;
-      
-      console.log('🎉 Configurado para criar campos CRMHub');
-      
-      return res.json({
-        response: {
-          actionType: 'DROPDOWN_UPDATE',
-          selectedOption: selectedOption,
-          message: message,
-          configuration: {
-            mode: 'crmhub_fields',
-            fieldsCount: CRMHUB_FIELDS.length
-          }
-        }
-      });
-      
-    } else {
-      const message = '✅ Configurado para usar campo "description" padrão do HubSpot para salvar dados do CNPJ.';
-      
-      console.log('📝 Configurado para usar campo description');
-      
-      return res.json({
-        response: {
-          actionType: 'DROPDOWN_UPDATE',
-          selectedOption: selectedOption,
-          message: message,
-          configuration: {
-            mode: 'description_field',
-            field: 'description'
-          }
-        }
-      });
-    }
-    
-  } catch (error) {
-    console.error('❌ Erro no dropdown update:', error);
-    
-    return res.json({
-      response: {
-        actionType: 'DROPDOWN_UPDATE',
-        selectedOption: 'sim',
-        message: '❌ Erro interno. Tente novamente.',
-        error: error.message
-      }
-    });
-  }
-});
-
-// ⚡ OAuth Callback
-app.get('/oauth/callback', async (req, res) => {
-  const code = req.query.code;
-  if (!code) return res.status(400).send('❌ Código de autorização não fornecido.');
-
-  console.log('🔍 Processando OAuth callback...');
-
-  try {
-    if (!CLIENT_ID || !CLIENT_SECRET || !REDIRECT_URI) {
-      console.error('❌ Variáveis de ambiente não configuradas');
-      return res.status(500).send(`
-        <h2>❌ Erro de Configuração</h2>
-        <p><strong>CLIENT_ID:</strong> ${CLIENT_ID ? 'Configurado' : 'NÃO CONFIGURADO'}</p>
-        <p><strong>CLIENT_SECRET:</strong> ${CLIENT_SECRET ? 'Configurado' : 'NÃO CONFIGURADO'}</p>
-        <p><strong>REDIRECT_URI:</strong> ${REDIRECT_URI ? 'Configurado' : 'NÃO CONFIGURADO'}</p>
-      `);
-    }
-
-    const response = await axios.post(
-      'https://api.hubapi.com/oauth/v1/token',
-      new URLSearchParams({
-        grant_type: 'authorization_code',
-        client_id: CLIENT_ID,
-        client_secret: CLIENT_SECRET,
-        redirect_uri: REDIRECT_URI,
-        code: code
-      }),
-      {
-        headers: { 
-          'Content-Type': 'application/x-www-form-urlencoded',
-          'User-Agent': 'CNPJ-Enricher/2.1'
-        },
-        timeout: 10000
-      }
-    );
-
-    const { access_token, refresh_token, expires_in } = response.data;
-    HUBSPOT_ACCESS_TOKEN = access_token;
-
-    console.log('✅ Access Token gerado:', access_token);
-    console.log('⏰ Expira em (segundos):', expires_in);
-
-    const successHtml = `
-<!DOCTYPE html>
-<html lang="pt-BR">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>OAuth Sucesso</title>
-    <style>
-        body { font-family: Arial, sans-serif; max-width: 600px; margin: 50px auto; padding: 20px; background: #f8f9fa; }
-        .container { background: white; padding: 30px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
-        .success { color: #28a745; border-left: 4px solid #28a745; padding-left: 15px; margin-bottom: 20px; }
-        .info { background: #e9ecef; padding: 15px; border-radius: 5px; margin: 15px 0; }
-        .btn { display: inline-block; padding: 10px 20px; background: #007bff; color: white; text-decoration: none; border-radius: 5px; margin: 10px 5px; }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <div class="success">
-            <h2>✅ Token OAuth gerado com sucesso!</h2>
-        </div>
-        
-        <div class="info">
-            <p><strong>Access Token:</strong> ${access_token.substring(0, 20)}...</p>
-            <p><strong>Expira em:</strong> ${Math.floor(expires_in / 3600)} horas</p>
-            <p><strong>Status:</strong> Conectado ao HubSpot ✅</p>
-            <p><strong>Campos CRMHub:</strong> ${CRMHUB_FIELDS.length} campos disponíveis</p>
-            <p><strong>Polling:</strong> ${pollingActive ? 'Ativo 🟢' : 'Será iniciado automaticamente 🔄'}</p>
-        </div>
-        
-        <h3>🚀 Próximos passos:</h3>
-        <ol>
-            <li><strong>Criar empresa teste:</strong><br><code>POST /create-test-company</code></li>
-            <li><strong>Marcar empresa como SIM</strong> no campo "Enriquecer Empresa - CRMHub"</li>
-            <li><strong>Aguardar até 30 segundos</strong> para enriquecimento automático</li>
-        </ol>
-        
-        <div style="margin-top: 30px;">
-            <a href="/account" class="btn">📊 Verificar Status</a>
-            <a href="/settings" class="btn">⚙️ Configurações</a>
-        </div>
-        
-        <script>
-            if (window.opener) {
-                setTimeout(() => window.close(), 3000);
-            }
-            if (window.parent && window.parent !== window) {
-                window.parent.postMessage({
-                    type: 'oauth_success',
-                    token: '${access_token.substring(0, 20)}...',
-                    expiresIn: ${expires_in}
-                }, '*');
-            }
-        </script>
-    </div>
-</body>
-</html>`;
-
-    res.send(successHtml);
-    
-  } catch (error) {
-    console.error('❌ Erro no OAuth:', error.response?.data);
-    
-    const errorHtml = `
-<!DOCTYPE html>
-<html lang="pt-BR">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Erro OAuth</title>
-    <style>
-        body { font-family: Arial, sans-serif; max-width: 600px; margin: 50px auto; padding: 20px; background: #f8f9fa; }
-        .container { background: white; padding: 30px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
-        .error { color: #dc3545; border-left: 4px solid #dc3545; padding-left: 15px; margin-bottom: 20px; }
-        .debug { background: #f8f9fa; padding: 15px; border-radius: 5px; margin: 15px 0; font-family: monospace; font-size: 12px; }
-        .btn { display: inline-block; padding: 10px 20px; background: #007bff; color: white; text-decoration: none; border-radius: 5px; margin: 10px 5px; }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <div class="error">
-            <h2>❌ Erro ao gerar token OAuth</h2>
-        </div>
-        
-        <p><strong>Status:</strong> ${error.response?.status || 'Desconhecido'}</p>
-        <p><strong>Mensagem:</strong> ${error.message}</p>
-        
-        <div class="debug">
-            <h4>🔍 Debug:</h4>
-            <p><strong>CLIENT_ID:</strong> ${CLIENT_ID || 'Não configurado'}</p>
-            <p><strong>REDIRECT_URI:</strong> ${REDIRECT_URI || 'Não configurado'}</p>
-            <p><strong>CLIENT_SECRET:</strong> ${CLIENT_SECRET ? 'Configurado' : 'Não configurado'}</p>
-            <pre>${JSON.stringify(error.response?.data, null, 2)}</pre>
-        </div>
-        
-        <div style="margin-top: 30px;">
-            <a href="/account" class="btn">📊 Status</a>
-        </div>
-    </div>
-</body>
-</html>`;
-
-    res.status(500).send(errorHtml);
-  }
-});
-
-// ⚡ ENRICHMENT PRINCIPAL - VERSÃO ATUALIZADA COM NOVOS STATUS
-app.post('/enrich', async (req, res) => {
-  const { companyId } = req.body;
-
-  console.log('🔍 Iniciando enriquecimento para companyId:', companyId);
-
-  if (!companyId) {
-    console.error('❌ Company ID não fornecido');
-    return res.status(400).json({ error: 'Company ID is required' });
-  }
-
-  if (!HUBSPOT_ACCESS_TOKEN) {
-    console.error('❌ HUBSPOT_ACCESS_TOKEN não configurado');
-    return res.status(500).json({ 
-      error: 'Token do HubSpot não configurado',
-      details: 'Execute OAuth primeiro',
-      authUrl: `https://app.hubspot.com/oauth/authorize?client_id=${CLIENT_ID}&scope=crm.objects.companies.read%20crm.objects.companies.write&redirect_uri=${REDIRECT_URI}`
-    });
-  }
-
-  try {
-    console.log('📡 Buscando empresa no HubSpot...');
-    
-    const hubspotCompany = await axios.get(
-      `https://api.hubapi.com/crm/v3/objects/companies/${companyId}?properties=cnpj,name,domain,website,phone,city,state,country,createdate,hs_lastmodifieddate`,
-      {
-        headers: { 
-          Authorization: `Bearer ${HUBSPOT_ACCESS_TOKEN}`,
-          'Content-Type': 'application/json'
-        }
-      }
-    );
-
-    console.log('✅ Empresa encontrada no HubSpot');
-    const properties = hubspotCompany.data.properties;
-    
-    console.log('🔍 Propriedades da empresa:');
-    Object.keys(properties).forEach(key => {
-      console.log(`${key}: "${properties[key]}"`);
-    });
-    
-    // Buscar CNPJ
-    let cnpjRaw = properties.cnpj || 
-                  properties.CNPJ ||
-                  properties.registration_number ||
-                  properties.company_cnpj ||
-                  properties.document_number ||
-                  properties.tax_id ||
-                  properties.federal_id;
-
-    // Se não encontrou, procurar em qualquer campo com 14 dígitos
-    if (!cnpjRaw) {
-      console.log('🔍 CNPJ não encontrado nos campos padrão, procurando em todos os campos...');
-      
-      for (const [key, value] of Object.entries(properties)) {
-        if (value && typeof value === 'string') {
-          const cleaned = cleanCNPJ(value);
-          if (cleaned.length === 14) {
-            console.log(`🎯 CNPJ encontrado no campo "${key}": ${value} -> ${cleaned}`);
-            cnpjRaw = value;
-            break;
-          }
-        }
-      }
-    }
-
-    console.log('🔍 CNPJ bruto encontrado:', cnpjRaw);
-
-    const cnpjLimpo = cleanCNPJ(cnpjRaw);
-    console.log('🧹 CNPJ limpo:', cnpjLimpo);
-
-    if (!cnpjLimpo || cnpjLimpo.length !== 14) {
-      console.warn('⚠️ CNPJ inválido ou não encontrado');
-      
-      // ⚡ ATUALIZAR STATUS PARA FALHA SE USANDO CRMHUB
-      if (crmhubToggleEnabled) {
-        try {
-          await axios.patch(
-            `https://api.hubapi.com/crm/v3/objects/companies/${companyId}`,
-            {
-              properties: {
-                status_enriquecimento_crmhub: 'falha'
-              }
-            },
-            {
-              headers: {
-                Authorization: `Bearer ${HUBSPOT_ACCESS_TOKEN}`,
-                'Content-Type': 'application/json'
-              }
-            }
-          );
-          console.log('❌ Status atualizado para FALHA - CNPJ inválido');
-        } catch (statusError) {
-          console.error('❌ Erro ao atualizar status:', statusError.message);
-        }
-      }
-      
-      let sugestoes = [];
-      if (!cnpjRaw) {
-        sugestoes.push('Campo CNPJ não encontrado na empresa');
-        sugestoes.push(`Use: POST /add-cnpj/${companyId} com {"cnpj": "14665903000104"}`);
-      } else if (cnpjLimpo.length !== 14) {
-        sugestoes.push(`CNPJ tem ${cnpjLimpo.length} dígitos, precisa ter 14`);
-        sugestoes.push('Formatos aceitos: 14665903000104 ou 14.665.903/0001-04');
-      }
-      
-      return res.status(400).json({ 
-        error: 'CNPJ inválido ou não encontrado',
-        cnpjRaw: cnpjRaw,
-        cnpjLimpo: cnpjLimpo,
-        cnpjTamanho: cnpjLimpo.length,
-        sugestoes: sugestoes
-      });
-    }
-
-    console.log('📡 Buscando dados do CNPJ na API externa...');
-    
-    const cnpjDataResponse = await axios.get(`https://publica.cnpj.ws/cnpj/${cnpjLimpo}`, {
-      timeout: 10000,
-      headers: {
-        'User-Agent': 'CNPJ-Enricher/2.1'
-      }
-    });
-
-    console.log('✅ Dados do CNPJ obtidos com sucesso');
-    const cnpjData = cnpjDataResponse.data;
-
-    // ⚡ GERAR PAYLOAD BASEADO NO MODO CONFIGURADO
-    const updatePayload = updateEnrichmentPayloadWithCRMHub(cnpjData, cnpjLimpo, 'enriquecido');
-
-    console.log('📦 Payload final:', JSON.stringify(updatePayload, null, 2));
-    console.log('📡 Atualizando empresa no HubSpot...');
-    
-    await axios.patch(
-      `https://api.hubapi.com/crm/v3/objects/companies/${companyId}`,
-      updatePayload,
-      {
-        headers: {
-          Authorization: `Bearer ${HUBSPOT_ACCESS_TOKEN}`,
-          'Content-Type': 'application/json'
-        }
-      }
-    );
-
-    const hasIndividualMapping = Object.values(individualMapping).some(field => field && field !== 'nenhum');
-    const campoUsado = crmhubToggleEnabled ? 'CRMHub (campos específicos)' : 
-                      (hasIndividualMapping ? 'mapeamento individual' : (savedUserChoice || selectedDestinationField));
-    
-    console.log(`✅ Empresa atualizada com sucesso! Modo usado: ${campoUsado}`);
-    
-    const dadosEmpresa = {
-      razaoSocial: cnpjData.razao_social || '',
-      nomeFantasia: cnpjData.estabelecimento?.nome_fantasia || '',
-      situacao: cnpjData.estabelecimento?.situacao_cadastral || '',
-      porte: cnpjData.porte?.descricao || '',
-      cidade: cnpjData.estabelecimento?.cidade?.nome || '',
-      estado: cnpjData.estabelecimento?.estado?.sigla || '',
-      atividade: cnpjData.estabelecimento?.atividade_principal?.descricao || '',
-      email: cnpjData.estabelecimento?.email || '',
-      telefone: cnpjData.estabelecimento?.telefone1 ? 
-        `(${cnpjData.estabelecimento.ddd1}) ${cnpjData.estabelecimento.telefone1}` : ''
-    };
-    
-    console.log('🎉 SUCESSO COMPLETO:');
-    console.log('🏢 Razão Social:', dadosEmpresa.razaoSocial);
-    console.log('✨ Nome Fantasia:', dadosEmpresa.nomeFantasia);
-    console.log('📊 Situação:', dadosEmpresa.situacao);
-    console.log('📍 Local:', `${dadosEmpresa.cidade}/${dadosEmpresa.estado}`);
-    console.log('📞 Telefone:', dadosEmpresa.telefone);
-
-    res.json({ 
-      success: true,
-      message: `🎉 Empresa enriquecida com sucesso! Modo: ${campoUsado}`,
-      cnpj: cnpjLimpo,
-      empresa: {
-        razaoSocial: dadosEmpresa.razaoSocial,
-        nomeFantasia: dadosEmpresa.nomeFantasia,
-        situacao: dadosEmpresa.situacao,
-        localizacao: `${dadosEmpresa.cidade}/${dadosEmpresa.estado}`,
-        porte: dadosEmpresa.porte,
-        contato: {
-          email: dadosEmpresa.email,
-          telefone: dadosEmpresa.telefone
-        },
-        atividade: dadosEmpresa.atividade
-      },
-      configuracao: {
-        modo: crmhubToggleEnabled ? 'crmhub_ativo' : 
-              (hasIndividualMapping ? 'mapeamento_individual' : 'campo_unico'),
-        campoDestino: crmhubToggleEnabled ? 'Campos específicos CRMHub' : 
-                      (hasIndividualMapping ? 'múltiplos campos' : campoUsado),
-        tipoConteudo: crmhubToggleEnabled ? 'Dados em campos dedicados CRMHub' :
-                      (hasIndividualMapping ? 'Campos específicos + backup' : 'Texto formatado completo'),
-        crmhubAtivo: crmhubToggleEnabled,
-        pollingAtivo: pollingActive,
-        statusEnriquecimento: 'enriquecido'
-      }
-    });
-
-  } catch (error) {
-    console.error('❌ Erro detalhado no enriquecimento:');
-    console.error('📋 Mensagem:', error.message);
-    console.error('📊 Status:', error.response?.status);
-    console.error('📄 Response data:', error.response?.data);
-    
-    // ⚡ ATUALIZAR STATUS BASEADO NO TIPO DE ERRO
-    if (crmhubToggleEnabled) {
-      try {
-        let statusToUpdate = 'falha';
-        
-        if (error.response?.status === 429 && error.config?.url?.includes('cnpj.ws')) {
+//
