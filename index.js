@@ -1,4 +1,5 @@
 status: 'rate_limit',
+        statusEnriquecimento: 'rate_limit',
         proximaTentativa: 'Aguarde 1-2 minutos para nova consulta'
       });
     }
