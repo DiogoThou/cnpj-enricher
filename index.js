@@ -787,7 +787,7 @@ async function performPollingEnrichment(companyId) {
     
     // ⚡ CONSULTAR API CNPJ
     const cnpjDataResponse = await axios.get(`https://publica.cnpj.ws/cnpj/${cnpjLimpo}`, {
-      timeout: 15000
+      timeout: 15000,
       headers: {
         'User-Agent': 'CNPJ-Enricher-Polling/2.1'
       }
