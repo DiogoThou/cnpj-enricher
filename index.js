@@ -2283,35 +2283,4 @@ app.listen(PORT, () => {
 });
 
 
-// ⚡ DEBUG - TESTE BUSCA ESPECÍFICA
-app.get('/api/debug-company/:id', async (req, res) => {
-  const { id } = req.params;
-  
-  try {
-    const response = await axios.get(
-      `https://api.hubapi.com/crm/v3/objects/companies/${id}?properties=name,cnpj,enriquecer_empresa_crmhub,status_enriquecimento_crmhub`,
-      {
-        headers: {
-          Authorization: `Bearer ${HUBSPOT_ACCESS_TOKEN}`,
-          'Content-Type': 'application/json'
-        }
-      }
-    );
-    
-    res.json({
-      success: true,
-      company: response.data,
-      debug: {
-        enriquecer: response.data.properties.enriquecer_empresa_crmhub,
-        status: response.data.properties.status_enriquecimento_crmhub,
-        shouldProcess: response.data.properties.enriquecer_empresa_crmhub === 'sim' &&
-                      response.data.properties.status_enriquecimento_crmhub !== 'enriquecido'
-      }
-    });
-    
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
 module.exports = app;
