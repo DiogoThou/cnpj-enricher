@@ -1081,22 +1081,38 @@ async function performPollingEnrichment(companyId) {
 }
 
 // ⚡ INICIAR POLLING
-function forceAutoStartPolling() {
-  autoStartAttempts++;
-  console.log(`🔧 [AUTO-START] Tentativa ${autoStartAttempts}/${MAX_AUTO_START_ATTEMPTS} de auto-início`);
+function startPolling() {
+  console.log('🔄 [POLLING] Tentativa de início do polling...');
   
-  if (autoStartAttempts > MAX_AUTO_START_ATTEMPTS) {
-    console.error('❌ [AUTO-START] Máximo de tentativas atingido');
-    return;
+  if (pollingInterval) {
+    console.log('⚠️ [POLLING] Polling já está ativo');
+    return true;
   }
   
-  const success = startPolling();
-  
-  if (success && pollingActive) {
-    console.log('🎉 [AUTO-START] Polling iniciado com sucesso!');
-  } else {
-    console.log('⚠️ [AUTO-START] Falha, tentando novamente em 5 segundos...');
-    setTimeout(forceAutoStartPolling, 5000);
+  try {
+    console.log('🚀 [POLLING] Iniciando sistema de polling (30 segundos)...');
+    pollingActive = true;
+    
+    // ⚡ RODAR IMEDIATAMENTE
+    console.log('🎯 [POLLING] Executando primeira verificação imediata...');
+    checkForAutoEnrichment();
+    
+    // ⚡ CONFIGURAR INTERVAL DE 30 SEGUNDOS
+    pollingInterval = setInterval(() => {
+      if (pollingActive) {
+        console.log('🔍 [POLLING] Verificação automática iniciada...');
+        checkForAutoEnrichment();
+      }
+    }, 30000); // 30 segundos
+    
+    console.log('✅ [POLLING] Polling iniciado com sucesso!');
+    console.log(`📊 [POLLING] Status: ${pollingActive ? 'ATIVO' : 'INATIVO'}`);
+    return true;
+    
+  } catch (error) {
+    console.error('❌ [POLLING] Erro ao iniciar polling:', error);
+    pollingActive = false;
+    return false;
   }
 }
 
@@ -2607,6 +2623,33 @@ app.listen(PORT, () => {
       forceAutoStartPolling();
     }
   }, 5000);
+});
+
+
+// ⚡ ENDPOINT DE EMERGÊNCIA PARA FORÇAR POLLING
+app.post('/api/force-polling', (req, res) => {
+  console.log('🔧 [FORCE] Forçando início do polling via endpoint...');
+  
+  // Reset completo
+  if (pollingInterval) {
+    clearInterval(pollingInterval);
+    pollingInterval = null;
+  }
+  pollingActive = false;
+  autoStartAttempts = 0;
+  
+  // Forçar início
+  const success = startPolling();
+  
+  res.json({
+    success: success,
+    message: success ? '✅ Polling forçado com sucesso!' : '❌ Erro ao forçar polling',
+    status: {
+      pollingActive: pollingActive,
+      pollingInterval: !!pollingInterval,
+      attempts: autoStartAttempts
+    }
+  });
 });
 
 module.exports = app;
