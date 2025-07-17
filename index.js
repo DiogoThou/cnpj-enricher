@@ -132,18 +132,16 @@ async function ensureValidToken() {
 // ⚡ MIDDLEWARE PARA AUTO-RENOVAÇÃO EM TODAS AS CHAMADAS
 async function withAutoTokenRefresh(apiCall) {
   try {
-    // ⚡ VERIFICAR E RENOVAR TOKEN SE NECESSÁRIO
-    const tokenValid = await ensureValidToken();
-
-    if (!tokenValid) {
-      throw new Error('Não foi possível renovar token');
+    // ⚡ VERIFICAR SE TOKEN EXISTE
+    if (!HUBSPOT_ACCESS_TOKEN) {
+      throw new Error('Token não configurado');
     }
 
-    // ⚡ EXECUTAR CHAMADA ORIGINAL
+    // ⚡ EXECUTAR CHAMADA ORIGINAL DIRETAMENTE (sem renovação automática)
     return await apiCall();
   } catch (error) {
-    // ⚡ SE DEU 401, TENTAR RENOVAR TOKEN UMA VEZ
-    if (error.response?.status === 401 && !tokenRefreshInProgress) {
+    // ⚡ SE DEU 401, TENTAR RENOVAR TOKEN UMA VEZ APENAS SE TEMOS REFRESH TOKEN
+    if (error.response?.status === 401 && process.env.HUBSPOT_REFRESH_TOKEN && !tokenRefreshInProgress) {
       console.log('🔄 Token inválido detectado, tentando renovar...');
 
       const renewed = await refreshAccessToken();
@@ -447,15 +445,17 @@ async function createOrVerifyCRMHubGroup() {
     
     // Primeiro, verificar se o grupo já existe
     try {
-      const existingGroups = await axios.get(
-        'https://api.hubapi.com/crm/v3/properties/companies/groups',
-        {
-          headers: {
-            Authorization: `Bearer ${HUBSPOT_ACCESS_TOKEN}`,
-            'Content-Type': 'application/json'
-          }
-        }
-      );
+      const existingGroups = await withAutoTokenRefresh(async () => {
+  return await axios.get(
+    'https://api.hubapi.com/crm/v3/properties/companies/groups',
+    {
+      headers: {
+        Authorization: `Bearer ${HUBSPOT_ACCESS_TOKEN}`,
+        'Content-Type': 'application/json'
+      }
+    }
+  );
+});
       
       const crmhubGroup = existingGroups.data.results.find(group => 
         group.name === 'crmhub_dados' || group.label.includes('CRMHub')
