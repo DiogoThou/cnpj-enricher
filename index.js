@@ -38,10 +38,12 @@ async function refreshAccessToken() {
     return false;
   }
 
-  if (!HUBSPOT_REFRESH_TOKEN) {
-    console.error('❌ HUBSPOT_REFRESH_TOKEN não configurado');
-    return false;
-  }
+  const refreshToken = process.env.HUBSPOT_REFRESH_TOKEN || HUBSPOT_REFRESH_TOKEN;
+if (!refreshToken) {
+  console.error('❌ HUBSPOT_REFRESH_TOKEN não configurado');
+  console.error('🔧 Configure a variável HUBSPOT_REFRESH_TOKEN no Vercel');
+  return false;
+}
 
   tokenRefreshInProgress = true;
 
@@ -54,7 +56,7 @@ async function refreshAccessToken() {
         grant_type: 'refresh_token',
         client_id: CLIENT_ID,
         client_secret: CLIENT_SECRET,
-        refresh_token: HUBSPOT_REFRESH_TOKEN
+        refresh_token: refreshToken
       }),
       {
         headers: { 
@@ -89,6 +91,11 @@ async function refreshAccessToken() {
 
 // ⚡ FUNÇÃO PARA VERIFICAR SE TOKEN PRECISA SER RENOVADO
 async function ensureValidToken() {
+  console.log('🔍 [DEBUG] Verificando token...');
+  console.log('🔍 [DEBUG] Access Token existe:', !!HUBSPOT_ACCESS_TOKEN);
+  console.log('🔍 [DEBUG] Refresh Token existe:', !!process.env.HUBSPOT_REFRESH_TOKEN);
+  console.log('🔍 [DEBUG] Token expiration time:', tokenExpirationTime);
+  
   if (!HUBSPOT_ACCESS_TOKEN) {
     console.log('⚠️ Token não configurado');
     return false;
@@ -1271,10 +1278,13 @@ app.get('/oauth/callback', async (req, res) => {
     HUBSPOT_ACCESS_TOKEN = access_token;
     
     // ⚡ ATUALIZAR REFRESH TOKEN SE RECEBIDO
-    if (refresh_token) {
-      HUBSPOT_REFRESH_TOKEN = refresh_token;
-      console.log('✅ Refresh Token recebido:', refresh_token.substring(0, 20) + '...');
-    }
+   if (refresh_token) {
+  // ⚡ ATENÇÃO: Esta linha só atualiza em memória, não persiste no Vercel
+  process.env.HUBSPOT_REFRESH_TOKEN = refresh_token;
+  console.log('✅ Refresh Token recebido:', refresh_token.substring(0, 20) + '...');
+  console.log('⚠️ IMPORTANTE: Copie este refresh token para as variáveis do Vercel!');
+  console.log(`🔑 REFRESH_TOKEN: ${refresh_token}`);
+}
 
     // ⚡ CALCULAR TEMPO DE EXPIRAÇÃO
     const expiresInMs = (expires_in - 300) * 1000; // 5 min antes para segurança
@@ -1427,13 +1437,29 @@ app.post('/enrich', async (req, res) => {
   }
 
   if (!HUBSPOT_ACCESS_TOKEN) {
-    console.error('❌ HUBSPOT_ACCESS_TOKEN não configurado');
+  console.error('❌ HUBSPOT_ACCESS_TOKEN não configurado');
+  console.error('🔧 Token atual:', HUBSPOT_ACCESS_TOKEN ? 'EXISTS' : 'NULL');
+  console.error('🔧 Refresh token:', process.env.HUBSPOT_REFRESH_TOKEN ? 'EXISTS' : 'NULL');
+  
+  // ⚡ TENTAR RENOVAR TOKEN AUTOMATICAMENTE
+  if (process.env.HUBSPOT_REFRESH_TOKEN) {
+    console.log('🔄 Tentando renovar token automaticamente...');
+    const renewed = await refreshAccessToken();
+    if (!renewed) {
+      return res.status(500).json({
+        error: 'Token do HubSpot não configurado e falha na renovação automática',
+        details: 'Execute OAuth novamente',
+        authUrl: `https://app.hubspot.com/oauth/authorize?client_id=${CLIENT_ID}&scope=crm.objects.companies.read%20crm.objects.companies.write&redirect_uri=${REDIRECT_URI}`
+      });
+    }
+  } else {
     return res.status(500).json({
       error: 'Token do HubSpot não configurado',
       details: 'Execute OAuth primeiro',
       authUrl: `https://app.hubspot.com/oauth/authorize?client_id=${CLIENT_ID}&scope=crm.objects.companies.read%20crm.objects.companies.write&redirect_uri=${REDIRECT_URI}`
     });
   }
+}
 
   try {
     console.log('📡 Buscando empresa no HubSpot...');
