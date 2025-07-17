@@ -38,10 +38,18 @@ async function refreshAccessToken() {
     return false;
   }
 
-  const refreshToken = process.env.HUBSPOT_REFRESH_TOKEN || HUBSPOT_REFRESH_TOKEN;
+ const refreshToken = process.env.HUBSPOT_REFRESH_TOKEN;
+console.log('🔍 [DEBUG] Refresh token preview:', refreshToken ? refreshToken.substring(0, 20) + '...' : 'NULL');
+
 if (!refreshToken) {
   console.error('❌ HUBSPOT_REFRESH_TOKEN não configurado');
   console.error('🔧 Configure a variável HUBSPOT_REFRESH_TOKEN no Vercel');
+  return false;
+}
+
+if (refreshToken.length < 20) {
+  console.error('❌ HUBSPOT_REFRESH_TOKEN parece inválido (muito curto)');
+  console.error('🔧 Tamanho atual:', refreshToken.length);
   return false;
 }
 
@@ -103,9 +111,10 @@ async function ensureValidToken() {
 
   // ⚡ SE NÃO SABEMOS QUANDO EXPIRA, ASSUMIR QUE PRECISA RENOVAR
   if (!tokenExpirationTime) {
-    console.log('🔄 Tempo de expiração desconhecido, renovando token...');
-    return await refreshAccessToken();
-  }
+  console.log('⚠️ Tempo de expiração desconhecido, assumindo token válido');
+  console.log('🔧 Para renovação automática, execute OAuth novamente');
+  return true; // ⚡ MUDANÇA: não tentar renovar automaticamente
+}
 
   // ⚡ VERIFICAR SE ESTÁ PRÓXIMO DO VENCIMENTO (5 minutos antes)
   const timeUntilExpiration = tokenExpirationTime - Date.now();
@@ -204,7 +213,7 @@ app.post('/refresh-token-manual', async (req, res) => {
 // ⚡ ENDPOINT PARA STATUS DO TOKEN
 app.get('/token-status', (req, res) => {
   const hasToken = !!HUBSPOT_ACCESS_TOKEN;
-  const hasRefreshToken = !!HUBSPOT_REFRESH_TOKEN;
+  const hasRefreshToken = !!process.env.HUBSPOT_REFRESH_TOKEN;
 
   let timeUntilExpiration = null;
   if (tokenExpirationTime) {
