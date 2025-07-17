@@ -2573,29 +2573,28 @@ app.listen(PORT, () => {
   console.log(`🚀 CNPJ Enricher 2.1 com Polling rodando na porta ${PORT}`);
 
   // ⚡ AUTO-ATIVAR CRMHUB E POLLING APÓS 5 SEGUNDOS + INICIAR SCHEDULER DE TOKEN
-  setTimeout(async () => {
-    console.log('🕐 Iniciando auto-configuração...');
+ setTimeout(async () => {
+  console.log('🕐 Iniciando auto-configuração...');
 
-    // ⚡ INICIAR SCHEDULER DE TOKEN PRIMEIRO
-    startTokenRefreshScheduler();
+  // ⚡ INICIAR SCHEDULER DE TOKEN PRIMEIRO
+  startTokenRefreshScheduler();
 
-    // Ativar CRMHub automaticamente
-    if (!crmhubToggleEnabled && HUBSPOT_ACCESS_TOKEN) {
-      console.log('🚀 Auto-ativando CRMHub...');
-      crmhubToggleEnabled = true;
-      
-      try {
-        await checkCRMHubFieldsStatus();
-        console.log('✅ CRMHub auto-ativado com sucesso!');
-      } catch (error) {
-        console.log('⚠️ Erro na auto-ativação CRMHub:', error.message);
-      }
+  // ⚡ INICIAR POLLING PRIMEIRO (SEMPRE)
+  console.log('🔄 Iniciando polling automático...');
+  startPolling();
+
+  // Ativar CRMHub automaticamente (só se tiver token)
+  if (!crmhubToggleEnabled && HUBSPOT_ACCESS_TOKEN) {
+    console.log('🚀 Auto-ativando CRMHub...');
+    crmhubToggleEnabled = true;
+    
+    try {
+      await checkCRMHubFieldsStatus();
+      console.log('✅ CRMHub auto-ativado com sucesso!');
+    } catch (error) {
+      console.log('⚠️ Erro na auto-ativação CRMHub:', error.message);
     }
-
-    // Iniciar polling
-    console.log('🔄 Iniciando polling automático...');
-    startPolling();
-  }, 5000);
-});
+  }
+}, 5000);
 
 module.exports = app;
