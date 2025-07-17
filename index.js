@@ -21,6 +21,206 @@ let crmhubToggleEnabled = false;
 let pollingInterval = null;
 let pollingActive = false;
 
+
+
+
+
+// ⚡ SISTEMA DE AUTO-RENOVAÇÃO DE TOKEN
+// ADICIONAR ESTAS VARIÁVEIS NO TOPO DO ARQUIVO (APÓS AS OUTRAS VARIÁVEIS)
+
+let tokenExpirationTime = null;
+let tokenRefreshInProgress = false;
+
+// ⚡ FUNÇÃO PARA RENOVAR TOKEN AUTOMATICAMENTE
+async function refreshAccessToken() {
+  if (tokenRefreshInProgress) {
+    console.log('🔄 Renovação já em andamento, aguardando...');
+    return false;
+  }
+
+  if (!HUBSPOT_REFRESH_TOKEN) {
+    console.error('❌ HUBSPOT_REFRESH_TOKEN não configurado');
+    return false;
+  }
+
+  tokenRefreshInProgress = true;
+
+  try {
+    console.log('🔄 Renovando token do HubSpot...');
+
+    const response = await axios.post(
+      'https://api.hubapi.com/oauth/v1/token',
+      new URLSearchParams({
+        grant_type: 'refresh_token',
+        client_id: CLIENT_ID,
+        client_secret: CLIENT_SECRET,
+        refresh_token: HUBSPOT_REFRESH_TOKEN
+      }),
+      {
+        headers: { 
+          'Content-Type': 'application/x-www-form-urlencoded',
+          'User-Agent': 'CNPJ-Enricher/2.1'
+        },
+        timeout: 10000
+      }
+    );
+
+    const { access_token, expires_in } = response.data;
+
+    // ⚡ ATUALIZAR TOKEN GLOBAL
+    HUBSPOT_ACCESS_TOKEN = access_token;
+
+    // ⚡ CALCULAR TEMPO DE EXPIRAÇÃO (5 minutos antes para segurança)
+    const expiresInMs = (expires_in - 300) * 1000; // 5 min antes
+    tokenExpirationTime = Date.now() + expiresInMs;
+
+    console.log('✅ Token renovado com sucesso!');
+    console.log(`🕐 Próxima renovação em: ${Math.floor(expires_in / 3600)}h${Math.floor((expires_in % 3600) / 60)}m`);
+    console.log(`🔑 Novo token: ${access_token.substring(0, 20)}...`);
+
+    tokenRefreshInProgress = false;
+    return true;
+  } catch (error) {
+    console.error('❌ Erro ao renovar token:', error.response?.data || error.message);
+    tokenRefreshInProgress = false;
+    return false;
+  }
+}
+
+// ⚡ FUNÇÃO PARA VERIFICAR SE TOKEN PRECISA SER RENOVADO
+async function ensureValidToken() {
+  if (!HUBSPOT_ACCESS_TOKEN) {
+    console.log('⚠️ Token não configurado');
+    return false;
+  }
+
+  // ⚡ SE NÃO SABEMOS QUANDO EXPIRA, ASSUMIR QUE PRECISA RENOVAR
+  if (!tokenExpirationTime) {
+    console.log('🔄 Tempo de expiração desconhecido, renovando token...');
+    return await refreshAccessToken();
+  }
+
+  // ⚡ VERIFICAR SE ESTÁ PRÓXIMO DO VENCIMENTO (5 minutos antes)
+  const timeUntilExpiration = tokenExpirationTime - Date.now();
+  const fiveMinutes = 5 * 60 * 1000;
+
+  if (timeUntilExpiration <= fiveMinutes) {
+    console.log('⏰ Token expirando em breve, renovando...');
+    return await refreshAccessToken();
+  }
+
+  console.log(`✅ Token válido por mais ${Math.floor(timeUntilExpiration / 60000)} minutos`);
+  return true;
+}
+
+// ⚡ MIDDLEWARE PARA AUTO-RENOVAÇÃO EM TODAS AS CHAMADAS
+async function withAutoTokenRefresh(apiCall) {
+  try {
+    // ⚡ VERIFICAR E RENOVAR TOKEN SE NECESSÁRIO
+    const tokenValid = await ensureValidToken();
+
+    if (!tokenValid) {
+      throw new Error('Não foi possível renovar token');
+    }
+
+    // ⚡ EXECUTAR CHAMADA ORIGINAL
+    return await apiCall();
+  } catch (error) {
+    // ⚡ SE DEU 401, TENTAR RENOVAR TOKEN UMA VEZ
+    if (error.response?.status === 401 && !tokenRefreshInProgress) {
+      console.log('🔄 Token inválido detectado, tentando renovar...');
+
+      const renewed = await refreshAccessToken();
+      
+      if (renewed) {
+        console.log('✅ Token renovado, tentando novamente...');
+        return await apiCall();
+      }
+    }
+
+    throw error;
+  }
+}
+
+// ⚡ AUTO-RENOVAÇÃO PERIÓDICA (A CADA 30 MINUTOS)
+let tokenRefreshInterval = null;
+
+function startTokenRefreshScheduler() {
+  if (tokenRefreshInterval) {
+    clearInterval(tokenRefreshInterval);
+  }
+
+  console.log('⏰ Iniciando scheduler de renovação de token (30 min)');
+
+  tokenRefreshInterval = setInterval(async () => {
+    console.log('⏰ Verificação automática de token...');
+    await ensureValidToken();
+  }, 30 * 60 * 1000); // 30 minutos
+}
+
+function stopTokenRefreshScheduler() {
+  if (tokenRefreshInterval) {
+    clearInterval(tokenRefreshInterval);
+    tokenRefreshInterval = null;
+    console.log('⏹️ Scheduler de token parado');
+  }
+}
+
+// ⚡ ENDPOINT MANUAL PARA RENOVAR TOKEN
+app.post('/refresh-token-manual', async (req, res) => {
+  try {
+    const success = await refreshAccessToken();
+
+    if (success) {
+      res.json({
+        success: true,
+        message: '✅ Token renovado com sucesso!',
+        tokenPreview: HUBSPOT_ACCESS_TOKEN.substring(0, 20) + '...',
+        expiresIn: tokenExpirationTime ? 
+          Math.floor((tokenExpirationTime - Date.now()) / 60000) + ' minutos' : 
+          'Tempo desconhecido'
+      });
+    } else {
+      res.status(500).json({
+        success: false,
+        error: 'Falha ao renovar token'
+      });
+    }
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+// ⚡ ENDPOINT PARA STATUS DO TOKEN
+app.get('/token-status', (req, res) => {
+  const hasToken = !!HUBSPOT_ACCESS_TOKEN;
+  const hasRefreshToken = !!HUBSPOT_REFRESH_TOKEN;
+
+  let timeUntilExpiration = null;
+  if (tokenExpirationTime) {
+    timeUntilExpiration = Math.floor((tokenExpirationTime - Date.now()) / 60000);
+  }
+
+  res.json({
+    hasAccessToken: hasToken,
+    hasRefreshToken: hasRefreshToken,
+    tokenPreview: hasToken ? HUBSPOT_ACCESS_TOKEN.substring(0, 20) + '...' : null,
+    expiresInMinutes: timeUntilExpiration,
+    refreshSchedulerActive: !!tokenRefreshInterval,
+    refreshInProgress: tokenRefreshInProgress,
+    autoRefreshEnabled: hasRefreshToken && hasToken
+  });
+});
+
+console.log('🔄 Sistema de auto-renovação de token carregado!');
+console.log('📡 Endpoints adicionados:');
+console.log('   POST /refresh-token-manual - Renovar token manualmente');
+console.log('   GET /token-status - Status do token');
+console.log('⏰ Scheduler automático será iniciado no startup');
+
 // ⚡ SISTEMA DE MAPEAMENTO INDIVIDUAL
 let individualMapping = {
   telefone: null,
@@ -709,22 +909,25 @@ async function checkForAutoEnrichment() {
   }
 }
 
-// ⚡ FUNÇÃO DE ENRIQUECIMENTO PARA POLLING
+// ⚡ SUBSTITUA A FUNÇÃO performPollingEnrichment POR ESTA VERSÃO ATUALIZADA:
+
 async function performPollingEnrichment(companyId) {
   try {
     console.log(`🔄 Iniciando enriquecimento automático para: ${companyId}`);
     
-    // ⚡ BUSCAR DADOS DA EMPRESA
-    const hubspotCompany = await axios.get(
-      `https://api.hubapi.com/crm/v3/objects/companies/${companyId}?properties=cnpj,name,enriquecer_empresa_crmhub,status_enriquecimento_crmhub`,
-      {
-        headers: { 
-          Authorization: `Bearer ${HUBSPOT_ACCESS_TOKEN}`,
-          'Content-Type': 'application/json'
-        },
-        timeout: 30000
-      }
-    );
+    // ⚡ BUSCAR DADOS DA EMPRESA COM AUTO-RENOVAÇÃO
+    const hubspotCompany = await withAutoTokenRefresh(async () => {
+      return await axios.get(
+        `https://api.hubapi.com/crm/v3/objects/companies/${companyId}?properties=cnpj,name,enriquecer_empresa_crmhub,status_enriquecimento_crmhub`,
+        {
+          headers: { 
+            Authorization: `Bearer ${HUBSPOT_ACCESS_TOKEN}`,
+            'Content-Type': 'application/json'
+          },
+          timeout: 30000
+        }
+      );
+    });
 
     const properties = hubspotCompany.data.properties;
     
@@ -739,15 +942,17 @@ async function performPollingEnrichment(companyId) {
     
     // Se não encontrou, procurar em outros campos
     if (!cnpjRaw) {
-      const allPropsResponse = await axios.get(
-        `https://api.hubapi.com/crm/v3/objects/companies/${companyId}`,
-        {
-          headers: { 
-            Authorization: `Bearer ${HUBSPOT_ACCESS_TOKEN}`,
-            'Content-Type': 'application/json'
+      const allPropsResponse = await withAutoTokenRefresh(async () => {
+        return await axios.get(
+          `https://api.hubapi.com/crm/v3/objects/companies/${companyId}`,
+          {
+            headers: { 
+              Authorization: `Bearer ${HUBSPOT_ACCESS_TOKEN}`,
+              'Content-Type': 'application/json'
+            }
           }
-        }
-      );
+        );
+      });
       
       const allProps = allPropsResponse.data.properties;
       
@@ -769,21 +974,23 @@ async function performPollingEnrichment(companyId) {
     if (!cnpjLimpo || cnpjLimpo.length !== 14) {
       console.warn(`⚠️ CNPJ inválido para empresa ${companyId}: ${cnpjRaw}`);
       
-      await axios.patch(
-        `https://api.hubapi.com/crm/v3/objects/companies/${companyId}`,
-        {
-          properties: {
-            status_enriquecimento_crmhub: 'falha',
-            data_atualizacao_crmhub: new Date().toLocaleString('pt-BR')
+      await withAutoTokenRefresh(async () => {
+        return await axios.patch(
+          `https://api.hubapi.com/crm/v3/objects/companies/${companyId}`,
+          {
+            properties: {
+              status_enriquecimento_crmhub: 'falha',
+              data_atualizacao_crmhub: new Date().toLocaleString('pt-BR')
+            }
+          },
+          {
+            headers: {
+              Authorization: `Bearer ${HUBSPOT_ACCESS_TOKEN}`,
+              'Content-Type': 'application/json'
+            }
           }
-        },
-        {
-          headers: {
-            Authorization: `Bearer ${HUBSPOT_ACCESS_TOKEN}`,
-            'Content-Type': 'application/json'
-          }
-        }
-      );
+        );
+      });
       
       return;
     }
@@ -804,24 +1011,26 @@ async function performPollingEnrichment(companyId) {
     // ⚡ MAPEAR DADOS USANDO CRMHUB
     const updatePayload = mapCNPJDataToCRMHubFields(cnpjData, cnpjLimpo, 'enriquecido');
 
-    // ⚡ ATUALIZAR EMPRESA
-    await axios.patch(
-      `https://api.hubapi.com/crm/v3/objects/companies/${companyId}`,
-      updatePayload,
-      {
-        headers: {
-          Authorization: `Bearer ${HUBSPOT_ACCESS_TOKEN}`,
-          'Content-Type': 'application/json'
+    // ⚡ ATUALIZAR EMPRESA COM AUTO-RENOVAÇÃO
+    await withAutoTokenRefresh(async () => {
+      return await axios.patch(
+        `https://api.hubapi.com/crm/v3/objects/companies/${companyId}`,
+        updatePayload,
+        {
+          headers: {
+            Authorization: `Bearer ${HUBSPOT_ACCESS_TOKEN}`,
+            'Content-Type': 'application/json'
+          }
         }
-      }
-    );
+      );
+    });
 
     console.log(`🎉 Empresa ${companyId} enriquecida com sucesso via polling!`);
     
   } catch (error) {
     console.error(`❌ Erro no enriquecimento polling para ${companyId}:`, error.message);
     
-    // ⚡ ATUALIZAR STATUS DE ERRO
+    // ⚡ ATUALIZAR STATUS DE ERRO COM AUTO-RENOVAÇÃO
     let statusToUpdate = 'falha';
     
     if (error.response?.status === 429 && error.config?.url?.includes('cnpj.ws')) {
@@ -830,21 +1039,23 @@ async function performPollingEnrichment(companyId) {
     }
     
     try {
-      await axios.patch(
-        `https://api.hubapi.com/crm/v3/objects/companies/${companyId}`,
-        {
-          properties: {
-            status_enriquecimento_crmhub: statusToUpdate,
-            data_atualizacao_crmhub: new Date().toLocaleString('pt-BR')
+      await withAutoTokenRefresh(async () => {
+        return await axios.patch(
+          `https://api.hubapi.com/crm/v3/objects/companies/${companyId}`,
+          {
+            properties: {
+              status_enriquecimento_crmhub: statusToUpdate,
+              data_atualizacao_crmhub: new Date().toLocaleString('pt-BR')
+            }
+          },
+          {
+            headers: {
+              Authorization: `Bearer ${HUBSPOT_ACCESS_TOKEN}`,
+              'Content-Type': 'application/json'
+            }
           }
-        },
-        {
-          headers: {
-            Authorization: `Bearer ${HUBSPOT_ACCESS_TOKEN}`,
-            'Content-Type': 'application/json'
-          }
-        }
-      );
+        );
+      });
     } catch (updateError) {
       console.error('❌ Erro ao atualizar status de erro:', updateError.message);
     }
@@ -1017,6 +1228,8 @@ app.post('/api/crmhub-dropdown-update', (req, res) => {
 });
 
 // ⚡ OAuth Callback
+// ⚡ SUBSTITUA TODO O ENDPOINT '/oauth/callback' POR ESTE:
+
 app.get('/oauth/callback', async (req, res) => {
   const code = req.query.code;
   if (!code) return res.status(400).send('❌ Código de autorização não fornecido.');
@@ -1035,7 +1248,7 @@ app.get('/oauth/callback', async (req, res) => {
     }
 
     const response = await axios.post(
-      'https://api.hubapi.com/oauth/v1/token',
+      'https://api.hubspot.com/oauth/v1/token',
       new URLSearchParams({
         grant_type: 'authorization_code',
         client_id: CLIENT_ID,
@@ -1053,10 +1266,26 @@ app.get('/oauth/callback', async (req, res) => {
     );
 
     const { access_token, refresh_token, expires_in } = response.data;
+    
+    // ⚡ ATUALIZAR TOKENS GLOBAIS
     HUBSPOT_ACCESS_TOKEN = access_token;
+    
+    // ⚡ ATUALIZAR REFRESH TOKEN SE RECEBIDO
+    if (refresh_token) {
+      HUBSPOT_REFRESH_TOKEN = refresh_token;
+      console.log('✅ Refresh Token recebido:', refresh_token.substring(0, 20) + '...');
+    }
+
+    // ⚡ CALCULAR TEMPO DE EXPIRAÇÃO
+    const expiresInMs = (expires_in - 300) * 1000; // 5 min antes para segurança
+    tokenExpirationTime = Date.now() + expiresInMs;
 
     console.log('✅ Access Token gerado:', access_token);
     console.log('⏰ Expira em (segundos):', expires_in);
+    console.log('🔄 Refresh Token disponível:', !!refresh_token);
+
+    // ⚡ INICIAR SCHEDULER AUTOMÁTICO
+    startTokenRefreshScheduler();
 
     const successHtml = `
 <!DOCTYPE html>
@@ -1064,12 +1293,13 @@ app.get('/oauth/callback', async (req, res) => {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>OAuth Sucesso</title>
+    <title>OAuth Sucesso - Auto-Renovação Ativa</title>
     <style>
         body { font-family: Arial, sans-serif; max-width: 600px; margin: 50px auto; padding: 20px; background: #f8f9fa; }
         .container { background: white; padding: 30px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
         .success { color: #28a745; border-left: 4px solid #28a745; padding-left: 15px; margin-bottom: 20px; }
         .info { background: #e9ecef; padding: 15px; border-radius: 5px; margin: 15px 0; }
+        .auto-refresh { background: #d1ecf1; border: 1px solid #bee5eb; padding: 15px; border-radius: 5px; margin: 15px 0; }
         .btn { display: inline-block; padding: 10px 20px; background: #007bff; color: white; text-decoration: none; border-radius: 5px; margin: 10px 5px; }
     </style>
 </head>
@@ -1077,6 +1307,14 @@ app.get('/oauth/callback', async (req, res) => {
     <div class="container">
         <div class="success">
             <h2>✅ Token OAuth gerado com sucesso!</h2>
+        </div>
+        
+        <div class="auto-refresh">
+            <h3>🔄 Auto-Renovação ATIVA</h3>
+            <p>✅ <strong>Sistema configurado para renovar automaticamente!</strong></p>
+            <p>🔑 <strong>Refresh Token:</strong> ${refresh_token ? 'Configurado' : 'Não recebido'}</p>
+            <p>⏰ <strong>Scheduler:</strong> Verificação a cada 30 minutos</p>
+            <p>🛡️ <strong>Renovação:</strong> Automática 5 minutos antes de expirar</p>
         </div>
         
         <div class="info">
@@ -1087,15 +1325,24 @@ app.get('/oauth/callback', async (req, res) => {
             <p><strong>Polling:</strong> ${pollingActive ? 'Ativo' : 'Iniciará automaticamente'}</p>
         </div>
         
-        <h3>🚀 Próximos passos:</h3>
+        <h3>🚀 Sistema Totalmente Automático!</h3>
+        <ul>
+            <li>✅ Token renovará automaticamente</li>
+            <li>🔄 Polling verificará empresas a cada 30s</li>
+            <li>🎯 CRMHub será ativado automaticamente</li>
+            <li>📊 Status será atualizado em tempo real</li>
+        </ul>
+        
+        <h3>🧪 Testar Sistema:</h3>
         <ol>
             <li><strong>Criar empresa teste:</strong><br><code>POST /create-test-company</code></li>
             <li><strong>Enriquecer empresa:</strong><br><code>POST /enrich</code></li>
-            <li><strong>CRMHub:</strong><br><code>POST /api/enrich-crmhub</code></li>
+            <li><strong>Status do token:</strong><br><code>GET /token-status</code></li>
         </ol>
         
         <div style="margin-top: 30px;">
             <a href="/account" class="btn">📊 Verificar Status</a>
+            <a href="/token-status" class="btn">🔑 Status Token</a>
             <a href="/settings" class="btn">⚙️ Configurações</a>
         </div>
         
@@ -1107,7 +1354,9 @@ app.get('/oauth/callback', async (req, res) => {
                 window.parent.postMessage({
                     type: 'oauth_success',
                     token: '${access_token.substring(0, 20)}...',
-                    expiresIn: ${expires_in}
+                    expiresIn: ${expires_in},
+                    hasRefreshToken: ${!!refresh_token},
+                    autoRefreshEnabled: true
                 }, '*');
             }
         </script>
@@ -1163,7 +1412,10 @@ app.get('/oauth/callback', async (req, res) => {
   }
 });
 
-// ⚡ ENRICHMENT PRINCIPAL - VERSÃO ATUALIZADA COM NOVOS STATUS
+
+// ⚡ ENDPOINT /enrich ATUALIZADO COM AUTO-RENOVAÇÃO
+// SUBSTITUA TODO O ENDPOINT '/enrich' ATUAL POR ESTE:
+
 app.post('/enrich', async (req, res) => {
   const { companyId } = req.body;
 
@@ -1176,7 +1428,7 @@ app.post('/enrich', async (req, res) => {
 
   if (!HUBSPOT_ACCESS_TOKEN) {
     console.error('❌ HUBSPOT_ACCESS_TOKEN não configurado');
-    return res.status(500).json({ 
+    return res.status(500).json({
       error: 'Token do HubSpot não configurado',
       details: 'Execute OAuth primeiro',
       authUrl: `https://app.hubspot.com/oauth/authorize?client_id=${CLIENT_ID}&scope=crm.objects.companies.read%20crm.objects.companies.write&redirect_uri=${REDIRECT_URI}`
@@ -1185,17 +1437,20 @@ app.post('/enrich', async (req, res) => {
 
   try {
     console.log('📡 Buscando empresa no HubSpot...');
-    
-    const hubspotCompany = await axios.get(
-      `https://api.hubapi.com/crm/v3/objects/companies/${companyId}?properties=cnpj,name,domain,website,phone,city,state,country,createdate,hs_lastmodifieddate`,
-      {
-        headers: { 
-          Authorization: `Bearer ${HUBSPOT_ACCESS_TOKEN}`,
-          'Content-Type': 'application/json'
-        },
-        timeout: 30000
-      }
-    );
+
+    // ⚡ USAR withAutoTokenRefresh PARA AUTO-RENOVAÇÃO
+    const hubspotCompany = await withAutoTokenRefresh(async () => {
+      return await axios.get(
+        `https://api.hubapi.com/crm/v3/objects/companies/${companyId}?properties=cnpj,name,domain,website,phone,city,state,country,createdate,hs_lastmodifieddate`,
+        {
+          headers: { 
+            Authorization: `Bearer ${HUBSPOT_ACCESS_TOKEN}`,
+            'Content-Type': 'application/json'
+          },
+          timeout: 30000
+        }
+      );
+    });
 
     console.log('✅ Empresa encontrada no HubSpot');
     const properties = hubspotCompany.data.properties;
@@ -1241,20 +1496,22 @@ app.post('/enrich', async (req, res) => {
       // ⚡ ATUALIZAR STATUS PARA FALHA SE USANDO CRMHUB
       if (crmhubToggleEnabled) {
         try {
-          await axios.patch(
-            `https://api.hubapi.com/crm/v3/objects/companies/${companyId}`,
-            {
-              properties: {
-                status_enriquecimento_crmhub: 'falha'
+          await withAutoTokenRefresh(async () => {
+            return await axios.patch(
+              `https://api.hubapi.com/crm/v3/objects/companies/${companyId}`,
+              {
+                properties: {
+                  status_enriquecimento_crmhub: 'falha'
+                }
+              },
+              {
+                headers: {
+                  Authorization: `Bearer ${HUBSPOT_ACCESS_TOKEN}`,
+                  'Content-Type': 'application/json'
+                }
               }
-            },
-            {
-              headers: {
-                Authorization: `Bearer ${HUBSPOT_ACCESS_TOKEN}`,
-                'Content-Type': 'application/json'
-              }
-            }
-          );
+            );
+          });
           console.log('❌ Status atualizado para FALHA - CNPJ inválido');
         } catch (statusError) {
           console.error('❌ Erro ao atualizar status:', statusError.message);
@@ -1297,16 +1554,19 @@ app.post('/enrich', async (req, res) => {
     console.log('📦 Payload final:', JSON.stringify(updatePayload, null, 2));
     console.log('📡 Atualizando empresa no HubSpot...');
     
-    await axios.patch(
-      `https://api.hubapi.com/crm/v3/objects/companies/${companyId}`,
-      updatePayload,
-      {
-        headers: {
-          Authorization: `Bearer ${HUBSPOT_ACCESS_TOKEN}`,
-          'Content-Type': 'application/json'
+    // ⚡ USAR withAutoTokenRefresh PARA ATUALIZAR
+    await withAutoTokenRefresh(async () => {
+      return await axios.patch(
+        `https://api.hubapi.com/crm/v3/objects/companies/${companyId}`,
+        updatePayload,
+        {
+          headers: {
+            Authorization: `Bearer ${HUBSPOT_ACCESS_TOKEN}`,
+            'Content-Type': 'application/json'
+          }
         }
-      }
-    );
+      );
+    });
 
     const hasIndividualMapping = Object.values(individualMapping).some(field => field && field !== 'nenhum');
     const campoUsado = crmhubToggleEnabled ? 'CRMHub (campos específicos)' : 
@@ -1358,7 +1618,8 @@ app.post('/enrich', async (req, res) => {
         tipoConteudo: crmhubToggleEnabled ? 'Dados em campos dedicados CRMHub' :
                       (hasIndividualMapping ? 'Campos específicos + backup' : 'Texto formatado completo'),
         crmhubAtivo: crmhubToggleEnabled,
-        statusEnriquecimento: 'enriquecido'
+        statusEnriquecimento: 'enriquecido',
+        tokenAutoRenovado: true
       }
     });
 
@@ -1378,20 +1639,22 @@ app.post('/enrich', async (req, res) => {
           console.log('⚠️ Rate limit detectado - atualizando status');
         }
         
-        await axios.patch(
-          `https://api.hubapi.com/crm/v3/objects/companies/${companyId}`,
-          {
-            properties: {
-              status_enriquecimento_crmhub: statusToUpdate
+        await withAutoTokenRefresh(async () => {
+          return await axios.patch(
+            `https://api.hubapi.com/crm/v3/objects/companies/${companyId}`,
+            {
+              properties: {
+                status_enriquecimento_crmhub: statusToUpdate
+              }
+            },
+            {
+              headers: {
+                Authorization: `Bearer ${HUBSPOT_ACCESS_TOKEN}`,
+                'Content-Type': 'application/json'
+              }
             }
-          },
-          {
-            headers: {
-              Authorization: `Bearer ${HUBSPOT_ACCESS_TOKEN}`,
-              'Content-Type': 'application/json'
-            }
-          }
-        );
+          );
+        });
         console.log(`❌ Status atualizado para: ${statusToUpdate}`);
       } catch (statusError) {
         console.error('❌ Erro ao atualizar status:', statusError.message);
@@ -1401,7 +1664,7 @@ app.post('/enrich', async (req, res) => {
     if (error.response?.status === 401) {
       return res.status(401).json({ 
         error: 'Token do HubSpot inválido ou expirado',
-        details: 'Execute OAuth novamente',
+        details: 'Sistema tentou renovar automaticamente mas falhou',
         authUrl: `https://app.hubspot.com/oauth/authorize?client_id=${CLIENT_ID}&scope=crm.objects.companies.read%20crm.objects.companies.write&redirect_uri=${REDIRECT_URI}`
       });
     }
@@ -2273,12 +2536,31 @@ console.log(`🔄 Status inicial Polling: ${pollingActive ? 'ATIVO' : 'INATIVO'}
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`🚀 CNPJ Enricher 2.1 com Polling rodando na porta ${PORT}`);
-  
-// ⚡ INICIAR POLLING AUTOMATICAMENTE APÓS 5 SEGUNDOS
-  setTimeout(() => {
-    console.log('🕐 Iniciando polling automático em 5 segundos...');
+
+  // ⚡ AUTO-ATIVAR CRMHUB E POLLING APÓS 5 SEGUNDOS + INICIAR SCHEDULER DE TOKEN
+  setTimeout(async () => {
+    console.log('🕐 Iniciando auto-configuração...');
+
+    // ⚡ INICIAR SCHEDULER DE TOKEN PRIMEIRO
+    startTokenRefreshScheduler();
+
+    // Ativar CRMHub automaticamente
+    if (!crmhubToggleEnabled && HUBSPOT_ACCESS_TOKEN) {
+      console.log('🚀 Auto-ativando CRMHub...');
+      crmhubToggleEnabled = true;
+      
+      try {
+        await checkCRMHubFieldsStatus();
+        console.log('✅ CRMHub auto-ativado com sucesso!');
+      } catch (error) {
+        console.log('⚠️ Erro na auto-ativação CRMHub:', error.message);
+      }
+    }
+
+    // Iniciar polling
+    console.log('🔄 Iniciando polling automático...');
     startPolling();
-  }, 5000); // Aguarda 5 segundos após iniciar servidor
+  }, 5000);
 });
 
 module.exports = app;
