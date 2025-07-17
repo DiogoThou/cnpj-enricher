@@ -2571,31 +2571,54 @@ console.log(`🔄 Status inicial Polling: ${pollingActive ? 'ATIVO' : 'INATIVO'}
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`🚀 CNPJ Enricher 2.1 com Polling rodando na porta ${PORT}`);
+  
+  // ⚡ AUTO-CONFIGURAÇÃO IMEDIATA (SEM DELAY)
+  console.log('🕐 Iniciando auto-configuração IMEDIATA...');
 
-  // ⚡ AUTO-CONFIGURAÇÃO APÓS 5 SEGUNDOS
-  setTimeout(async () => {
-    console.log('🕐 Iniciando auto-configuração...');
-
-    // ⚡ INICIAR SCHEDULER DE TOKEN PRIMEIRO
+  // ⚡ 1. INICIAR SCHEDULER DE TOKEN PRIMEIRO
+  if (process.env.HUBSPOT_REFRESH_TOKEN) {
+    console.log('⏰ Iniciando scheduler de renovação de token...');
     startTokenRefreshScheduler();
+  } else {
+    console.log('⚠️ Refresh token não configurado - pular scheduler');
+  }
 
-    // ⚡ INICIAR POLLING PRIMEIRO (SEMPRE ATIVO)
-    console.log('🔄 Iniciando polling automático...');
+  // ⚡ 2. INICIAR POLLING AUTOMATICAMENTE (SEMPRE)
+  console.log('🔄 Auto-iniciando polling...');
+  try {
     startPolling();
+    console.log('✅ Polling auto-iniciado com sucesso!');
+  } catch (error) {
+    console.error('❌ Erro ao auto-iniciar polling:', error);
+  }
 
-    // Ativar CRMHub automaticamente (só se tiver token)
-    if (!crmhubToggleEnabled && HUBSPOT_ACCESS_TOKEN) {
-      console.log('🚀 Auto-ativando CRMHub...');
-      crmhubToggleEnabled = true;
-      
+  // ⚡ 3. ATIVAR CRMHUB SE TIVER TOKEN
+  if (!crmhubToggleEnabled && HUBSPOT_ACCESS_TOKEN) {
+    console.log('🚀 Auto-ativando CRMHub...');
+    crmhubToggleEnabled = true;
+    
+    // ⚡ VERIFICAR CAMPOS DE FORMA ASSÍNCRONA (NÃO BLOQUEAR)
+    setTimeout(async () => {
       try {
         await checkCRMHubFieldsStatus();
-        console.log('✅ CRMHub auto-ativado com sucesso!');
+        console.log('✅ CRMHub auto-ativado com verificação de campos!');
       } catch (error) {
-        console.log('⚠️ Erro na auto-ativação CRMHub:', error.message);
+        console.log('⚠️ Erro na verificação de campos CRMHub:', error.message);
       }
-    }
-  }, 5000);
+    }, 2000); // 2 segundos apenas para não bloquear
+  } else {
+    console.log('💡 CRMHub não auto-ativado (já ativo ou sem token)');
+  }
+
+  // ⚡ 4. LOG FINAL DE STATUS
+  setTimeout(() => {
+    console.log('📊 STATUS FINAL DA AUTO-CONFIGURAÇÃO:');
+    console.log(`   🔄 Polling: ${pollingActive ? 'ATIVO' : 'INATIVO'}`);
+    console.log(`   🚀 CRMHub: ${crmhubToggleEnabled ? 'ATIVO' : 'INATIVO'}`);
+    console.log(`   🔑 Token: ${HUBSPOT_ACCESS_TOKEN ? 'CONFIGURADO' : 'NÃO CONFIGURADO'}`);
+    console.log(`   ⏰ Scheduler: ${tokenRefreshInterval ? 'ATIVO' : 'INATIVO'}`);
+    console.log('🎉 Sistema totalmente configurado e funcionando!');
+  }, 3000);
 });
 
 module.exports = app;
