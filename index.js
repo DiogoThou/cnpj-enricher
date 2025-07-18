@@ -1732,7 +1732,7 @@ app.post('/enrich', async (req, res) => {
     console.log('📍 Local:', `${dadosEmpresa.cidade}/${dadosEmpresa.estado}`);
     console.log('📞 Telefone:', dadosEmpresa.telefone);
 
-    / ⚡ VALIDAÇÃO DE SEGURANÇA - Verificar se estamos retornando a empresa correta
+// ⚡ VALIDAÇÃO DE SEGURANÇA - Verificar se estamos retornando a empresa correta
 if (hubspotCompany.data.id !== companyId) {
   console.error(`🚨 [REQ-${requestId}] ERRO CRÍTICO: Empresa processada (${hubspotCompany.data.id}) diferente da solicitada (${companyId})`);
   return res.status(500).json({
@@ -1748,36 +1748,31 @@ res.json({
   success: true,
   message: `🎉 Empresa enriquecida com sucesso! Modo: ${campoUsado}`,
   cnpj: cnpjLimpo,
-  companyId: companyId, // ⚡ ADICIONAR PARA CONFIRMAR
-
-    res.json({ 
-      success: true,
-      message: `🎉 Empresa enriquecida com sucesso! Modo: ${campoUsado}`,
-      cnpj: cnpjLimpo,
-      empresa: {
-        razaoSocial: dadosEmpresa.razaoSocial,
-        nomeFantasia: dadosEmpresa.nomeFantasia,
-        situacao: dadosEmpresa.situacao,
-        localizacao: `${dadosEmpresa.cidade}/${dadosEmpresa.estado}`,
-        porte: dadosEmpresa.porte,
-        contato: {
-          email: dadosEmpresa.email,
-          telefone: dadosEmpresa.telefone
-        },
-        atividade: dadosEmpresa.atividade
-      },
-      configuracao: {
-        modo: crmhubToggleEnabled ? 'crmhub_ativo' : 
-              (hasIndividualMapping ? 'mapeamento_individual' : 'campo_unico'),
-        campoDestino: crmhubToggleEnabled ? 'Campos específicos CRMHub' : 
-                      (hasIndividualMapping ? 'múltiplos campos' : campoUsado),
-        tipoConteudo: crmhubToggleEnabled ? 'Dados em campos dedicados CRMHub' :
-                      (hasIndividualMapping ? 'Campos específicos + backup' : 'Texto formatado completo'),
-        crmhubAtivo: crmhubToggleEnabled,
-        statusEnriquecimento: 'enriquecido',
-        tokenAutoRenovado: true
-      }
-    });
+  companyId: companyId,
+  empresa: {
+    razaoSocial: dadosEmpresa.razaoSocial,
+    nomeFantasia: dadosEmpresa.nomeFantasia,
+    situacao: dadosEmpresa.situacao,
+    localizacao: `${dadosEmpresa.cidade}/${dadosEmpresa.estado}`,
+    porte: dadosEmpresa.porte,
+    contato: {
+      email: dadosEmpresa.email,
+      telefone: dadosEmpresa.telefone
+    },
+    atividade: dadosEmpresa.atividade
+  },
+  configuracao: {
+    modo: crmhubToggleEnabled ? 'crmhub_ativo' : 
+          (hasIndividualMapping ? 'mapeamento_individual' : 'campo_unico'),
+    campoDestino: crmhubToggleEnabled ? 'Campos específicos CRMHub' : 
+                  (hasIndividualMapping ? 'múltiplos campos' : campoUsado),
+    tipoConteudo: crmhubToggleEnabled ? 'Dados em campos dedicados CRMHub' :
+                  (hasIndividualMapping ? 'Campos específicos + backup' : 'Texto formatado completo'),
+    crmhubAtivo: crmhubToggleEnabled,
+    statusEnriquecimento: 'enriquecido',
+    tokenAutoRenovado: true
+  }
+});
 
   } catch (error) {
     console.error('❌ Erro detalhado no enriquecimento:');
