@@ -983,7 +983,9 @@ async function checkForAutoEnrichment() {
 
 async function performPollingEnrichment(companyId) {
   try {
-    console.log(`🔄 Iniciando enriquecimento automático para: ${companyId}`);
+    const pollingId = Date.now().toString().slice(-6);
+    console.log(`🔄 [POLL-${pollingId}] Iniciando enriquecimento AUTOMÁTICO para: ${companyId}`);
+    console.log(`🤖 [POLL-${pollingId}] Tipo: POLLING AUTOMÁTICO`);
     
     // ⚡ BUSCAR DADOS DA EMPRESA COM AUTO-RENOVAÇÃO
     const hubspotCompany = await withAutoTokenRefresh(async () => {
@@ -1536,8 +1538,10 @@ app.get('/oauth/callback', async (req, res) => {
 
 app.post('/enrich', async (req, res) => {
   const { companyId } = req.body;
+  const requestId = Date.now().toString().slice(-6); // Últimos 6 dígitos do timestamp
 
-  console.log('🔍 Iniciando enriquecimento para companyId:', companyId);
+  console.log(`🔍 [REQ-${requestId}] Iniciando enriquecimento MANUAL para companyId: ${companyId}`);
+  console.log(`🎯 [REQ-${requestId}] Tipo: REQUISIÇÃO MANUAL via /enrich`);
 
   if (!companyId) {
     console.error('❌ Company ID não fornecido');
@@ -1727,6 +1731,24 @@ app.post('/enrich', async (req, res) => {
     console.log('📊 Situação:', dadosEmpresa.situacao);
     console.log('📍 Local:', `${dadosEmpresa.cidade}/${dadosEmpresa.estado}`);
     console.log('📞 Telefone:', dadosEmpresa.telefone);
+
+    / ⚡ VALIDAÇÃO DE SEGURANÇA - Verificar se estamos retornando a empresa correta
+if (hubspotCompany.data.id !== companyId) {
+  console.error(`🚨 [REQ-${requestId}] ERRO CRÍTICO: Empresa processada (${hubspotCompany.data.id}) diferente da solicitada (${companyId})`);
+  return res.status(500).json({
+    error: 'Erro interno: Empresa processada diferente da solicitada',
+    solicitada: companyId,
+    processada: hubspotCompany.data.id
+  });
+}
+
+console.log(`✅ [REQ-${requestId}] Validação OK: Empresa correta processada`);
+
+res.json({ 
+  success: true,
+  message: `🎉 Empresa enriquecida com sucesso! Modo: ${campoUsado}`,
+  cnpj: cnpjLimpo,
+  companyId: companyId, // ⚡ ADICIONAR PARA CONFIRMAR
 
     res.json({ 
       success: true,
