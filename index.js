@@ -2168,10 +2168,7 @@ app.post('/api/crmhub-toggle-update', async (req, res) => {
       }
     };
     
-    console.log('📤 Enviando resposta de sucesso:', JSON.stringify(successResponse, null, 2));
-    res.json(successResponse);
-
-console.log('📤 Enviando resposta de sucesso:', JSON.stringify(successResponse, null, 2));
+  console.log('📤 Enviando resposta de sucesso:', JSON.stringify(successResponse, null, 2));
     res.json(successResponse);
     
     // ⚡ AUTO-INICIAR POLLING QUANDO CRMHUB FOR ATIVADO
@@ -2184,13 +2181,35 @@ console.log('📤 Enviando resposta de sucesso:', JSON.stringify(successResponse
         } else {
           console.log('❌ Falha ao auto-iniciar polling após CRMHub');
         }
-      }, 1000); // Aguardar 1 segundo para garantir que a resposta foi enviada
+      }, 1000);
     }
     
   } catch (error) {
-
+    console.error('❌ Erro geral no toggle:', error);
     
-  } catch (error) {
+    const errorResponse = {
+      response: {
+        actionType: 'TOGGLE_UPDATE',
+        toggleEnabled: crmhubToggleEnabled,
+        success: false,
+        message: '❌ Erro ao executar ação: ' + error.message,
+        error: error.message,
+        logs: [
+          '🔄 Tentativa de alternar CRMHub',
+          `❌ Erro: ${error.message}`,
+          '🔧 Tente novamente em alguns segundos'
+        ],
+        authStatus: {
+          tokenConfigured: !!HUBSPOT_ACCESS_TOKEN,
+          tokenValid: false
+        }
+      }
+    };
+    
+    console.log('📤 Enviando resposta de erro:', JSON.stringify(errorResponse, null, 2));
+    res.json(errorResponse);
+  }
+});
     console.error('❌ Erro geral no toggle:', error);
     
     const errorResponse = {
