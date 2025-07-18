@@ -35,30 +35,33 @@ let tokenRefreshInProgress = false;
 
 // ⚡ FUNÇÃO PARA RENOVAR TOKEN AUTOMATICAMENTE
 async function refreshAccessToken() {
+  console.log('🔄 [TOKEN-REFRESH] Iniciando renovação de token...');
+  
   if (tokenRefreshInProgress) {
-    console.log('🔄 Renovação já em andamento, aguardando...');
+    console.log('🔄 [TOKEN-REFRESH] Renovação já em andamento, aguardando...');
     return false;
   }
 
- const refreshToken = process.env.HUBSPOT_REFRESH_TOKEN;
-console.log('🔍 [DEBUG] Refresh token preview:', refreshToken ? refreshToken.substring(0, 20) + '...' : 'NULL');
+  const refreshToken = process.env.HUBSPOT_REFRESH_TOKEN;
+  console.log('🔍 [TOKEN-REFRESH] Refresh token existe:', !!refreshToken);
+  console.log('🔍 [TOKEN-REFRESH] Refresh token preview:', refreshToken ? refreshToken.substring(0, 20) + '...' : 'NULL');
 
-if (!refreshToken) {
-  console.error('❌ HUBSPOT_REFRESH_TOKEN não configurado');
-  console.error('🔧 Configure a variável HUBSPOT_REFRESH_TOKEN no Vercel');
-  return false;
-}
+  if (!refreshToken) {
+    console.error('❌ [TOKEN-REFRESH] HUBSPOT_REFRESH_TOKEN não configurado');
+    console.error('🔧 [TOKEN-REFRESH] Configure a variável HUBSPOT_REFRESH_TOKEN no Vercel');
+    return false;
+  }
 
-if (refreshToken.length < 20) {
-  console.error('❌ HUBSPOT_REFRESH_TOKEN parece inválido (muito curto)');
-  console.error('🔧 Tamanho atual:', refreshToken.length);
-  return false;
-}
+  if (refreshToken.length < 20) {
+    console.error('❌ [TOKEN-REFRESH] HUBSPOT_REFRESH_TOKEN parece inválido (muito curto)');
+    console.error('🔧 [TOKEN-REFRESH] Tamanho atual:', refreshToken.length);
+    return false;
+  }
 
   tokenRefreshInProgress = true;
 
   try {
-    console.log('🔄 Renovando token do HubSpot...');
+    console.log('🔄 [TOKEN-REFRESH] Enviando requisição para HubSpot...');
 
     const response = await axios.post(
       'https://api.hubapi.com/oauth/v1/token',
@@ -77,23 +80,27 @@ if (refreshToken.length < 20) {
       }
     );
 
+    console.log('✅ [TOKEN-REFRESH] Resposta recebida do HubSpot');
     const { access_token, expires_in } = response.data;
 
     // ⚡ ATUALIZAR TOKEN GLOBAL
     HUBSPOT_ACCESS_TOKEN = access_token;
 
-    // ⚡ CALCULAR TEMPO DE EXPIRAÇÃO (5 minutos antes para segurança)
-    const expiresInMs = (expires_in - 300) * 1000; // 5 min antes
+    // ⚡ CALCULAR TEMPO DE EXPIRAÇÃO (10 minutos antes para segurança)
+    const expiresInMs = (expires_in - 600) * 1000; // 10 min antes
     tokenExpirationTime = Date.now() + expiresInMs;
 
-    console.log('✅ Token renovado com sucesso!');
-    console.log(`🕐 Próxima renovação em: ${Math.floor(expires_in / 3600)}h${Math.floor((expires_in % 3600) / 60)}m`);
-    console.log(`🔑 Novo token: ${access_token.substring(0, 20)}...`);
+    console.log('✅ [TOKEN-REFRESH] Token renovado com sucesso!');
+    console.log(`🕐 [TOKEN-REFRESH] Próxima renovação em: ${Math.floor(expires_in / 3600)}h${Math.floor((expires_in % 3600) / 60)}m`);
+    console.log(`🔑 [TOKEN-REFRESH] Novo token: ${access_token.substring(0, 20)}...`);
+    console.log(`⏰ [TOKEN-REFRESH] Expira em: ${new Date(tokenExpirationTime).toLocaleString('pt-BR')}`);
 
     tokenRefreshInProgress = false;
     return true;
+    
   } catch (error) {
-    console.error('❌ Erro ao renovar token:', error.response?.data || error.message);
+    console.error('❌ [TOKEN-REFRESH] Erro ao renovar token:', error.response?.data || error.message);
+    console.error('📊 [TOKEN-REFRESH] Status da resposta:', error.response?.status);
     tokenRefreshInProgress = false;
     return false;
   }
@@ -133,24 +140,45 @@ async function ensureValidToken() {
 
 // ⚡ MIDDLEWARE PARA AUTO-RENOVAÇÃO EM TODAS AS CHAMADAS
 async function withAutoTokenRefresh(apiCall) {
+  console.log('🔒 [AUTO-REFRESH] Executando chamada com auto-renovação...');
+  
   try {
     // ⚡ VERIFICAR SE TOKEN EXISTE
     if (!HUBSPOT_ACCESS_TOKEN) {
+      console.log('⚠️ [AUTO-REFRESH] Token não configurado');
       throw new Error('Token não configurado');
     }
 
-    // ⚡ EXECUTAR CHAMADA ORIGINAL DIRETAMENTE (sem renovação automática)
+    // ⚡ VERIFICAR SE TOKEN ESTÁ PRÓXIMO DE EXPIRAR
+    if (tokenExpirationTime) {
+      const timeUntilExpiration = tokenExpirationTime - Date.now();
+      const tenMinutes = 10 * 60 * 1000;
+      
+      if (timeUntilExpiration <= tenMinutes) {
+        console.log('⏰ [AUTO-REFRESH] Token próximo do vencimento, renovando preventivamente...');
+        await refreshAccessToken();
+      }
+    }
+
+    // ⚡ EXECUTAR CHAMADA ORIGINAL
+    console.log('📡 [AUTO-REFRESH] Executando chamada da API...');
     return await apiCall();
+    
   } catch (error) {
-    // ⚡ SE DEU 401, TENTAR RENOVAR TOKEN UMA VEZ APENAS SE TEMOS REFRESH TOKEN
-    if (error.response?.status === 401 && process.env.HUBSPOT_REFRESH_TOKEN && !tokenRefreshInProgress) {
-      console.log('🔄 Token inválido detectado, tentando renovar...');
+    console.log('❌ [AUTO-REFRESH] Erro na chamada:', error.response?.status, error.message);
+    
+    // ⚡ SE DEU 401, TENTAR RENOVAR TOKEN
+    if (error.response?.status === 401 && process.env.HUBSPOT_REFRESH_TOKEN) {
+      console.log('🔄 [AUTO-REFRESH] Erro 401 detectado, tentando renovar token...');
 
       const renewed = await refreshAccessToken();
       
       if (renewed) {
-        console.log('✅ Token renovado, tentando novamente...');
+        console.log('✅ [AUTO-REFRESH] Token renovado, tentando chamada novamente...');
         return await apiCall();
+      } else {
+        console.error('❌ [AUTO-REFRESH] Falha na renovação do token');
+        throw new Error('Falha na renovação automática do token');
       }
     }
 
@@ -162,16 +190,40 @@ async function withAutoTokenRefresh(apiCall) {
 let tokenRefreshInterval = null;
 
 function startTokenRefreshScheduler() {
+  console.log('⏰ [SCHEDULER] Iniciando scheduler de renovação de token...');
+  
   if (tokenRefreshInterval) {
     clearInterval(tokenRefreshInterval);
   }
 
-  console.log('⏰ Iniciando scheduler de renovação de token (30 min)');
+  console.log('⏰ [SCHEDULER] Scheduler configurado para verificar a cada 15 minutos');
 
   tokenRefreshInterval = setInterval(async () => {
-    console.log('⏰ Verificação automática de token...');
-    await ensureValidToken();
-  }, 30 * 60 * 1000); // 30 minutos
+    console.log('⏰ [SCHEDULER] Verificação automática de token...');
+    
+    if (!HUBSPOT_ACCESS_TOKEN) {
+      console.log('⚠️ [SCHEDULER] Token não configurado, pulando verificação');
+      return;
+    }
+    
+    if (!tokenExpirationTime) {
+      console.log('⚠️ [SCHEDULER] Tempo de expiração desconhecido, tentando renovar...');
+      await refreshAccessToken();
+      return;
+    }
+    
+    const timeUntilExpiration = tokenExpirationTime - Date.now();
+    const twentyMinutes = 20 * 60 * 1000;
+    
+    console.log(`⏰ [SCHEDULER] Token expira em: ${Math.floor(timeUntilExpiration / 60000)} minutos`);
+    
+    if (timeUntilExpiration <= twentyMinutes) {
+      console.log('⏰ [SCHEDULER] Token próximo do vencimento, renovando...');
+      await refreshAccessToken();
+    } else {
+      console.log('✅ [SCHEDULER] Token ainda válido');
+    }
+  }, 15 * 60 * 1000); // 15 minutos
 }
 
 function stopTokenRefreshScheduler() {
@@ -1113,6 +1165,25 @@ function startPolling() {
     console.error('❌ [POLLING] Erro ao iniciar polling:', error);
     pollingActive = false;
     return false;
+  }
+}
+
+function forceAutoStartPolling() {
+  autoStartAttempts++;
+  console.log(`🔧 [AUTO-START] Tentativa ${autoStartAttempts}/${MAX_AUTO_START_ATTEMPTS} de auto-início`);
+  
+  if (autoStartAttempts > MAX_AUTO_START_ATTEMPTS) {
+    console.error('❌ [AUTO-START] Máximo de tentativas atingido');
+    return;
+  }
+  
+  const success = startPolling();
+  
+  if (success && pollingActive) {
+    console.log('🎉 [AUTO-START] Polling iniciado com sucesso!');
+  } else {
+    console.log('⚠️ [AUTO-START] Falha, tentando novamente em 5 segundos...');
+    setTimeout(forceAutoStartPolling, 5000);
   }
 }
 
