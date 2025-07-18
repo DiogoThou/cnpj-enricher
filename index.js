@@ -952,7 +952,7 @@ async function checkForAutoEnrichment() {
         Authorization: `Bearer ${HUBSPOT_ACCESS_TOKEN}`,
         'Content-Type': 'application/json'
       },
-      timeout: 60000
+      timeout: 15000
     });
 
     const companies = response.data.results || [];
@@ -996,7 +996,7 @@ async function performPollingEnrichment(companyId) {
             Authorization: `Bearer ${HUBSPOT_ACCESS_TOKEN}`,
             'Content-Type': 'application/json'
           },
-          timeout: 60000
+          timeout: 15000
         }
       );
     });
@@ -1585,7 +1585,7 @@ app.post('/enrich', async (req, res) => {
             Authorization: `Bearer ${HUBSPOT_ACCESS_TOKEN}`,
             'Content-Type': 'application/json'
           },
-          timeout: 60000
+          timeout: 15000
         }
       );
     });
