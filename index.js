@@ -952,7 +952,7 @@ async function checkForAutoEnrichment() {
         Authorization: `Bearer ${HUBSPOT_ACCESS_TOKEN}`,
         'Content-Type': 'application/json'
       },
-      timeout: 30000
+      timeout: 60000
     });
 
     const companies = response.data.results || [];
@@ -994,7 +994,7 @@ async function performPollingEnrichment(companyId) {
             Authorization: `Bearer ${HUBSPOT_ACCESS_TOKEN}`,
             'Content-Type': 'application/json'
           },
-          timeout: 30000
+          timeout: 60000
         }
       );
     });
@@ -1069,7 +1069,7 @@ async function performPollingEnrichment(companyId) {
     
     // ⚡ CONSULTAR API CNPJ
     const cnpjDataResponse = await axios.get(`https://publica.cnpj.ws/cnpj/${cnpjLimpo}`, {
-      timeout: 30000,
+      timeout: 60000,
       headers: {
         'User-Agent': 'CNPJ-Enricher-Polling/2.1'
       }
@@ -1568,7 +1568,7 @@ app.post('/enrich', async (req, res) => {
             Authorization: `Bearer ${HUBSPOT_ACCESS_TOKEN}`,
             'Content-Type': 'application/json'
           },
-          timeout: 30000
+          timeout: 60000
         }
       );
     });
