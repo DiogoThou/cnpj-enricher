@@ -1075,27 +1075,40 @@ async function performPollingEnrichment(companyId) {
       }
     });
 
-    const cnpjData = cnpjDataResponse.data;
-    console.log(`✅ Dados obtidos para CNPJ: ${cnpjLimpo}`);
+   const cnpjData = cnpjDataResponse.data;
+console.log(`✅ Dados obtidos para CNPJ: ${cnpjLimpo}`);
+console.log(`📊 Dados recebidos:`, JSON.stringify(cnpjData, null, 2));
 
-    // ⚡ MAPEAR DADOS USANDO CRMHUB
-    const updatePayload = mapCNPJDataToCRMHubFields(cnpjData, cnpjLimpo, 'enriquecido');
+// ⚡ VERIFICAR SE DADOS SÃO VÁLIDOS
+if (!cnpjData || !cnpjData.estabelecimento) {
+  console.error(`❌ Dados inválidos recebidos para CNPJ: ${cnpjLimpo}`);
+  throw new Error('Dados inválidos da API CNPJ');
+}
 
-    // ⚡ ATUALIZAR EMPRESA COM AUTO-RENOVAÇÃO
-    await withAutoTokenRefresh(async () => {
-      return await axios.patch(
-        `https://api.hubapi.com/crm/v3/objects/companies/${companyId}`,
-        updatePayload,
-        {
-          headers: {
-            Authorization: `Bearer ${HUBSPOT_ACCESS_TOKEN}`,
-            'Content-Type': 'application/json'
-          }
-        }
-      );
-    });
+// ⚡ MAPEAR DADOS USANDO CRMHUB
+console.log(`🗺️ Mapeando dados para campos CRMHub...`);
+const updatePayload = mapCNPJDataToCRMHubFields(cnpjData, cnpjLimpo, 'enriquecido');
+console.log(`📦 Payload gerado:`, JSON.stringify(updatePayload, null, 2));
 
-    console.log(`🎉 Empresa ${companyId} enriquecida com sucesso via polling!`);
+   // ⚡ ATUALIZAR EMPRESA COM AUTO-RENOVAÇÃO
+console.log(`📡 Atualizando empresa ${companyId} no HubSpot...`);
+const updateResponse = await withAutoTokenRefresh(async () => {
+  return await axios.patch(
+    `https://api.hubapi.com/crm/v3/objects/companies/${companyId}`,
+    updatePayload,
+    {
+      headers: {
+        Authorization: `Bearer ${HUBSPOT_ACCESS_TOKEN}`,
+        'Content-Type': 'application/json'
+      },
+      timeout: 30000  // ⚡ TIMEOUT MENOR
+    }
+  );
+});
+
+console.log(`✅ Resposta do HubSpot:`, updateResponse.status);
+console.log(`🎉 Empresa ${companyId} enriquecida com sucesso via polling!`);
+console.log(`📊 Dados atualizados: ${Object.keys(updatePayload.properties).length} campos`);
     
   } catch (error) {
     console.error(`❌ Erro no enriquecimento polling para ${companyId}:`, error.message);
@@ -1660,7 +1673,7 @@ app.post('/enrich', async (req, res) => {
     console.log('📡 Buscando dados do CNPJ na API externa...');
     
     const cnpjDataResponse = await axios.get(`https://publica.cnpj.ws/cnpj/${cnpjLimpo}`, {
-      timeout: 10000,
+      timeout: 15000,
       headers: {
         'User-Agent': 'CNPJ-Enricher/2.1'
       }
