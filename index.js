@@ -2170,6 +2170,25 @@ app.post('/api/crmhub-toggle-update', async (req, res) => {
     
     console.log('📤 Enviando resposta de sucesso:', JSON.stringify(successResponse, null, 2));
     res.json(successResponse);
+
+console.log('📤 Enviando resposta de sucesso:', JSON.stringify(successResponse, null, 2));
+    res.json(successResponse);
+    
+    // ⚡ AUTO-INICIAR POLLING QUANDO CRMHUB FOR ATIVADO
+    if (crmhubToggleEnabled && !pollingActive) {
+      console.log('🚀 Auto-iniciando polling após ativar CRMHub...');
+      setTimeout(() => {
+        const success = startPolling();
+        if (success) {
+          console.log('✅ Polling auto-iniciado com sucesso após CRMHub!');
+        } else {
+          console.log('❌ Falha ao auto-iniciar polling após CRMHub');
+        }
+      }, 1000); // Aguardar 1 segundo para garantir que a resposta foi enviada
+    }
+    
+  } catch (error) {
+
     
   } catch (error) {
     console.error('❌ Erro geral no toggle:', error);
