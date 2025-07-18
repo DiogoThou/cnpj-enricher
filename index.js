@@ -2658,30 +2658,37 @@ const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`🚀 CNPJ Enricher 2.1 com Polling rodando na porta ${PORT}`);
   
-  // ⚡ 1. AUTO-INÍCIO IMEDIATO COM RETRY
+  // ⚡ AUTO-CONFIGURAÇÃO IMEDIATA
   console.log('🕐 [AUTO-CONFIG] Iniciando configuração automática...');
   
-  // ⚡ 2. INICIAR POLLING COM MÚLTIPLAS TENTATIVAS
+  // ⚡ INICIAR POLLING IMEDIATAMENTE
   console.log('🔄 [AUTO-CONFIG] Forçando início do polling...');
-  setTimeout(() => {
-    forceAutoStartPolling();
-  }, 1000); // 1 segundo de delay para garantir inicialização
   
-  // ⚡ 3. SCHEDULER DE TOKEN
+  // ⚡ USAR setTimeout PARA GARANTIR QUE AS FUNÇÕES ESTEJAM CARREGADAS
+  setTimeout(() => {
+    console.log('🎯 [AUTO-CONFIG] Executando forceAutoStartPolling...');
+    forceAutoStartPolling();
+  }, 500); // Apenas 500ms de delay
+  
+  // ⚡ SCHEDULER DE TOKEN
   if (process.env.HUBSPOT_REFRESH_TOKEN) {
     console.log('⏰ [AUTO-CONFIG] Iniciando scheduler de token...');
     startTokenRefreshScheduler();
+  } else {
+    console.log('⚠️ [AUTO-CONFIG] Refresh token não configurado');
   }
   
-  // ⚡ 4. CRMHUB AUTO-ATIVAÇÃO
+  // ⚡ CRMHUB AUTO-ATIVAÇÃO
   setTimeout(() => {
     if (!crmhubToggleEnabled && HUBSPOT_ACCESS_TOKEN) {
       console.log('🚀 [AUTO-CONFIG] Auto-ativando CRMHub...');
       crmhubToggleEnabled = true;
+    } else {
+      console.log('💡 [AUTO-CONFIG] CRMHub já ativo ou token não configurado');
     }
-  }, 2000);
+  }, 1000);
   
-  // ⚡ 5. VERIFICAÇÃO FINAL DE STATUS
+  // ⚡ VERIFICAÇÃO FINAL DE STATUS
   setTimeout(() => {
     console.log('📊 [STATUS-FINAL] Verificação de status:');
     console.log(`   🔄 Polling: ${pollingActive ? 'ATIVO ✅' : 'INATIVO ❌'}`);
@@ -2691,9 +2698,12 @@ app.listen(PORT, () => {
     // ⚡ SE POLLING AINDA INATIVO, FORÇAR NOVAMENTE
     if (!pollingActive) {
       console.log('🚨 [STATUS-FINAL] Polling inativo! Forçando reinício...');
+      console.log('🔧 [STATUS-FINAL] Tentando forceAutoStartPolling novamente...');
       forceAutoStartPolling();
+    } else {
+      console.log('🎉 [STATUS-FINAL] Sistema totalmente funcional!');
     }
-  }, 5000);
+  }, 3000);
 });
 
 
