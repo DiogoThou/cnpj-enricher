@@ -51,7 +51,7 @@ module.exports = async (req, res) => {
       return res.status(401).json({
         ok: false,
         message: "Sem token de acesso",
-        hint: "Complete o fluxo OAuth primeiro em /api/oauth/callback",
+        hint: "Complete o fluxo OAuth primeiro",
         oauth_url: `https://app.hubspot.com/oauth/authorize?client_id=${process.env.HUBSPOT_CLIENT_ID}&scope=crm.objects.companies.write%20crm.schemas.companies.write&redirect_uri=${encodeURIComponent(process.env.HUBSPOT_REDIRECT_URI || '')}`
       });
     }
@@ -87,7 +87,7 @@ module.exports = async (req, res) => {
 
     console.log('🚀 Creating company properties...');
 
-    // Criar campos um por um (mais seguro)
+    // Criar campos um por um
     const results = [];
     const errors = [];
 
