@@ -8,6 +8,7 @@ const COMPANY_FIELDS = [
     type: "enumeration",
     fieldType: "select",
     groupName: "companyinformation",
+    description: "Controla o status do enriquecimento via app",
     options: [
       { label: "Pendente", value: "pendente" },
       { label: "Enriquecer", value: "enriquecer" },
@@ -20,25 +21,32 @@ const COMPANY_FIELDS = [
     label: "Relatório do CNPJ (teste)",
     type: "string",
     fieldType: "textarea",
-    groupName: "companyinformation"
+    groupName: "companyinformation",
+    description: "Dados enriquecidos em formato de relatório (teste)"
   },
   {
     name: "cnpj_numero",
     label: "CNPJ (número)",
     type: "string",
     fieldType: "text",
-    groupName: "companyinformation"
+    groupName: "companyinformation",
+    description: "CNPJ da empresa"
   }
 ];
 
 module.exports = async (req, res) => {
+  if (req.method !== 'GET' && req.method !== 'POST') {
+    return res.status(405).json({ error: 'Method not allowed' });
+  }
+
   try {
-    const { accessToken, portalId } = getTokens();
+    const tokens = getTokens();
+    const { accessToken, portalId } = tokens;
 
     if (!accessToken) {
       return res.status(401).json({
         ok: false,
-        error: "App não autenticado. Por favor, instale o app novamente."
+        error: "App não autenticado. Por favor, instale o app novamente no HubSpot."
       });
     }
 
@@ -58,11 +66,11 @@ module.exports = async (req, res) => {
           }
         );
         results.push({ name: field.name, status: 'created' });
-      } catch (error) {
-        if (error.response?.status === 409) {
+      } catch (err) {
+        if (err.response?.status === 409) {
           results.push({ name: field.name, status: 'already_exists' });
         } else {
-          errors.push({ name: field.name, error: error.response?.data?.message || error.message });
+          errors.push({ name: field.name, error: err.response?.data?.message || err.message });
         }
       }
     }
@@ -76,7 +84,8 @@ module.exports = async (req, res) => {
         already_exists: results.filter(r => r.status === 'already_exists').length,
         errors: errors.length
       },
-      results
+      results,
+      errors: errors.length > 0 ? errors : undefined
     });
   } catch (error) {
     return res.status(500).json({ ok: false, error: error.message });
