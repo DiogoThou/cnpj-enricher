@@ -8,7 +8,6 @@ const COMPANY_FIELDS = [
     type: "enumeration",
     fieldType: "select",
     groupName: "companyinformation",
-    description: "Controla o status do enriquecimento via app",
     options: [
       { label: "Pendente", value: "pendente" },
       { label: "Enriquecer", value: "enriquecer" },
@@ -21,72 +20,45 @@ const COMPANY_FIELDS = [
     label: "Relatório do CNPJ (teste)",
     type: "string",
     fieldType: "textarea",
-    groupName: "companyinformation",
-    description: "Dados enriquecidos em formato de relatório (teste)"
+    groupName: "companyinformation"
   },
   {
     name: "cnpj_numero",
     label: "CNPJ (número)",
     type: "string",
     fieldType: "text",
-    groupName: "companyinformation",
-    description: "CNPJ da empresa"
+    groupName: "companyinformation"
   }
 ];
 
 module.exports = async (req, res) => {
-  if (req.method !== 'GET' && req.method !== 'POST') {
-    return res.status(405).json({ error: 'Method not allowed' });
-  }
-
   try {
     const tokens = getTokens();
     const { accessToken, portalId } = tokens;
 
     if (!accessToken) {
-      return res.status(401).json({
-        ok: false,
-        error: "App não autenticado. Por favor, instale o app novamente no HubSpot."
-      });
+      return res.status(401).json({ ok: false, error: "Sem token na memória. Reinstale o app." });
     }
 
     const results = [];
-    const errors = [];
-
     for (const field of COMPANY_FIELDS) {
       try {
         await axios.post(
           'https://api.hubapi.com/crm/v3/properties/companies',
           field,
-          {
-            headers: {
-              'Authorization': `Bearer ${accessToken}`,
-              'Content-Type': 'application/json'
-            }
-          }
+          { headers: { 'Authorization': `Bearer ${accessToken}`, 'Content-Type': 'application/json' } }
         );
         results.push({ name: field.name, status: 'created' });
       } catch (err) {
         if (err.response?.status === 409) {
           results.push({ name: field.name, status: 'already_exists' });
         } else {
-          errors.push({ name: field.name, error: err.response?.data?.message || err.message });
+          throw err;
         }
       }
     }
 
-    return res.status(200).json({
-      ok: errors.length === 0,
-      portalId,
-      summary: {
-        total: COMPANY_FIELDS.length,
-        created: results.filter(r => r.status === 'created').length,
-        already_exists: results.filter(r => r.status === 'already_exists').length,
-        errors: errors.length
-      },
-      results,
-      errors: errors.length > 0 ? errors : undefined
-    });
+    return res.status(200).json({ ok: true, portalId, results });
   } catch (error) {
     return res.status(500).json({ ok: false, error: error.message });
   }
