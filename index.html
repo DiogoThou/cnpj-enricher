@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>CRM Hub | Enriquecimento CNPJ</title>
+    <style>
+      body { font-family: Arial, sans-serif; max-width: 860px; margin: 40px auto; padding: 0 16px; }
+      .card { border: 1px solid #e5e5e5; border-radius: 12px; padding: 18px; }
+      button { padding: 10px 14px; border: 0; border-radius: 10px; cursor: pointer; }
+      .primary { background: #111; color: #fff; }
+      pre { background: #f6f6f6; padding: 12px; border-radius: 10px; overflow: auto; }
+      .row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+      input { padding: 10px; border-radius: 10px; border: 1px solid #ddd; width: 420px; }
+      small { color: #666; }
+    </style>
+  </head>
+  <body>
+    <h1>Enriquecimento de CNPJ</h1>
+
+    <div class="card">
+      <p><b>Status:</b> <span id="status">Aguardando…</span></p>
+
+      <div class="row">
+        <button class="primary" id="btnCreate">Criar campos</button>
+        <button id="btnStatus">Ver status</button>
+      </div>
+
+      <p>
+        <small>
+          Para testar em uma conta instalada: clique em "Criar campos".
+          Se der "Sem token", finalize a instalação primeiro pelo link do OAuth.
+        </small>
+      </p>
+
+      <h3>Logs</h3>
+      <pre id="log"></pre>
+    </div>
+
+    <script>
+      const logEl = document.getElementById("log");
+      const statusEl = document.getElementById("status");
+
+      function log(obj) {
+        logEl.textContent = typeof obj === "string" ? obj : JSON.stringify(obj, null, 2);
+      }
+
+      async function apiGet(url) {
+        const res = await fetch(url);
+        const txt = await res.text();
+        try { return JSON.parse(txt); } catch { return { raw: txt, status: res.status }; }
+      }
+
+      async function apiPost(url) {
+        const res = await fetch(url, { method: "POST" });
+        const txt = await res.text();
+        try { return JSON.parse(txt); } catch { return { raw: txt, status: res.status }; }
+      }
+
+      document.getElementById("btnStatus").addEventListener("click", async () => {
+        const data = await apiGet("/api/setup/create-fields?dryRun=1");
+        statusEl.textContent = data?.ok ? "Pronto" : "Problema";
+        log(data);
+      });
+
+      document.getElementById("btnCreate").addEventListener("click", async () => {
+        const data = await apiPost("/api/setup/create-fields");
+        statusEl.textContent = data?.ok ? "Campos criados" : "Falhou";
+        log(data);
+      });
+
+      // auto status
+      (async () => {
+        const data = await apiGet("/api/setup/create-fields?dryRun=1");
+        statusEl.textContent = data?.ok ? "Pronto" : "Atenção";
+        log(data);
+      })();
+    </script>
+  </body>
+</html>
