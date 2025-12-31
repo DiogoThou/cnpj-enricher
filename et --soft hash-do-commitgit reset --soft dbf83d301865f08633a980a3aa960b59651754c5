@@ -1,0 +1,218 @@
+[33m3eb91e8[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mmain[m[33m, [m[1;31morigin/main[m[33m, [m[1;31morigin/HEAD[m[33m)[m Projeto inicial: Integração Vercel + HubSpot Cards
+[33m64fd653[m Projeto inicial: Integração Vercel + HubSpot Cards
+[33m2aa422e[m Projeto inicial: Integração Vercel + HubSpot Cards
+[33m90115fc[m Projeto inicial: Integração Vercel + HubSpot Cards
+[33me021fd2[m Projeto inicial: Integração Vercel + HubSpot Cards
+[33m3b2b2f3[m Projeto inicial: Integração Vercel + HubSpot Cards
+[33m831c4de[m Projeto inicial: Integração Vercel + HubSpot Cards
+[33mdbf83d3[m Initial Vercel OAuth + create fields
+[33m60b9eae[m Initial Vercel OAuth + create fields
+[33m6b28488[m Initial Vercel OAuth + create fields
+[33mb6a7136[m Initial Vercel OAuth + create fields
+[33m3feaccd[m Initial Vercel OAuth + create fields
+[33mad02f4f[m Initial Vercel OAuth + create fields
+[33m27b495e[m Initial Vercel OAuth + create fields
+[33m6139e17[m Fix OAuth callback route for Vercel
+[33ma7866e2[m Fix Vercel API routing
+[33m7ecba29[m Add OAuth callback endpoint
+[33m0fb6960[m ✨ Auto-renovação de token OAuth implementada
+[33m6dfdc54[m ✨ Auto-renovação de token OAuth implementada
+[33m78713bf[m ✨ Auto-renovação de token OAuth implementada
+[33m7660144[m ✨ Auto-renovação de token OAuth implementada
+[33m14667c7[m ✨ Auto-renovação de token OAuth implementada
+[33m23dd7dc[m ✨ Auto-renovação de token OAuth implementada
+[33ma4ffc76[m ✨ Auto-renovação de token OAuth implementada
+[33mea0d13d[m ✨ Auto-renovação de token OAuth implementada
+[33m926b022[m ✨ Auto-renovação de token OAuth implementada
+[33m6a994d0[m ✨ Auto-renovação de token OAuth implementada
+[33m2a82084[m ✨ Auto-renovação de token OAuth implementada
+[33m12020bb[m ✨ Auto-renovação de token OAuth implementada
+[33m33de585[m ✨ Auto-renovação de token OAuth implementada
+[33m44a5adc[m ✨ Auto-renovação de token OAuth implementada
+[33mfc0166b[m ✨ Auto-renovação de token OAuth implementada
+[33m84ff00a[m ✨ Auto-renovação de token OAuth implementada
+[33mf4c1a14[m ✨ Auto-renovação de token OAuth implementada
+[33mb9cb28f[m ✨ Auto-renovação de token OAuth implementada
+[33m86b95aa[m ✨ Auto-renovação de token OAuth implementada
+[33m8616bed[m ✨ Auto-renovação de token OAuth implementada
+[33m5cd69d9[m feat: Adiciona sistema CRMHub Toggle
+[33mfbccd08[m feat: Adiciona sistema CRMHub Toggle
+[33maf6b3de[m feat: Adiciona sistema CRMHub Toggle
+[33m6b498e4[m feat: Adiciona sistema CRMHub Toggle
+[33m4e745e9[m feat: Adiciona sistema CRMHub Toggle
+[33m2f8a6e0[m feat: Adiciona sistema CRMHub Toggle
+[33mf4a98d0[m feat: Adiciona sistema CRMHub Toggle
+[33mf8491d4[m feat: Adiciona sistema CRMHub Toggle
+[33m13be57d[m feat: Adiciona sistema CRMHub Toggle
+[33m27d184b[m feat: Adiciona sistema CRMHub Toggle
+[33mb1ba09c[m feat: Adiciona sistema CRMHub Toggle
+[33m0652638[m feat: Adiciona sistema CRMHub Toggle
+[33m1b03ed2[m feat: Adiciona sistema CRMHub Toggle
+[33meb582de[m feat: Adiciona sistema CRMHub Toggle
+[33mfc3db30[m feat: Adiciona sistema CRMHub Toggle
+[33m032289a[m feat: Adiciona sistema CRMHub Toggle
+[33m0783064[m feat: Adiciona sistema CRMHub Toggle
+[33maa4e137[m feat: Adiciona sistema CRMHub Toggle
+[33mdca0eb5[m feat: Adiciona sistema CRMHub Toggle
+[33me70a2fa[m feat: Adiciona sistema CRMHub Toggle
+[33m3f0f534[m feat: Adiciona sistema CRMHub Toggle
+[33m779f5be[m feat: Adiciona sistema CRMHub Toggle
+[33m5010b66[m feat: Adiciona sistema CRMHub Toggle
+[33m5242b52[m feat: Adiciona sistema CRMHub Toggle
+[33m7e0d078[m feat: Adiciona sistema CRMHub Toggle
+[33m7fa7ca3[m feat: Adiciona sistema CRMHub Toggle
+[33m99bdb9a[m feat: Adiciona sistema CRMHub Toggle
+[33m83a0a97[m feat: Adiciona sistema CRMHub Toggle
+[33m1f5f20d[m feat: Adiciona sistema CRMHub Toggle
+[33me3feba7[m feat: Adiciona sistema CRMHub Toggle
+[33m02477ad[m feat: Adiciona sistema CRMHub Toggle
+[33m25d6856[m feat: Adiciona sistema CRMHub Toggle
+[33m891dfa6[m feat: Adiciona sistema CRMHub Toggle
+[33m120500a[m Fix: Corrige sintaxe e função fetchCompanyTextFields - Sistema 100% funcional
+[33ma8b04b4[m Fix: Corrige sintaxe e função fetchCompanyTextFields - Sistema 100% funcional
+[33m0884568[m Fix: Corrige sintaxe e função fetchCompanyTextFields - Sistema 100% funcional
+[33me7c202d[m Fix: Corrige sintaxe e função fetchCompanyTextFields - Sistema 100% funcional
+[33mdfac14c[m Fix: Corrige sintaxe e função fetchCompanyTextFields - Sistema 100% funcional
+[33mb069c6f[m Fix: Corrige sintaxe e função fetchCompanyTextFields - Sistema 100% funcional
+[33mc69b1c1[m Fix: Corrige sintaxe e função fetchCompanyTextFields - Sistema 100% funcional
+[33m74938d6[m Fix: Corrige sintaxe e função fetchCompanyTextFields - Sistema 100% funcional
+[33mdeed256[m Fix: Corrige sintaxe e função fetchCompanyTextFields - Sistema 100% funcional
+[33m032cbd0[m Fix: Corrige sintaxe e função fetchCompanyTextFields - Sistema 100% funcional
+[33m40806bf[m Fix: Corrige sintaxe e função fetchCompanyTextFields - Sistema 100% funcional
+[33m6b9f15f[m Fix: Corrige sintaxe e função fetchCompanyTextFields - Sistema 100% funcional
+[33m0fd22a3[m Fix: Corrige sintaxe e função fetchCompanyTextFields - Sistema 100% funcional
+[33mfb53624[m Fix: Corrige sintaxe e função fetchCompanyTextFields - Sistema 100% funcional
+[33mde89e09[m Fix: Corrige sintaxe e função fetchCompanyTextFields - Sistema 100% funcional
+[33m2c64a90[m Fix: Corrige sintaxe e função fetchCompanyTextFields - Sistema 100% funcional
+[33m2881686[m Fix: Corrige sintaxe e função fetchCompanyTextFields - Sistema 100% funcional
+[33m00d36b1[m Fix: Corrige sintaxe e função fetchCompanyTextFields - Sistema 100% funcional
+[33m97222df[m Fix: Corrige sintaxe e função fetchCompanyTextFields - Sistema 100% funcional
+[33me17f0f3[m Fix: Corrige sintaxe e função fetchCompanyTextFields - Sistema 100% funcional
+[33m70b1afb[m Fix: Corrige sintaxe e função fetchCompanyTextFields - Sistema 100% funcional
+[33m165d05f[m Fix: Corrige sintaxe e função fetchCompanyTextFields - Sistema 100% funcional
+[33m9b87ea1[m Fix: Corrige sintaxe e função fetchCompanyTextFields - Sistema 100% funcional
+[33m5451d4d[m Fix: Corrige sintaxe e função fetchCompanyTextFields - Sistema 100% funcional
+[33mc876398[m Fix: Corrige sintaxe e função fetchCompanyTextFields - Sistema 100% funcional
+[33mf809061[m Fix: Corrige sintaxe e função fetchCompanyTextFields - Sistema 100% funcional
+[33m5d01570[m Fix: Corrige sintaxe e função fetchCompanyTextFields - Sistema 100% funcional
+[33m92fe2ef[m Fix: Corrige sintaxe e função fetchCompanyTextFields - Sistema 100% funcional
+[33mbf4413b[m Fix: Corrige sintaxe e função fetchCompanyTextFields - Sistema 100% funcional
+[33m5a5c683[m Fix: Corrige sintaxe e função fetchCompanyTextFields - Sistema 100% funcional
+[33m8b3cc1b[m Fix: Corrige sintaxe e função fetchCompanyTextFields - Sistema 100% funcional
+[33m66a99de[m Fix: Corrige sintaxe e função fetchCompanyTextFields - Sistema 100% funcional
+[33me16043b[m Fix: Corrige sintaxe e função fetchCompanyTextFields - Sistema 100% funcional
+[33mea1acba[m Fix: Corrige sintaxe e função fetchCompanyTextFields - Sistema 100% funcional
+[33m334c94d[m Fix: Corrige sintaxe e função fetchCompanyTextFields - Sistema 100% funcional
+[33m8f1fb30[m Fix: Corrige sintaxe e função fetchCompanyTextFields - Sistema 100% funcional
+[33mccb7008[m Fix: Corrige sintaxe e função fetchCompanyTextFields - Sistema 100% funcional
+[33m97e0318[m Fix: Corrige sintaxe e função fetchCompanyTextFields - Sistema 100% funcional
+[33m5238504[m Fix: Corrige sintaxe e função fetchCompanyTextFields - Sistema 100% funcional
+[33mf4caaad[m Fix: Corrige sintaxe e função fetchCompanyTextFields - Sistema 100% funcional
+[33md59a748[m Fix: Corrige sintaxe e função fetchCompanyTextFields - Sistema 100% funcional
+[33mf7ad57c[m Fix: Corrige sintaxe e função fetchCompanyTextFields - Sistema 100% funcional
+[33m749653e[m Fix: Corrige sintaxe e função fetchCompanyTextFields - Sistema 100% funcional
+[33m9e0f653[m Fix: Corrige sintaxe e função fetchCompanyTextFields - Sistema 100% funcional
+[33m8fd08bb[m Fix: Corrige sintaxe e função fetchCompanyTextFields - Sistema 100% funcional
+[33m648bf79[m Fix: Corrige sintaxe e função fetchCompanyTextFields - Sistema 100% funcional
+[33mf3280de[m Fix: Corrige sintaxe e função fetchCompanyTextFields - Sistema 100% funcional
+[33m5aa6ae0[m Fix: Corrige sintaxe e função fetchCompanyTextFields - Sistema 100% funcional
+[33m7bce815[m 🔧 Corrigir endpoints interface HubSpot - token auth fix
+[33md3b9652[m 🔧 Corrigir endpoints interface HubSpot - token auth fix
+[33m54dee23[m 🔧 Corrigir endpoints interface HubSpot - token auth fix
+[33m9ef531b[m primeiro commit do CNPJ Enriche1111111111111r
+[33m2962eed[m primeiro commit do CNPJ Enriche1111111111111r
+[33mdd26ac6[m primeiro commit do CNPJ Enriche1111111111111r
+[33m67e1ec4[m primeiro commit do CNPJ Enriche1111111111111r
+[33ma9f458b[m primeiro commit do CNPJ Enriche1111111111111r
+[33me181e15[m primeiro commit do CNPJ Enriche1111111111111r
+[33mb953b41[m primeiro commit do CNPJ Enriche1111111111111r
+[33m52b3828[m primeiro commit do CNPJ Enriche1111111111111r
+[33m8852ed2[m primeiro commit do CNPJ Enriche1111111111111r
+[33md7b8dca[m primeiro commit do CNPJ Enriche1111111111111r
+[33m0cc4234[m primeiro commit do CNPJ Enriche1111111111111r
+[33mfb0ace5[m primeiro commit do CNPJ Enriche1111111111111r
+[33m5cff34a[m primeiro commit do CNPJ Enriche1111111111111r
+[33mcc829a0[m primeiro commit do CNPJ Enriche1111111111111r
+[33mca3a078[m primeiro commit do CNPJ Enriche1111111111111r
+[33m97f65d4[m primeiro commit do CNPJ Enriche1111111111111r
+[33mcfe2383[m primeiro commit do CNPJ Enriche1111111111111r
+[33ma425b1e[m primeiro commit do CNPJ Enriche1111111111111r
+[33m656d323[m primeiro commit do CNPJ Enriche1111111111111r
+[33m9cc0e27[m primeiro commit do CNPJ Enriche1111111111111r
+[33m0756f4e[m primeiro commit do CNPJ Enriche1111111111111111111111aaz1daz1zr
+[33m6cbcc67[m primeiro commit do CNPJ Enriche1111111111111111111111aaz1daz1zr
+[33m15b0959[m primeiro commit do CNPJ Enriche1111111111111111111111aaz1daz1zr
+[33m479cce2[m primeiro commit do CNPJ Enriche1111111111111111111111aaz1daz1zr
+[33mf0be4e8[m primeiro commit do CNPJ Enriche1111111111111111111111aaz1daz1zr
+[33md1f227f[m primeiro commit do CNPJ Enriche1111111111111111111111aaz1daz1zr
+[33m6a0ff44[m primeiro commit do CNPJ Enriche1111111111111111111111aaz1daz1zr
+[33m6f163df[m primeiro commit do CNPJ Enriche1111111111111111111111aaz1daz1zr
+[33m824767b[m primeiro commit do CNPJ Enriche1111111111111111111111aaz1daz1zr
+[33m6ea4477[m primeiro commit do CNPJ Enriche1111111111111111111111aaz1daz1zr
+[33mab24c74[m primeiro commit do CNPJ Enriche1111111111111111111111aaz1daz1zr
+[33m6a93a40[m primeiro commit do CNPJ Enriche1111111111111111111111aaz1daz1zr
+[33m642c88d[m primeiro commit do CNPJ Enriche1111111111111111111111aaz1daz1zr
+[33m41ab9e2[m primeiro commit do CNPJ Enriche1111111111111111111111aaz1daz1zr
+[33mc40c385[m primeiro commit do CNPJ Enriche1111111111111111111111aaz1daz1zr
+[33ma1b1d38[m primeiro commit do CNPJ Enriche1111111111111111111111aaz1daz1zr
+[33me53c751[m primeiro commit do CNPJ Enriche1111111111111111111111aaz1daz1zr
+[33mbe573d9[m primeiro commit do CNPJ Enriche1111111111111111111111aaz1daz1zr
+[33m6c98119[m primeiro commit do CNPJ Enriche1111111111111111111111aaz1daz1zr
+[33m3837771[m primeiro commit do CNPJ Enriche1111111111111111111111aaz1daz1zr
+[33md3e7760[m primeiro commit do CNPJ Enriche1111111111111111111111aaz1daz1zr
+[33m1d64b21[m primeiro commit do CNPJ Enriche1111111111111111111111aaz1daz1zr
+[33m269c4a8[m primeiro commit do CNPJ Enriche1111111111111111111111aaz1daz1zr
+[33m6cdb7d9[m primeiro commit do CNPJ Enriche1111111111111111111111aaz1daz1zr
+[33ma5386b9[m primeiro commit do CNPJ Enriche1111111111111111111111aaz1daz1zr
+[33mf893cb2[m primeiro commit do CNPJ Enriche1111111111111111111111aaz1daz1zr
+[33md2682b5[m primeiro commit do CNPJ Enriche1111111111111111111111aaz1daz1zr
+[33m63cb34c[m primeiro commit do CNPJ Enriche1111111111111111111111aaz1daz1zr
+[33m56c8a6c[m primeiro commit do CNPJ Enriche1111111111111111111111aaz1daz1zr
+[33ma207a33[m primeiro commit do CNPJ Enriche1111111111111111111111aaz1daz1zr
+[33mf82707c[m primeiro commit do CNPJ Enriche1111111111111111111111aaz1daz1zr
+[33md08a145[m primeiro commit do CNPJ Enriche1111111111111111111111aaz1daz1zr
+[33m7031eec[m primeiro commit do CNPJ Enriche1111111111111111111111aaz1daz1zr
+[33m9299242[m primeiro commit do CNPJ Enriche1111111111111111111111aaz1daz1zr
+[33m0e10dcc[m primeiro commit do CNPJ Enriche1111111111111111111111aaz1daz1zr
+[33mea199c7[m primeiro commit do CNPJ Enriche1111111111111111111111aaz1daz1zr
+[33mb3a2c07[m primeiro commit do CNPJ Enriche1111111111111111111111aaz1daz1zr
+[33mbf0a3f3[m primeiro commit do CNPJ Enriche1111111111111111111111aaz1daz1zr
+[33m1f18ebe[m primeiro commit do CNPJ Enriche1111111111111111111111aaz1daz1zr
+[33me09b279[m primeiro commit do CNPJ Enriche1111111111111111111111aadaz1zr
+[33m55ce31e[m primeiro commit do CNPJ Enriche1111111111111111111111aadaz1zr
+[33m7f6d010[m primeiro commit do CNPJ Enriche1111111111111111111111aadaz1zr
+[33m1d0490c[m primeiro commit do CNPJ Enriche1111111111111111111111aadaz1zr
+[33m61c301e[m primeiro commit do CNPJ Enriche1111111111111111111111aadaz1r
+[33m867fadc[m primeiro commit do CNPJ Enriche1111111111111r
+[33mdbbf4a9[m primeiro commit do CNPJ Enriche111111111111r
+[33m2ff2126[m primeiro commit do CNPJ Enriche11111r
+[33m888ed76[m primeiro commit do CNPJ Enriche11111r
+[33mc7460a6[m primeiro commit do CNPJ Enriche11111r
+[33mf5dca45[m primeiro commit do CNPJ Enriche11111r
+[33m6ca4b36[m primeiro commit do CNPJ Enriche11111r
+[33m98af1c8[m primeiro commit do CNPJ Enriche11111r
+[33m777f92b[m primeiro commit do CNPJ Enriche11111r
+[33mce11be9[m primeiro commit do CNPJ Enriche11111r
+[33ma1fd747[m primeiro commit do CNPJ Enriche11111r
+[33mc4258e7[m primeiro commit do CNPJ Enriche11111r
+[33m96a5676[m primeiro commit do CNPJ Enriche11111r
+[33m50c3249[m primeiro commit do CNPJ Enriche11111r
+[33mf299f0f[m primeiro commit do CNPJ Enriche1111r
+[33m0396320[m primeiro commit do CNPJ Enriche1111r
+[33m46364f4[m primeiro commit do CNPJ Enriche111r
+[33m1a58c80[m primeiro commit do CNPJ Enriche11r
+[33m0f8be0b[m primeiro commit do CNPJ Enriche1r
+[33mc750bc6[m primeiro commit do CNPJ Enricher
+[33m972151f[m corrige estrutura e move index.js para pasta pages
+[33m94ad2d3[m fix: add GET support to /api/sync-cnp1j
+[33mba744ab[m fix: add GET support to /api/sync-cnpj
+[33mdbd34b4[m add sync-cnpj endpoin121t
+[33m16d6908[m add sync-cnpj endpoin12t
+[33m29ea8e9[m add sync-cnpj endpoin1t
+[33m76cd45f[m add sync-cnpj endpoint
+[33m7452417[m exibe tokens na tela no /oauth/callback
+[33m760bae3[m exibe tokens na tela no /oauth/callback
+[33maaefdcd[m index completo com /refresh
+[33m2e40835[m adiciona index.js completo com /account /enrich /oauth/callback
+[33m4bced8d[m index.js completo com /account e /enrich
+[33m15ef88c[m primeiro commit
