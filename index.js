@@ -1347,6 +1347,12 @@ app.post('/api/crmhub-dropdown-update', (req, res) => {
 // ⚡ OAuth Callback
 // ⚡ SUBSTITUA TODO O ENDPOINT '/oauth/callback' POR ESTE:
 
+app.get('/api/oauth/callback', (req, res) => {
+  const qs = new URLSearchParams(req.query).toString();
+  return res.redirect(`/oauth/callback${qs ? `?${qs}` : ''}`);
+});
+
+
 app.get('/oauth/callback', async (req, res) => {
   const code = req.query.code;
   if (!code) return res.status(400).send('❌ Código de autorização não fornecido.');
