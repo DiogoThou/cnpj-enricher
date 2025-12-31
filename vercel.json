@@ -1,3 +1,95 @@
 {
-  "version": 2
+  "version": 2,
+  "buildCommand": "echo 'No build required'",
+  "outputDirectory": ".",
+  "framework": null,
+  "functions": {
+    "api/oauth/callback.js": {
+      "maxDuration": 10
+    },
+    "api/setup/create-fields.js": {
+      "maxDuration": 10
+    }
+  },
+  "rewrites": [
+    {
+      "source": "/",
+      "destination": "/index.html"
+    }
+  ],
+  "headers": [
+    {
+      "source": "/api/(.*)",
+      "headers": [
+        {
+          "key": "Access-Control-Allow-Origin",
+          "value": "*"
+        },
+        {
+          "key": "Access-Control-Allow-Methods",
+          "value": "GET, POST, OPTIONS"
+        }
+      ]
+    }
+  ]
 }
+```
+
+---
+
+### 📝 **PASSOS PARA CORRIGIR:**
+
+1. **No GitHub:**
+   - Vá para seu repositório
+   - Abra o arquivo `package.json`
+   - Clique em "Edit" (lápis)
+   - Cole o novo conteúdo
+   - Commit com mensagem: "Fix: Remove Next.js detection"
+
+2. **Faça o mesmo com `vercel.json`**
+
+3. **No Vercel:**
+   - O deploy deve iniciar automaticamente
+   - Ou vá em "Deployments" → "Redeploy"
+
+---
+
+### ✅ **Após o deploy funcionar:**
+
+Ótimo que você já tem as credenciais! Com o **Client ID** e **Secret** configurados, após o deploy funcionar:
+
+1. **Acesse sua aplicação:**
+```
+   https://crmhub-enriquecimento-cnpj.vercel.app/
+```
+
+2. **Clique em "🔐 Instalar no HubSpot"**
+   - Quando pedir, cole o Client ID: `5d94ca7a-fd5a-42b1-a1ad-45aa18eaf151`
+
+3. **Autorize o app** no HubSpot
+
+4. **Crie os campos** clicando no botão verde
+
+---
+
+### 🔍 **Se continuar dando erro:**
+
+Adicione também um arquivo `.vercelignore` na raiz com:
+```
+node_modules
+.next
+.git
+README.md
+```
+
+E certifique-se de que a estrutura de pastas está assim:
+```
+/
+├── api/
+│   ├── oauth/
+│   │   └── callback.js
+│   └── setup/
+│       └── create-fields.js
+├── index.html
+├── package.json
+└── vercel.json
