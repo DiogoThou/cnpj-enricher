@@ -1,156 +1,180 @@
 const axios = require('axios');
-const { getTokens } = require('../oauth/callback');
 
-// Definição dos campos a criar
-const COMPANY_FIELDS = [
-  {
-    name: "status_enriquecimento",
-    label: "Status do enriquecimento",
-    type: "enumeration",
-    fieldType: "select",
-    groupName: "companyinformation",
-    description: "Controla o status do enriquecimento via app",
-    options: [
-      { label: "Pendente", value: "pendente" },
-      { label: "Enriquecer", value: "enriquecer" },
-      { label: "Enriquecido", value: "enriquecido" },
-      { label: "Erro", value: "erro" }
-    ]
-  },
-  {
-    name: "teste_cnpj",
-    label: "Relatório do CNPJ (teste)",
-    type: "string",
-    fieldType: "textarea",
-    groupName: "companyinformation",
-    description: "Dados enriquecidos em formato de relatório (teste)"
-  },
-  {
-    name: "cnpj_numero",
-    label: "CNPJ (número)",
-    type: "string",
-    fieldType: "text",
-    groupName: "companyinformation",
-    description: "CNPJ da empresa"
-  }
-];
+// Store temporário em memória
+let tokens = {
+  portalId: null,
+  accessToken: null,
+  refreshToken: null,
+  expiresAt: null
+};
 
 module.exports = async (req, res) => {
-  // Aceitar GET e POST
+  // Permitir GET e POST para callback OAuth
   if (req.method !== 'GET' && req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
   try {
-    const dryRun = req.query?.dryRun === "1";
-    const tokens = getTokens();
-    const { accessToken, portalId, expiresAt } = tokens;
+    const { code, error, error_description } = req.query;
 
-    // Verificar se temos token
-    if (!accessToken) {
-      return res.status(401).json({
-        ok: false,
-        message: "Sem token de acesso",
-        hint: "Complete o fluxo OAuth primeiro",
-        oauth_url: `https://app.hubspot.com/oauth/authorize?client_id=${process.env.HUBSPOT_CLIENT_ID}&scope=crm.objects.companies.write%20crm.schemas.companies.write&redirect_uri=${encodeURIComponent(process.env.HUBSPOT_REDIRECT_URI || '')}`
-      });
+    // Se houver erro do OAuth
+    if (error) {
+      console.error('OAuth error:', error, error_description);
+      return res.status(400).send(`
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <title>Erro OAuth</title>
+          <style>
+            body { font-family: Arial; max-width: 600px; margin: 50px auto; padding: 20px; }
+            .error { background: #fee; padding: 20px; border-radius: 10px; }
+          </style>
+        </head>
+        <body>
+          <div class="error">
+            <h2>❌ Erro na autorização</h2>
+            <p><strong>Erro:</strong> ${error}</p>
+            <p>${error_description || ''}</p>
+            <a href="/">← Voltar</a>
+          </div>
+        </body>
+        </html>
+      `);
     }
 
-    // Verificar expiração
-    const now = Date.now();
-    const expired = expiresAt && now > expiresAt;
-
-    if (expired) {
-      return res.status(401).json({
-        ok: false,
-        message: "Token expirado",
-        hint: "Refaça a autenticação OAuth",
-        expired_at: new Date(expiresAt).toISOString()
-      });
+    // Verificar se temos o código
+    if (!code) {
+      return res.status(400).send(`
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <title>Callback OAuth</title>
+          <style>
+            body { font-family: Arial; max-width: 600px; margin: 50px auto; padding: 20px; }
+            .info { background: #e3f2fd; padding: 20px; border-radius: 10px; }
+          </style>
+        </head>
+        <body>
+          <div class="info">
+            <h2>🔐 OAuth Callback</h2>
+            <p>Este endpoint processa o retorno da autorização do HubSpot.</p>
+            <p>Parâmetro <code>?code=</code> não foi fornecido.</p>
+            <p><strong>URL esperada:</strong> /api/oauth/callback?code=xxx</p>
+            <a href="/">← Ir para home</a>
+          </div>
+        </body>
+        </html>
+      `);
     }
 
-    // Modo dry run - apenas mostra o que seria criado
-    if (dryRun) {
-      return res.status(200).json({
-        ok: true,
-        mode: "dry_run",
-        portalId,
-        token_status: "valid",
-        expires_at: expiresAt ? new Date(expiresAt).toISOString() : null,
-        fields_to_create: COMPANY_FIELDS.map(f => ({
-          name: f.name,
-          label: f.label,
-          type: f.type
-        }))
-      });
+    // Buscar variáveis de ambiente
+    const clientId = process.env.HUBSPOT_CLIENT_ID;
+    const clientSecret = process.env.HUBSPOT_CLIENT_SECRET;
+    const redirectUri = process.env.HUBSPOT_REDIRECT_URI;
+
+    // Validar configuração
+    if (!clientId || !clientSecret || !redirectUri) {
+      console.error('Missing environment variables');
+      return res.status(500).send(`
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <title>Erro de Configuração</title>
+          <style>
+            body { font-family: Arial; max-width: 600px; margin: 50px auto; padding: 20px; }
+            .error { background: #fee; padding: 20px; border-radius: 10px; }
+            .check { margin: 10px 0; }
+            .ok { color: green; }
+            .missing { color: red; }
+          </style>
+        </head>
+        <body>
+          <div class="error">
+            <h2>❌ Erro de Configuração</h2>
+            <p>Variáveis de ambiente não configuradas no Vercel:</p>
+            <div class="check ${clientId ? 'ok' : 'missing'}">
+              ${clientId ? '✅' : '❌'} HUBSPOT_CLIENT_ID
+            </div>
+            <div class="check ${clientSecret ? 'ok' : 'missing'}">
+              ${clientSecret ? '✅' : '❌'} HUBSPOT_CLIENT_SECRET
+            </div>
+            <div class="check ${redirectUri ? 'ok' : 'missing'}">
+              ${redirectUri ? '✅' : '❌'} HUBSPOT_REDIRECT_URI
+            </div>
+            <p>Configure essas variáveis no painel do Vercel.</p>
+          </div>
+        </body>
+        </html>
+      `);
     }
 
-    console.log('🚀 Creating company properties...');
-
-    // Criar campos um por um
-    const results = [];
-    const errors = [];
-
-    for (const field of COMPANY_FIELDS) {
-      try {
-        console.log(`Creating field: ${field.name}`);
-        
-        const response = await axios.post(
-          'https://api.hubapi.com/crm/v3/properties/companies',
-          field,
-          {
-            headers: {
-              'Authorization': `Bearer ${accessToken}`,
-              'Content-Type': 'application/json'
-            }
-          }
-        );
-
-        results.push({
-          name: field.name,
-          status: 'created',
-          response: response.data
-        });
-        
-      } catch (error) {
-        // Se o campo já existir, não é erro crítico
-        if (error.response?.status === 409) {
-          console.log(`Field ${field.name} already exists`);
-          results.push({
-            name: field.name,
-            status: 'already_exists'
-          });
-        } else {
-          console.error(`Error creating field ${field.name}:`, error.response?.data);
-          errors.push({
-            name: field.name,
-            error: error.response?.data?.message || error.message
-          });
+    console.log('🔄 Exchanging code for token...');
+    
+    // Trocar código por token
+    const response = await axios.post(
+      'https://api.hubapi.com/oauth/v1/token',
+      new URLSearchParams({
+        grant_type: 'authorization_code',
+        client_id: clientId,
+        client_secret: clientSecret,
+        redirect_uri: redirectUri,
+        code: code
+      }),
+      {
+        headers: { 
+          'Content-Type': 'application/x-www-form-urlencoded'
         }
       }
-    }
+    );
 
-    // Responder com resultado
-    return res.status(200).json({
-      ok: errors.length === 0,
-      portalId,
-      summary: {
-        total: COMPANY_FIELDS.length,
-        created: results.filter(r => r.status === 'created').length,
-        already_exists: results.filter(r => r.status === 'already_exists').length,
-        errors: errors.length
-      },
-      results,
-      errors: errors.length > 0 ? errors : undefined
+    const { access_token, refresh_token, expires_in, hub_id } = response.data;
+    
+    console.log('✅ Token received:', {
+      hub_id,
+      has_access_token: !!access_token,
+      has_refresh_token: !!refresh_token,
+      expires_in
     });
+
+    // Armazenar tokens em memória (temporário)
+    tokens.portalId = hub_id;
+    tokens.accessToken = access_token;
+    tokens.refreshToken = refresh_token;
+    tokens.expiresAt = expires_in ? Date.now() + (expires_in * 1000) : null;
+
+    // Exportar para uso em outros módulos
+    module.exports.tokens = tokens;
+
+    // Redirecionar para home com sucesso
+    return res.status(302).setHeader('Location', '/?success=true').end();
 
   } catch (error) {
-    console.error('Create fields error:', error.response?.data || error.message);
+    console.error('OAuth callback error:', error.response?.data || error.message);
     
-    return res.status(500).json({
-      ok: false,
-      error: error.response?.data?.message || error.message,
-      details: error.response?.data
-    });
+    return res.status(500).send(`
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>Erro</title>
+        <style>
+          body { font-family: Arial; max-width: 600px; margin: 50px auto; padding: 20px; }
+          .error { background: #fee; padding: 20px; border-radius: 10px; }
+          pre { background: #f5f5f5; padding: 10px; overflow: auto; }
+        </style>
+      </head>
+      <body>
+        <div class="error">
+          <h2>❌ Erro no OAuth</h2>
+          <p>Falha ao trocar código por token:</p>
+          <pre>${JSON.stringify(error.response?.data || error.message, null, 2)}</pre>
+          <a href="/">← Voltar</a>
+        </div>
+      </body>
+      </html>
+    `);
   }
 };
+
+// Exportar tokens para uso em outros módulos
+module.exports.getTokens = () => tokens;
+module.exports.setTokens = (newTokens) => { tokens = { ...tokens, ...newTokens }; };
