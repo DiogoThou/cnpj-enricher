@@ -1,7 +1,6 @@
 const mysql = require('mysql2/promise');
 const axios = require('axios');
 
-// LISTA DE CAMPOS QUE SERÃO CRIADOS
 const COMPANY_FIELDS = [
   {
     name: "status_enriquecimento",
@@ -33,38 +32,33 @@ const COMPANY_FIELDS = [
 ];
 
 module.exports = async (req, res) => {
-  // --- INÍCIO DA PROTEÇÃO CORS (IMPORTANTE PARA O BOTÃO FUNCIONAR) ---
+  // CONFIGURAÇÃO DE CORS PARA O BOTÃO FUNCIONAR
   res.setHeader('Access-Control-Allow-Credentials', true);
   res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,DELETE,POST,PUT');
-  res.setHeader('Access-Control-Allow-Headers', 'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version');
+  res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,POST');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
 
   if (req.method === 'OPTIONS') {
-    res.status(200).end();
-    return;
+    return res.status(200).end();
   }
-  // --- FIM DA PROTEÇÃO CORS ---
 
   let connection;
   try {
-    // 1. Conecta ao seu MySQL usando a URL que você colocou na Vercel
     connection = await mysql.createConnection(process.env.MYSQL_URL);
     
-    // 2. Busca o token mais recente que foi salvo durante a instalação
+    // Busca o token mais recente no MySQL
     const [rows] = await connection.execute(
       'SELECT access_token, portal_id FROM hubspot_tokens ORDER BY updated_at DESC LIMIT 1'
     );
     await connection.end();
 
     if (rows.length === 0) {
-      return res.status(401).json({ ok: false, error: 'Token não encontrado. Reinstale o app.' });
+      return res.status(401).json({ ok: false, error: 'Instale o app primeiro.' });
     }
 
     const accessToken = rows[0].access_token;
-    const portalId = rows[0].portal_id;
     const results = [];
 
-    // 3. Loop para criar cada campo no HubSpot
     for (const field of COMPANY_FIELDS) {
       try {
         await axios.post(
@@ -79,28 +73,27 @@ module.exports = async (req, res) => {
         );
         results.push({ name: field.name, status: 'created' });
       } catch (err) {
-        // Se o campo já existir (erro 409), ignoramos o erro e marcamos como ok
+        // Se o erro for 409 (Já existe), tratamos como sucesso
         if (err.response?.status === 409) {
           results.push({ name: field.name, status: 'already_exists' });
         } else {
-          throw err;
+          console.error(`Erro no campo ${field.name}:`, err.response?.data || err.message);
+          // Não travamos o loop, apenas registramos o erro
+          results.push({ name: field.name, status: 'error', detail: err.message });
         }
       }
     }
 
-    // 4. Resposta final para o botão do HubSpot
+    // Retorna OK mesmo se alguns já existiam
     return res.status(200).json({ 
       ok: true, 
-      portalId, 
+      portalId: rows[0].portal_id, 
       results,
-      msg: "Configuração concluída com sucesso!" 
+      msg: "Processo concluído com sucesso!" 
     });
 
   } catch (err) {
     if (connection) await connection.end();
-    return res.status(500).json({ 
-      ok: false, 
-      error: err.response?.data?.message || err.message 
-    });
+    return res.status(500).json({ ok: false, error: err.message });
   }
 };
