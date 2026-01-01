@@ -1,98 +1,82 @@
-import React, { useState } from 'react';
-import { 
-  Button, 
-  Text, 
-  Flex, 
-  hubspot, 
-  Alert, 
-  Box 
-} from '@hubspot/ui-extensions';
+const mysql = require('mysql2/promise');
+const axios = require('axios');
 
-// Extensão do HubSpot
-hubspot.extend(() => (
-  <Extension />
-));
+const COMPANY_FIELDS = [
+  {
+    name: "status_enriquecimento",
+    label: "Status do enriquecimento",
+    type: "enumeration",
+    fieldType: "select",
+    groupName: "companyinformation",
+    options: [
+      { label: "Pendente", value: "pendente" },
+      { label: "Enriquecer", value: "enriquecer" },
+      { label: "Enriquecido", value: "enriquecido" },
+      { label: "Erro", value: "erro" }
+    ]
+  },
+  {
+    name: "teste_cnpj",
+    label: "Relatório do CNPJ (teste)",
+    type: "string",
+    fieldType: "textarea",
+    groupName: "companyinformation"
+  },
+  {
+    name: "cnpj_numero",
+    label: "CNPJ (número)",
+    type: "string",
+    fieldType: "text",
+    groupName: "companyinformation"
+  }
+];
 
-const Extension = () => {
-  const [loading, setLoading] = useState(false);
-  const [res, setRes] = useState({ type: '', msg: '' });
+module.exports = async (req, res) => {
+  // LIBERAÇÃO DE SINAL (CORS) - Fundamental para o botão não dar erro
+  res.setHeader('Access-Control-Allow-Credentials', true);
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,POST');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
 
-  const configurarViaVercel = async () => {
-    setLoading(true);
-    setRes({ type: '', msg: '' });
+  if (req.method === 'OPTIONS') return res.status(200).end();
 
-    try {
-      // 1. URL da tua API na Vercel
-      // O "?t=" força a Vercel a processar o clique como uma nova requisição, ignorando o cache do deploy
-      const url = `https://crmhub-enriquecimento-cnpj.vercel.app/api/setup/create-fields?t=${Date.now()}`;
-      
-      console.log("🚀 Iniciando requisição para:", url);
+  let connection;
+  try {
+    connection = await mysql.createConnection(process.env.MYSQL_URL);
+    
+    // Busca o token do banco
+    const [rows] = await connection.execute(
+      'SELECT access_token, portal_id FROM hubspot_tokens ORDER BY updated_at DESC LIMIT 1'
+    );
+    await connection.end();
 
-      // 2. Chamada Fetch configurada para atravessar o bloqueio de navegador
-      const response = await fetch(url, {
-        method: 'GET',
-        mode: 'cors', // Necessário para chamadas externas ao domínio do HubSpot
-        headers: {
-          'Accept': 'application/json',
+    if (rows.length === 0) return res.status(401).json({ ok: false, error: 'Token não encontrado.' });
+
+    const accessToken = rows[0].access_token;
+    const results = [];
+
+    // Cria os campos
+    for (const field of COMPANY_FIELDS) {
+      try {
+        await axios.post(
+          'https://api.hubapi.com/crm/v3/properties/companies',
+          field,
+          { headers: { Authorization: `Bearer ${accessToken}` } }
+        );
+        results.push({ name: field.name, status: 'created' });
+      } catch (err) {
+        if (err.response?.status === 409) {
+          results.push({ name: field.name, status: 'already_exists' });
+        } else {
+          throw err;
         }
-      });
-
-      // 3. Verifica se o servidor respondeu (mesmo que com erro)
-      if (!response.ok) {
-        throw new Error(`Erro no servidor: ${response.status}`);
       }
-
-      const data = await response.json();
-
-      if (data.ok) {
-        setRes({ 
-          type: 'success', 
-          msg: `✅ Configuração concluída! Campos verificados no portal ${data.portalId}.` 
-        });
-      } else {
-        setRes({ 
-          type: 'error', 
-          msg: '❌ Erro na Vercel: ' + (data.error || 'Falha ao processar') 
-        });
-      }
-    } catch (err) {
-      console.error("❌ Falha crítica na chamada:", err);
-      setRes({ 
-        type: 'error', 
-        msg: '❌ O botão não conseguiu comunicar com a Vercel. Verifique se o domínio está nas PermittedUrls do app-hsmeta.json.' 
-      });
-    } finally {
-      setLoading(false);
     }
-  };
 
-  return (
-    <Flex direction="column" gap="sm">
-      <Box padding="sm">
-        <Text variant="microcopy" weight="bold">
-          PAINEL DE CONFIGURAÇÃO CNPJ
-        </Text>
-      </Box>
+    return res.status(200).json({ ok: true, portalId: rows[0].portal_id, results });
 
-      {res.msg && (
-        <Box marginBottom="sm">
-          <Alert title={res.type === 'success' ? 'Sucesso' : 'Erro de Conexão'} variant={res.type}>
-            {res.msg}
-          </Alert>
-        </Box>
-      )}
-
-      <Button 
-        variant="primary" 
-        onClick={configurarViaVercel} 
-        disabled={loading}
-      >
-        {loading ? 'A comunicar com Vercel...' : 'Instalar / Verificar Campos'}
-      </Button>
-
-      <Text variant="microcopy">
-        Nota: Clique no botão acima para garantir que os campos personalizados foram criados no seu CRM.
-      </Text>
-    </Flex>
-  );
+  } catch (err) {
+    if (connection) await connection.end();
+    return res.status(500).json({ ok: false, error: err.message });
+  }
 };
