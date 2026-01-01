@@ -32,21 +32,22 @@ const COMPANY_FIELDS = [
 ];
 
 module.exports = async (req, res) => {
-  // --- CABEÇALHOS DE LIBERAÇÃO (CORS) ---
+  // ⚡ CONFIGURAÇÃO DE SEGURANÇA (CORS) - O BOTÃO PRECISA DISSO!
   res.setHeader('Access-Control-Allow-Credentials', true);
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,POST');
-  res.setHeader('Access-Control-Allow-Headers', 'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version');
+  res.setHeader('Access-Control-Allow-Headers', 'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version, Authorization');
 
-  // Resposta rápida para o navegador não bloquear o clique
+  // Resposta rápida para o navegador (Preflight)
   if (req.method === 'OPTIONS') {
     return res.status(200).end();
   }
 
   let connection;
   try {
-    // 1. Conexão com o Banco
     connection = await mysql.createConnection(process.env.MYSQL_URL);
+    
+    // Busca o token do banco
     const [rows] = await connection.execute(
       'SELECT access_token, portal_id FROM hubspot_tokens ORDER BY updated_at DESC LIMIT 1'
     );
@@ -57,16 +58,15 @@ module.exports = async (req, res) => {
     }
 
     const accessToken = rows[0].access_token;
-    const portalId = rows[0].portal_id;
     const results = [];
 
-    // 2. Criação dos Campos
+    // Criação dos campos
     for (const field of COMPANY_FIELDS) {
       try {
         await axios.post(
           'https://api.hubapi.com/crm/v3/properties/companies',
           field,
-          { headers: { Authorization: `Bearer ${accessToken}` } }
+          { headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' } }
         );
         results.push({ name: field.name, status: 'created' });
       } catch (err) {
@@ -78,8 +78,7 @@ module.exports = async (req, res) => {
       }
     }
 
-    // 3. Resposta de Sucesso para o Botão
-    return res.status(200).json({ ok: true, portalId, results });
+    return res.status(200).json({ ok: true, portalId: rows[0].portal_id, results });
 
   } catch (err) {
     if (connection) await connection.end();
