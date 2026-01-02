@@ -22,13 +22,14 @@ module.exports = async (req, res) => {
     connection = await mysql.createConnection(process.env.MYSQL_URL);
     console.log('🔌 Conectado ao MySQL com sucesso!');
 
-    const sql = `
-      INSERT INTO hubspot_tokens (portal_id, access_token, refresh_token, expires_at)
-      VALUES (?, ?, ?, ?)
+   const sql = `
+      INSERT INTO hubspot_tokens (portal_id, access_token, refresh_token, expires_at, updated_at)
+      VALUES (?, ?, ?, ?, NOW())
       ON DUPLICATE KEY UPDATE 
       access_token = VALUES(access_token), 
       refresh_token = VALUES(refresh_token), 
-      expires_at = VALUES(expires_at)
+      expires_at = VALUES(expires_at),
+      updated_at = NOW()
     `;
     
     // O await aqui é obrigatório para a Vercel não fechar antes de salvar
