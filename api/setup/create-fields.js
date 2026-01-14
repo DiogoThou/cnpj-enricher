@@ -54,6 +54,22 @@ module.exports = async (req, res) => {
       }
     }
 
+// Verificar se é requisição JSON (HubSpot) ou HTML (browser)
+    const isJsonRequest = req.headers.accept && req.headers.accept.includes('application/json');
+    
+    if (isJsonRequest) {
+      // Retorno JSON para HubSpot
+      return res.status(200).json({
+        success: true,
+        portalId,
+        message: 'Campos configurados com sucesso',
+        results,
+        fieldsCreated: results.filter(r => r.status.includes('Criado')).length,
+        fieldsExisted: results.filter(r => r.status.includes('Já existe')).length,
+        fieldsError: results.filter(r => r.status.includes('Erro')).length
+      });
+    }
+    
     // RETORNO DA PÁGINA VISUAL (HTML)
     res.setHeader('Content-Type', 'text/html');
     return res.status(200).send(`
@@ -91,8 +107,19 @@ module.exports = async (req, res) => {
       </html>
     `);
 
-  } catch (err) {
+} catch (err) {
     if (connection) await connection.end();
+    
+    const isJsonRequest = req.headers.accept && req.headers.accept.includes('application/json');
+    
+    if (isJsonRequest) {
+      return res.status(500).json({
+        success: false,
+        error: err.message,
+        message: 'Erro ao configurar campos'
+      });
+    }
+    
     return res.status(500).send(`<h2>Erro na configuração: ${err.message}</h2>`);
   }
 };
